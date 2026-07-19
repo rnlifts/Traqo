@@ -1,0 +1,19 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "backend",
+      "runtimeExecutable": "C:\\Users\\user\\Desktop\\Traqo\\backend\\venv\\Scripts\\python.exe",
+      "runtimeArgs": ["run.py"],
+      "cwd": "C:\\Users\\user\\Desktop\\Traqo\\backend",
+      "port": 5000
+    },
+    {
+      "name": "frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "C:\\Users\\user\\Desktop\\Traqo\\frontend",
+      "port": 5173
+    }
+  ]
+}
