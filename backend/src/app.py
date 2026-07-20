@@ -236,8 +236,15 @@ async def health():
 # Register routers (imported after exception handlers to ensure they're set up first)
 from src.modules.auth.presentation.routes import auth_router
 from src.modules.exercises.presentation.routes import exercises_router
-from src.modules.sessions.presentation.routes import sessions_router, get_workout_history_handler
-from src.modules.sessions.presentation.schemas import WorkoutHistoryEntryResponse
+from src.modules.sessions.presentation.routes import (
+    sessions_router,
+    get_workout_history_handler,
+    get_exercise_progress_handler,
+)
+from src.modules.sessions.presentation.schemas import (
+    WorkoutHistoryEntryResponse,
+    ExerciseProgressResponse,
+)
 from src.modules.workouts.presentation.routes import workouts_router
 
 app.include_router(auth_router)
@@ -251,4 +258,12 @@ app.add_api_route(
     get_workout_history_handler,
     methods=["GET"],
     response_model=list[WorkoutHistoryEntryResponse],
+)
+
+# Register exercise progress endpoint directly
+app.add_api_route(
+    "/api/exercises/{exercise_id}/progress",
+    get_exercise_progress_handler,
+    methods=["GET"],
+    response_model=ExerciseProgressResponse,
 )

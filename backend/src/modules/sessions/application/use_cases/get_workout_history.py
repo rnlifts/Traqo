@@ -12,6 +12,7 @@ class WorkoutHistoryEntry:
     date: datetime
     workout_name: str
     duration_minutes: int
+    session_id: int
 
 
 class GetWorkoutHistory:
@@ -49,6 +50,7 @@ class GetWorkoutHistory:
                 date=session.started_at,
                 workout_name=workout_name,
                 duration_minutes=duration_minutes,
+                session_id=session.id,
             )
             entries.append(entry)
 
