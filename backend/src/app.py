@@ -3,8 +3,11 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from src.config.settings import settings
+
 from src.modules.auth.domain.exceptions import InvalidCredentialsError
 from src.modules.exercises.domain.exceptions import (
+    DuplicateExerciseNameError,
     ExerciseInUseError,
     ExerciseNotFoundError,
     UnauthorizedExerciseAccessError,
@@ -32,10 +35,17 @@ from src.modules.workouts.domain.exceptions import (
 
 app = FastAPI(title="Traqo API", version="1.0.0")
 
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from src.infrastructure.rate_limiter import limiter
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=[origin.strip() for origin in settings.CORS_ORIGINS.split(",")],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -88,6 +98,14 @@ async def exercise_in_use_handler(request, exc):
     return JSONResponse(
         status_code=status.HTTP_409_CONFLICT,
         content={"error": "This exercise is used in one or more workout plans — remove it from those plans first."},
+    )
+
+
+@app.exception_handler(DuplicateExerciseNameError)
+async def duplicate_exercise_name_handler(request, exc):
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={"error": str(exc)},
     )
 
 

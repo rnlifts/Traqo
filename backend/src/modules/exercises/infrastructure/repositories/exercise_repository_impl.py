@@ -55,6 +55,15 @@ class ExerciseRepositoryImpl(ExerciseRepository):
             is not None
         )
 
+    def exists_by_user_and_name(self, user_id: int, name: str) -> bool:
+        """Check if an exercise with the given name already exists for the user."""
+        return (
+            self.session.query(ExerciseModel)
+            .filter_by(user_id=user_id, name=name)
+            .first()
+            is not None
+        )
+
     def _model_to_entity(self, model: ExerciseModel) -> Exercise:
         """Convert a SQLAlchemy model to a domain entity."""
         return Exercise(

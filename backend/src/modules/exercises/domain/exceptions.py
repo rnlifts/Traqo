@@ -20,3 +20,9 @@ class ExerciseInUseError(ExerciseException):
     """Raised when trying to delete an exercise that's used in workout plans."""
 
     pass
+
+
+class DuplicateExerciseNameError(ExerciseException):
+    """Raised when a user tries to create an exercise with a name that already exists for them."""
+
+    pass

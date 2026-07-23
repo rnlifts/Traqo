@@ -30,3 +30,8 @@ class ExerciseRepository(ABC):
     def is_used_in_any_plan(self, exercise_id: int) -> bool:
         """Check if an exercise is used in any workout plan."""
         pass
+
+    @abstractmethod
+    def exists_by_user_and_name(self, user_id: int, name: str) -> bool:
+        """Check if an exercise with the given name already exists for the user."""
+        pass

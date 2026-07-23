@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, UniqueConstraint
 
 from src.infrastructure.database import Base
 
@@ -15,3 +15,5 @@ class ExerciseModel(Base):
     name = Column(String(255), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     category = Column(String(50), nullable=True)
+
+    __table_args__ = (UniqueConstraint("user_id", "name", name="uq_exercises_user_id_name"),)

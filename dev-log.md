@@ -525,6 +525,46 @@ Completed final UX/consistency polish across all frontend pages and backend erro
   - Auto-dismisses after duration (default 3000ms)
   - Animation: slideIn (0.3s ease-in-out, translateX 400px → 0)
 
+---
+
+## 2026-07-21 — Sprint 13: Visual Reskin (Page 3: Active Workout)
+
+### What was done
+
+**ActiveWorkout.tsx inline style audit and update** — discovered that this component uses 100% inline `style={{...}}` objects instead of CSS classes, requiring direct fixes to the component rather than CSS-only changes.
+
+**Fixes applied:**
+1. Exit-confirm banner (lines 545–561): Replaced hardcoded RGB colors with design tokens
+   - `backgroundColor: "#fff3cd"` → `"var(--danger-soft)"`
+   - `border: "1px solid #ffc107"` → `"1px solid var(--danger)"`
+   - `color: "#856404"` → `"var(--danger)"`
+   - `borderRadius: "4px"` → `"8px"` (spec alignment)
+
+2. Regular pips (lines 763–777): Updated to use design tokens throughout
+   - Empty: `backgroundColor: "white"` → `"var(--surface)"`
+   - Empty: `color: "var(--text-h)"` → `"var(--ink-primary)"`
+   - Done: border changed from `"none"` to `"2px solid var(--success)"` (adds border matching fill)
+   - Done: `color: "white"` → `"var(--surface)"`
+
+3. Extra set pip (lines 788–801):
+   - `backgroundColor: "white"` → `"var(--surface)"`
+   - `color: "var(--text)"` → `"var(--ink-primary)"`
+
+**Verification (live on fresh tab with real data):**
+- ✅ Done pip: `rgb(34,197,94)` (`--success` green), white text, matching border
+- ✅ Empty pips: white bg, `#334155` (`--ink-primary`) text, `#E2E8F0` (`--border`)
+- ✅ Exit-confirm banner: `rgb(254,226,226)` (`--danger-soft`) bg, `#EF4444` (`--danger`) border and text
+- ✅ All computed values match design-system.md exactly
+
+### Known cleanup debt
+
+**Orphaned CSS classes in App.css (lines 1025–1094):**
+- `.pip`, `.pip-row`, `.rest-widget`, `.exit-confirm` CSS classes exist but are **not used by ActiveWorkout.tsx** — this component uses inline styles instead
+- These classes were built in an earlier version of the component and left orphaned during refactoring
+- **Action required:** Either delete these unused classes or wire up the component to use them (consistency with other pages)
+- **Priority:** Low (no correctness impact), but flag to avoid confusion for future readers
+- **Location:** frontend/src/App.css lines 1019–1094
+
 ### Verification (live, as completed)
 
 **Layout.tsx:**
@@ -633,3 +673,134 @@ Added optional `target_sets`, `target_reps`, `target_weight` to plan exercises (
 - ✅ `reviewer`: approved, no blocking issues; flagged one pre-existing (not introduced this sprint) design gap — duplicate exercises in the same plan collide because several code paths key off `exercise_id` instead of the `workout_exercise` row id — spun off as a separate follow-up task rather than folded into this sprint
 
 **Sprint 8 is complete and verified.** Ready for Sprint 9 (day-of-week scheduling) or Sprint 10 (previous-performance prefill), both of which build on this schema.
+
+---
+
+## 2026-07-19 → 2026-07-20 — Plan Builder v2: UI Redesign + Week-Chain Plan Workflow
+
+### What was done
+
+Superseded the earlier weekday-tag multi-day plan design with a full rework of plan creation and workout logging, driven by a reference HTML prototype the owner supplied (interaction/workflow only — visual design was explicitly not adopted; the shipped white/dark-gray/indigo UI style was kept). Spec written first (`docs/feature-spec-plan-builder-v2.md`), then built via the PM pipeline (ux-researcher → coder → PM review → live verification) overnight per explicit standing authorization to proceed without further check-ins.
+
+**UI redesign** (`docs/design-spec-ui-refresh.md`): white background, dark-gray text (`#52525b`/`#18181b`), indigo accent (`#4f46e5`), green success, amber customize-state color, light-only (dark-mode media query removed). Applied as CSS custom properties in `index.css`/`App.css`, swept across all components.
+
+**Backend — data model:**
+- New `PlanWeek` entity/table: `workout_plan_id`, `week_number`, `mode` (`base` | `linked` | `custom`)
+- `WorkoutPlan` gains `unit_type` (`days`|`weeks`) + `total_units`; `PlanDay` gains `is_rest` + `plan_week_id`; `WorkoutExercise` gains `notes`; `WorkoutSession` gains `plan_week_id`
+- All weekday-tag code from the superseded design (`plan_day_schedule` table, `DuplicateWeekdayInPlanError`, weekday lookups) fully removed
+- Migration: additive/nullable columns, existing plans backfilled as `unit_type='days'`, `plan_day_schedule` dropped — reviewed by `db-migration-checker`, row-count integrity verified before/after
+
+**Backend — week-chain resolution:** a `linked` week owns no `PlanDay` rows; its effective content resolves by walking backward to the nearest preceding non-`linked` week (not always week 1). Implemented once as a pure function, `resolve_effective_week()` (`domain/services/week_resolver.py`), and reused by plan-detail fetch, week customization, and session start — consolidated from what had started as 2–3 separate implementations.
+
+**Backend — new/changed endpoints:** bulk plan-create (`/build`), week customize (deep-copy a linked week into an editable custom week) and match-previous (revert a custom week back to linked), in-place exercise target/notes editing, and `StartWorkout` extended to accept `week_number`, resolve it server-side, validate the client's `plan_day_id` against the resolved week, and store the actual `PlanWeek.id` (not the raw week number) on the session.
+
+**Backend — session logging rework:** `POST /workout-sessions/{id}/sets` now takes an explicit `set_number` and upserts (updates the existing row if `(session_id, exercise_id, set_number)` already exists, else inserts) instead of always auto-incrementing — this is what makes the pip UI's log/edit/delete-in-place interaction possible. New `DELETE .../sets/{set_id}`.
+
+**Frontend:**
+- `CreatePlanStep1.tsx` — plan name + length picker (1 Day / 2 Days / 1 Week / 4 Weeks / Custom)
+- `PlanBuilder.tsx` (~810 lines) — week rail with base/linked/custom visual states, day tabs, rest-day toggle, 6-column exercise grid (name/sets/reps/weight/notes/remove), customize/match-previous actions
+- `SessionSetupPage.tsx` — week/day picker with rest-day and empty-day validation before a session can start
+- `ActiveWorkout.tsx` — full rewrite to the pip-based interaction: tapping an unlogged set pip opens a weight/reps/notes entry panel (pre-filled from the exercise's target), logging flips the pip to done and auto-starts a rest timer (30/60/90/120s selectable, live countdown, +15s, Skip); tapping a done pip reopens it pre-filled with the actual saved values for edit/delete; a "+" pip adds an extra set beyond target, pre-filled from the most recently logged set; inline (non-native) exit-confirm banner; Finish Workout goes through a `ConfirmDialog` to a summary screen (exercises/sets completed counts)
+
+### Bugs found during live verification (not caught by implementing agents' own checks)
+
+1. **Field-not-persisted, three separate occurrences of the same bug class:** `PlanDayRepositoryImpl.create()` silently dropped `is_rest`/`plan_week_id`; `WorkoutExerciseRepositoryImpl.add()` dropped `notes`; `WorkoutSessionRepositoryImpl.create()` dropped `plan_week_id`. Each looked correct in the API response (constructed from the in-memory entity) but was wrong in the actual database row — only caught by inspecting raw DB state directly, not by re-reading the API response. After the third occurrence, requested a full audit of every repository `create`/`update` method rather than continuing to patch one at a time; the audit found one more genuine instance (the session repository one) and confirmed the rest were clean.
+2. **`GetWorkoutPlanDetail` route discarded the use case's resolved-weeks result**, rebuilding its own flat, non-week-aware response instead. The use case's `get_effective_week()` method existed but was dead code, never called from the route. Fixed by wiring it in and extending the response schema with a `weeks` field alongside the legacy `days` field.
+3. **`plan_week_id` vs. week-number confusion:** `StartWorkoutRequest` originally named a field `plan_week_id` but populated it with a week *number* (1, 2, 3…), while the session's actual `plan_week_id` column needs to be a real foreign key to `plan_weeks.id`. Renamed the request field to `week_number`; the use case now resolves it to the real `PlanWeek` row and stores that row's `id`.
+4. **`ActiveWorkoutPage.tsx` only searched `planDetail.days`** when matching a session to its day, which is `null`/empty for weeks-type plans — every weeks-type session hit "Day not found." Fixed to also search within `planDetail.weeks[].days`; re-verified live afterward (see below).
+5. **Rest timer "+15s" button had no effect.** The countdown is recalculated every tick as `restDuration - elapsed`, but the button was adjusting `restTimeRemaining`/`restStartTime` — values the recalculation doesn't read, so the adjustment was silently discarded. Fixed by having the button increase `restDuration` itself instead.
+6. **Massive stray dev-server accumulation** (a recurring environment issue, not an app bug): at different points, ~11 frontend processes across ports 5173–5183 and ~12 backend processes across 5000/8000/8001/8002/9000 were found running simultaneously, causing tests to silently hit stale code. Standing practice going forward: check listening ports and kill duplicates before trusting any live test result.
+
+### Live verification (all performed directly — set logging, edits, deletes, and session state cross-checked against the database or a raw API call, not just the rendered page)
+
+- ✅ Week rail renders base/linked/custom states correctly, including the hardest case: a `linked` week correctly falls through to the nearest preceding *customized* week, not always week 1 — checked at both the raw-data and full-UI level
+- ✅ Plan create (days-type and weeks-type), customize week, match-previous-week, in-place exercise edit
+- ✅ Session setup: week/day selection, rest-day and empty-day validation block session start with the correct messaging
+- ✅ Pip logging: empty pip → panel pre-filled from target → log → pip flips to done → rest timer auto-starts
+- ✅ Done pip → reopens pre-filled with actual saved values (not target) → edit saves correctly, delete removes the row (confirmed gone via direct API call, not just UI)
+- ✅ "+" extra-set pip → pre-fills from the most recently logged set
+- ✅ Rest timer: Skip stops it immediately; **+15s genuinely adds ~15s to the displayed countdown**, confirmed with a controlled before/after check (baseline read, deliberate real-time wait to confirm normal countdown, then click, then re-read — net change was a large increase, not the decrease a broken button would produce)
+- ✅ Weeks-type session (previously broken) now loads with the correct "Week N · Day" heading and correct exercise/target, and pip logging on it was exercised end-to-end (not just page-load) — set write confirmed via direct API fetch showing the correct weight/reps/set_number row
+- ✅ Exit shows the inline confirm banner with exact spec copy; Finish Workout → `ConfirmDialog` → summary screen with correct completed-exercise/set counts, `completed_at` confirmed set via API
+
+**Feature complete and verified.** This closes out the full plan-builder-v2 rework (data model, week resolution, plan builder UI, session setup, and pip-based active-workout logging with rest timer). Next up: History redesign (drill-down to exercises/sets per session) and the duplicate-exercise-in-plan key-collision issue flagged by `reviewer` back in Sprint 8, both still open in the backlog.
+
+---
+
+## 2026-07-20 — Sprint 12: Progress Views (History Drill-Down, Per-Exercise Trends, Volume, Est. 1RM, PRs)
+
+### What was done
+
+Implemented the "History redesign" item left open after Plan Builder v2, matching `docs/sprints.md` Sprint 12 and the progress-tracking scope CLAUDE.md brought into MVP on 2026-07-19. Spec written first (`docs/feature-spec-progress-views.md` by `ux-researcher`), grounded in the actual post-Plan-Builder-v2 codebase rather than the older UX report's assumptions. Two genuinely product-level open questions in the spec were decided by the PM under standing overnight authorization rather than blocked on: (a) no live "New PR!" toast during active logging this sprint — deferred, since it would touch `ActiveWorkout.tsx`'s pip-logging flow, which had just been rebuilt and verified; (b) PR status computed fresh on every read rather than persisted at write-time, to avoid stale PR flags if a set is later corrected via the upsert/delete endpoints.
+
+**Backend — zero migration required.** Confirmed every field needed (`plan_week_id`, `plan_day_id`, `weight`/`reps`/`notes` on `workout_sets`) already existed post-Plan-Builder-v2 — this sprint is entirely new read-side queries plus two additive response-schema extensions:
+- New `WorkoutSetRepository.list_finished_by_user_and_exercise()` — single join, filtered to finished sessions, chronological order
+- New `GetExerciseProgress` use case: per-set Epley estimated 1RM (`weight × (1 + reps/30)`), and four independently-tracked PR categories (heaviest weight, best est. 1RM, best session volume, most reps in a set) via running-max comparison over chronologically ordered sets — a value only counts as a PR if it strictly beats an *existing* running max (maxes start at `None`, not `0`), so a user's first-ever logged set for an exercise is never itself flagged as a PR even though it does become their current personal record
+- `GetWorkoutSessionDetail` extended with `plan_name`/`day_label`/`week_number`/`duration_minutes`, and a new `WorkoutSetWithExerciseResponse` type (deliberately *not* modifying the shared `WorkoutSetResponse` used by the live pip-logging `POST`/`DELETE /sets` endpoints, to keep that recently-verified surface completely untouched)
+- `GET /api/workout-history` entries gain `session_id` (a real gap — there was previously no way to link from a history row to anything)
+- New route `GET /api/exercises/{id}/progress`, registered directly on `app.py` matching the existing Sprint-5 pattern for `/api/workout-history`
+
+**Frontend:**
+- `SessionDetailPage`/`SessionDetail.tsx` (new) — read-only drill-down at `/workout-history/:sessionId`, deliberately a separate route from the live `/workout-sessions/:sessionId` logging page rather than teaching that page a second read-only mode
+- `ExerciseProgressPage`/`ExerciseProgress.tsx` (new) — PR summary card (four stat tiles with dates), metric-selector switching a chart between Est. 1RM / Volume / Best Weight, reverse-chronological session list with inline PR badges
+- `TrendChart.tsx` (new) — custom SVG line chart, no new npm dependency (evaluated Recharts per the original UX report's suggestion, rejected — the project has zero charting dependencies today and one line-chart type on one screen didn't clear the bar for adding the first one)
+- `sessionDayResolver.ts` (new) — extracted the day/week-matching logic that previously lived inline in `ActiveWorkoutPage.tsx` (the same logic that handles the weeks-type-plan day lookup fixed in Plan Builder v2), so the new session-detail page reuses it instead of duplicating it; `ActiveWorkoutPage.tsx` refactored to call the extracted function as a pure extraction with no behavior change
+
+### Bugs found during live verification
+
+1. **Falsy-zero bug on session duration:** `SessionDetail.tsx` used `session.duration_minutes ? ... : "Unknown duration"` — but `0` is a legitimate value (a session finished within the same minute it started) and is falsy in JS, so genuinely-fast sessions incorrectly showed "Unknown duration". Reproduced directly (started and finished a session ~7 seconds apart, confirmed the API correctly returned `duration_minutes: 0`, confirmed the UI showed the wrong text). Fixed with an explicit `!= null` check.
+2. **Wrong variable in empty-state copy:** the "no sets logged yet" message for an exercise with zero history was interpolating the chart's current metric label ("Estimated 1RM (lbs)") instead of the exercise's actual name. Fixed by threading the real exercise name into `TrendChart` as its own prop.
+
+### Live verification (independent — backend tested via direct HTTP calls with hand-verified math, frontend tested via live browser interaction, not accepted from either implementing agent's report)
+
+- ✅ Backend: empty-exercise 200 with all-null personal records; Epley e1RM hand-checked (185×(1+6/30)=222.0 ✓, 225×(1+3/30)=247.5 ✓); PR flags confirmed to flip correctly on genuine improvement and stay false when not (tested across three real sessions — a weight+e1RM PR that wasn't a reps or volume PR, per the four-independent-categories design); in-progress sessions correctly excluded from progress until finished; cross-user 403 on another user's exercise
+- ✅ Frontend: history list → "View Details" → correct session drill-down with correct plan/day/exercise/set data; in-progress-session banner and "Continue Workout" link; exercise list → "View Progress" → PR summary card and chart values cross-checked line-by-line against the actual API response; metric-selector genuinely swaps the chart's underlying data (verified via SVG DOM inspection, not just visually); **the `sessionDayResolver` extraction specifically re-verified against a weeks-type-plan session to confirm no regression of the "Week N · Day" heading fix from Plan Builder v2** — confirmed still correct
+- ✅ An environment issue (not an implementation bug) briefly made the new backend route appear to not exist at all: the `--reload` uvicorn process didn't pick up the coder's file changes. Resolved with a full kill + clean non-reload restart — consistent with this project's established "never trust `--reload` alone" practice. Also found and killed a stray backend server the implementing agent left running on port 8000 and a stray frontend dev server on port 5174.
+
+**Sprint 12 is complete and verified.** Flagged separately (not part of this sprint, spun off as a background cleanup task): dead code left over from the retired weekday-tag plan design (`plan_day_schedule` references in `PlanDayRepositoryImpl`) — unused, not a live bug, but a latent risk for future Alembic autogenerate runs.
+
+### Test suite maintenance (same session, after both features above)
+
+Live verification was used as the primary correctness check for both Plan Builder v2 and Sprint 12 (per this project's standing verification discipline), but the automated `pytest` suite was not kept in sync as those features were built, and had silently gone red: the `WorkoutExerciseRepository` interface gained new abstract methods (`list_by_day`, `update`) during the two features above, but `tests/conftest.py`'s in-memory test double was never updated to implement them, breaking every test depending on that fixture (9 errors) plus 13 related integration-test failures.
+
+Fixed the test double, and added real new unit coverage for the two most logic-dense, easiest-to-silently-break pieces from tonight's work that had zero automated coverage: `week_resolver.py`'s `resolve_effective_week()` (12 tests, including the tricky multi-week linked-chain-falls-through-to-nearest-custom-week case) and `get_exercise_progress.py`'s `GetExerciseProgress` (10 tests: Epley formula precision, the first-set-never-a-PR rule, and each of the four PR categories flipping independently and correctly).
+
+**Result confirmed independently (PM re-ran `pytest -q` directly, not accepted from the report alone):** the fixture-related failures are gone and the 22 new tests pass — 26 passing overall now. 18 tests still fail, but root-caused to something unrelated and pre-existing: `AddExerciseToPlan`, a use case superseded by `AddExerciseToDay` before Plan Builder v2 even started, has a broken constructor call and is dead code (confirmed via grep — not referenced by any route). Spun off as a separate background cleanup task (delete the dead use case + its now-broken tests) rather than fixed inline, since it's unrelated pre-existing debt, not a regression from tonight.
+
+---
+
+## 2026-07-23 — Task 8: Exercise Name Uniqueness Constraint
+
+### What was done
+
+Implemented database-level and application-level enforcement of exercise name uniqueness. Users can no longer create multiple exercises with the same name within their own exercise list, but different users can independently create exercises with the same name (constraint is per-user, not global).
+
+**Backend — database migration:**
+- New migration: `add_exercise_name_uniqueness_001.py` adds `UNIQUE(user_id, name)` constraint on `exercises` table
+- Pre-migration check: 4 duplicate (user_id, name) pairs found in development database. All duplicates cleaned up by owner before migration applied (deleted exercises that were unreferenced or part of abandoned test data)
+- Migration verified applied successfully
+
+**Backend — model update:**
+- `ExerciseModel`: added `UniqueConstraint("user_id", "name", name="uq_exercises_user_id_name")` to `__table_args__`
+
+**Backend — domain layer:**
+- New exception: `DuplicateExerciseNameError` in `exercises.domain.exceptions`
+- `ExerciseRepository` interface: added `exists_by_user_and_name(user_id: int, name: str) -> bool` abstract method
+- `ExerciseRepositoryImpl`: implemented `exists_by_user_and_name()` as a simple existence query
+
+**Backend — application layer:**
+- `CreateExercise` use case updated: now checks `exists_by_user_and_name()` before creating, raises `DuplicateExerciseNameError` with user-friendly message `"An exercise named '{name}' already exists for you"`
+
+**Backend — presentation layer:**
+- `app.py`: imported `DuplicateExerciseNameError`, added exception handler returning 409 Conflict with the exception message as the error body
+
+### Verification (all performed via live HTTP requests — no code review accepted)
+
+- ✅ First exercise creation succeeds (201)
+- ✅ Duplicate exercise creation within same user fails with 409 Conflict and correct error message: `"An exercise named 'Bench Press' already exists for you"`
+- ✅ Non-duplicate exercises (different name) succeed within same user (201)
+- ✅ Different user can create exercise with same name as another user's exercise (201) — constraint is per-user as designed, not global
+- ✅ Backend server restart clean, no errors in startup logs
+- ✅ No side effects on other exercise operations (list, get, delete)
+
+**Task 8 complete and verified.** All steps executed (Steps 1–15 including duplicate cleanup by owner at Step 3). Constraint now enforced at both database and application layers with user-friendly error messaging.
