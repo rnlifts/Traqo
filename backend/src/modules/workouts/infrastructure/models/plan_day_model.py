@@ -10,7 +10,7 @@ class PlanDayModel(Base):
 
     id = Column(Integer, primary_key=True)
     workout_plan_id = Column(
-        Integer, ForeignKey("workout_plans.id"), nullable=False
+        Integer, ForeignKey("workout_plans.id"), nullable=False, index=True
     )
     label = Column(String(255), nullable=False)
     order_position = Column(Integer, nullable=False)

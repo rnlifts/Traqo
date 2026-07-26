@@ -32,6 +32,11 @@ class WorkoutExerciseRepository(ABC):
         pass
 
     @abstractmethod
+    def update(self, workout_exercise: WorkoutExercise) -> WorkoutExercise:
+        """Update an existing workout_exercise. Returns the updated entity."""
+        pass
+
+    @abstractmethod
     def update_order(self, workout_exercise_id: int, new_order_number: int) -> WorkoutExercise:
         """Update the order_number of a workout_exercise. Returns the updated entity."""
         pass

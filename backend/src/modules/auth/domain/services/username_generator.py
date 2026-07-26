@@ -22,11 +22,7 @@ class UsernameGenerator:
         base = display_name.lower().strip()
         base = re.sub(r"[^a-z0-9_]", "", base)
 
-        # Try the base name first
-        if not self.is_username_taken(base):
-            return base
-
-        # Append random 4-digit suffix until we find an available one
+        # Always append random 4-digit suffix for uniqueness and predictability
         for _ in range(100):  # Avoid infinite loop
             suffix = random.randint(1000, 9999)
             candidate = f"{base}_{suffix}"

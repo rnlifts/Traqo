@@ -22,6 +22,7 @@ class ExerciseRepositoryImpl(ExerciseRepository):
             name=exercise.name,
             created_at=exercise.created_at,
             category=exercise.category,
+            logging_type=exercise.logging_type,
         )
         self.session.add(model)
         self.session.commit()
@@ -72,4 +73,5 @@ class ExerciseRepositoryImpl(ExerciseRepository):
             name=model.name,
             created_at=model.created_at,
             category=model.category,
+            logging_type=model.logging_type,
         )

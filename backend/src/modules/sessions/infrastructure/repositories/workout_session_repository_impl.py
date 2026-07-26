@@ -18,6 +18,7 @@ class WorkoutSessionRepositoryImpl(WorkoutSessionRepository):
             user_id=session.user_id,
             workout_plan_id=session.workout_plan_id,
             plan_day_id=session.plan_day_id,
+            plan_week_id=session.plan_week_id,
             started_at=session.started_at,
             completed_at=session.completed_at,
         )

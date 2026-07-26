@@ -30,8 +30,9 @@ export const WorkoutHistoryPage: React.FC = () => {
 
   return (
     <Layout>
-      <div>
-        <h1>Workout History</h1>
+      <div className="page-container">
+        <h1 className="page-title">Workout History</h1>
+        <p className="page-subtitle">View your past workouts and progress.</p>
         <WorkoutHistory entries={entries} loading={loading} error={error} />
       </div>
     </Layout>

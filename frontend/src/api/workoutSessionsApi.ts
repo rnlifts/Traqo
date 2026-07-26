@@ -4,10 +4,16 @@ export interface WorkoutSet {
   id: number;
   workout_session_id: number;
   exercise_id: number;
+  workout_exercise_id: number | null;
   set_number: number;
-  weight: number;
-  reps: number;
+  weight: number | null;
+  reps: number | null;
+  duration_seconds: number | null;
   notes: string;
+}
+
+export interface WorkoutSetWithExercise extends WorkoutSet {
+  exercise_name: string;
 }
 
 export interface WorkoutSession {
@@ -17,6 +23,16 @@ export interface WorkoutSession {
   plan_day_id: number;
   started_at: string;
   completed_at: string | null;
+  plan_name?: string;
+  day_label?: string | null;
+  plan_week_id?: number | null;
+  week_number?: number | null;
+  duration_minutes?: number | null;
+}
+
+export interface WorkoutSessionDetail {
+  session: WorkoutSession;
+  sets: WorkoutSetWithExercise[];
 }
 
 export interface StartWorkoutRequest {
@@ -29,15 +45,14 @@ export interface StartWorkoutResponse {
   message: string;
 }
 
-export interface WorkoutSessionDetailResponse {
-  session: WorkoutSession;
-  sets: WorkoutSet[];
-}
+export interface WorkoutSessionDetailResponse extends WorkoutSessionDetail {}
 
 export interface AddWorkoutSetRequest {
   exercise_id: number;
-  weight: number;
-  reps: number;
+  set_number: number;
+  weight: number | null;
+  reps: number | null;
+  duration_seconds?: number | null;
   notes?: string;
 }
 
@@ -46,16 +61,24 @@ export interface FinishWorkoutResponse {
 }
 
 export interface WorkoutHistoryEntry {
+  session_id?: number;
   date: string;
   workout: string;
   duration: string;
 }
 
 export const workoutSessionsApi = {
-  async startWorkout(planId: number, planDayId: number): Promise<StartWorkoutResponse> {
+  async startWorkout(planId: number, planDayId: number, weekNumber?: number): Promise<StartWorkoutResponse> {
+    const payload: any = {
+      workout_plan_id: planId,
+      plan_day_id: planDayId
+    };
+    if (weekNumber !== undefined) {
+      payload.week_number = weekNumber;
+    }
     const response = await client.post<StartWorkoutResponse>(
       "/workout-sessions",
-      { workout_plan_id: planId, plan_day_id: planDayId }
+      payload
     );
     return response.data;
   },
@@ -69,21 +92,29 @@ export const workoutSessionsApi = {
 
   async addWorkoutSet(
     sessionId: number,
-    exerciseId: number,
-    weight: number,
-    reps: number,
+    workoutExerciseId: number,
+    setNumber: number,
+    weight: number | null,
+    reps: number | null,
+    durationSeconds: number | null = null,
     notes: string = ""
   ): Promise<WorkoutSet> {
     const response = await client.post<WorkoutSet>(
       `/workout-sessions/${sessionId}/sets`,
       {
-        exercise_id: exerciseId,
+        workout_exercise_id: workoutExerciseId,
+        set_number: setNumber,
         weight,
         reps,
+        duration_seconds: durationSeconds,
         notes,
       }
     );
     return response.data;
+  },
+
+  async deleteWorkoutSet(sessionId: number, setId: number): Promise<void> {
+    await client.delete(`/workout-sessions/${sessionId}/sets/${setId}`);
   },
 
   async finishWorkout(sessionId: number): Promise<FinishWorkoutResponse> {

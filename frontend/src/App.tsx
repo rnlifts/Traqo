@@ -5,18 +5,24 @@ import { LoginPage } from './features/auth/LoginPage';
 import { Dashboard } from './pages/Dashboard';
 import { ExercisesPage } from './pages/ExercisesPage';
 import WorkoutPlansPage from './pages/WorkoutPlansPage';
-import WorkoutPlanDetailPage from './pages/WorkoutPlanDetailPage';
+import CreatePlanPage from './pages/CreatePlanPage';
+import EditPlanPage from './pages/EditPlanPage';
+import SessionSetupPage from './pages/SessionSetupPage';
 import ActiveWorkoutPage from './pages/ActiveWorkoutPage';
 import { WorkoutHistoryPage } from './pages/WorkoutHistoryPage';
+import SessionDetailPage from './pages/SessionDetailPage';
+import ExerciseProgressPage from './pages/ExerciseProgressPage';
 import { AuthProvider } from './features/auth/AuthContext';
+import { UnsavedChangesProvider } from './contexts/UnsavedChangesContext';
 import { ProtectedRoute } from './routes/ProtectedRoute';
 import './App.css';
 
 function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Routes>
+    <UnsavedChangesProvider>
+      <AuthProvider>
+        <BrowserRouter>
+          <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/login" element={<LoginPage />} />
@@ -45,10 +51,26 @@ function App() {
             }
           />
           <Route
-            path="/workout-plans/:planId"
+            path="/workout-plans/new"
             element={
               <ProtectedRoute>
-                <WorkoutPlanDetailPage />
+                <CreatePlanPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/workout-plans/:planId/edit"
+            element={
+              <ProtectedRoute>
+                <EditPlanPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/workout-plans/:planId/start"
+            element={
+              <ProtectedRoute>
+                <SessionSetupPage />
               </ProtectedRoute>
             }
           />
@@ -68,9 +90,26 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/workout-history/:sessionId"
+            element={
+              <ProtectedRoute>
+                <SessionDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/exercises/:exerciseId/progress"
+            element={
+              <ProtectedRoute>
+                <ExerciseProgressPage />
+              </ProtectedRoute>
+            }
+          />
         </Routes>
       </BrowserRouter>
-    </AuthProvider>
+      </AuthProvider>
+    </UnsavedChangesProvider>
   );
 }
 

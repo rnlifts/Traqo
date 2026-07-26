@@ -11,6 +11,7 @@ from ...domain.interfaces.plan_day_repository import PlanDayRepository
 from ...domain.interfaces.plan_week_repository import PlanWeekRepository
 from ...domain.interfaces.workout_plan_repository import WorkoutPlanRepository
 from ...domain.interfaces.workout_exercise_repository import WorkoutExerciseRepository
+from ...domain.services.week_resolver import resolve_effective_week
 
 
 class CustomizeWeek:
@@ -51,8 +52,19 @@ class CustomizeWeek:
         if not week:
             raise PlanDayNotFoundError(f"Week {week_number} not found in plan {plan_id}")
 
-        # Resolve the effective days for this week
-        effective_days = self._get_effective_week_days(plan_id, week_number)
+        # Resolve the effective days for this week using the shared function
+        weeks = self.week_repository.list_by_plan(plan_id)
+        all_days = self.day_repository.list_by_plan(plan_id)
+
+        # Build a map of week_id -> [days for that week]
+        days_by_week_id = {}
+        for day in all_days:
+            if day.plan_week_id not in days_by_week_id:
+                days_by_week_id[day.plan_week_id] = []
+            days_by_week_id[day.plan_week_id].append(day)
+
+        resolution = resolve_effective_week(week_number, weeks, days_by_week_id)
+        effective_days = resolution["days"]
 
         # Deep-copy those days and their exercises to this week
         for source_day in effective_days:
@@ -83,58 +95,3 @@ class CustomizeWeek:
         # Flip mode to 'custom'
         week.mode = "custom"
         self.week_repository.update(week)
-
-    def _get_effective_week_days(self, plan_id: int, week_number: int) -> list[PlanDay]:
-        """
-        Walk backward from week_number to find the nearest preceding non-linked week,
-        and return its plan_day rows.
-
-        This is the exact algorithm from spec §1.4:
-        ```
-        function getEffectiveDays(weekIdx){
-          let j = weekIdx;
-          while(draft.weeks[j].mode === 'linked') j--;
-          return draft.weeks[j].days;
-        }
-        ```
-        But in 1-indexed terms and persisted rows.
-        """
-        weeks = self.week_repository.list_by_plan(plan_id)
-
-        # Find the week to start from
-        current_week = None
-        for w in weeks:
-            if w.week_number == week_number:
-                current_week = w
-                break
-
-        if not current_week:
-            raise PlanDayNotFoundError(f"Week {week_number} not found")
-
-        # Walk backward to find the nearest non-linked week
-        j = week_number
-        target_week = None
-        while j >= 1:
-            w = None
-            for week in weeks:
-                if week.week_number == j:
-                    w = week
-                    break
-
-            if not w:
-                j -= 1
-                continue
-
-            if w.mode != "linked":
-                # Found a non-linked week
-                target_week = w
-                break
-
-            j -= 1
-
-        if not target_week:
-            raise PlanDayNotFoundError(f"No base week found for week {week_number}")
-
-        # Return only the days for this target week
-        all_days = self.day_repository.list_by_plan(plan_id)
-        return [d for d in all_days if d.plan_week_id == target_week.id]

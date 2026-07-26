@@ -27,6 +27,9 @@ from src.modules.workouts.infrastructure.repositories.plan_day_repository_impl i
 from src.modules.workouts.infrastructure.repositories.plan_week_repository_impl import (
     PlanWeekRepositoryImpl,
 )
+from src.modules.workouts.infrastructure.repositories.workout_exercise_repository_impl import (
+    WorkoutExerciseRepositoryImpl,
+)
 from .schemas import (
     AddWorkoutSetRequest,
     FinishWorkoutResponse,
@@ -127,10 +130,12 @@ async def get_workout_session_detail(
             WorkoutSetWithExerciseResponse(
                 id=sd.workout_set.id,
                 exercise_id=sd.workout_set.exercise_id,
+                workout_exercise_id=sd.workout_set.workout_exercise_id,
                 exercise_name=sd.exercise_name,
                 set_number=sd.workout_set.set_number,
                 weight=sd.workout_set.weight,
                 reps=sd.workout_set.reps,
+                duration_seconds=sd.workout_set.duration_seconds,
                 notes=sd.workout_set.notes,
             )
             for sd in set_details
@@ -147,29 +152,33 @@ async def add_workout_set(
 ):
     """Log or update a set for an exercise in the current workout (upsert).
 
-    If a set at (exercise_id, set_number) already exists, updates it in place.
+    If a set at (workout_exercise, set_number) already exists, updates it in place.
     Otherwise, creates a new set.
     """
     session_repo = WorkoutSessionRepositoryImpl(db)
     set_repo = WorkoutSetRepositoryImpl(db)
     exercise_repo = ExerciseRepositoryImpl(db)
-    use_case = AddWorkoutSet(session_repo, set_repo, exercise_repo)
+    workout_exercise_repo = WorkoutExerciseRepositoryImpl(db)
+    use_case = AddWorkoutSet(session_repo, set_repo, exercise_repo, workout_exercise_repo)
     workout_set = use_case.execute(
         user_id,
         session_id,
-        req.exercise_id,
+        req.workout_exercise_id,
         req.set_number,
         req.weight,
         req.reps,
+        req.duration_seconds,
         req.notes,
     )
     return WorkoutSetResponse(
         id=workout_set.id,
         workout_session_id=workout_set.workout_session_id,
         exercise_id=workout_set.exercise_id,
+        workout_exercise_id=workout_set.workout_exercise_id,
         set_number=workout_set.set_number,
         weight=workout_set.weight,
         reps=workout_set.reps,
+        duration_seconds=workout_set.duration_seconds,
         notes=workout_set.notes,
     )
 

@@ -1,5 +1,7 @@
 import React from "react";
+import { Link } from "react-router-dom";
 import type { WorkoutHistoryEntry } from "../../api/workoutSessionsApi";
+import { CalendarIcon, ClipboardIcon, ClockIcon, ArrowRightIcon } from "../../components/icons";
 
 interface WorkoutHistoryProps {
   entries: WorkoutHistoryEntry[];
@@ -20,19 +22,19 @@ export const WorkoutHistory: React.FC<WorkoutHistoryProps> = ({
 
   if (error) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} className="error-message">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }} className="error-message">
         <span>Error: {error}</span>
         {onDismissError && (
           <button
             onClick={onDismissError}
             style={{
-              background: 'none',
-              border: 'none',
-              color: '#721c24',
-              fontSize: '20px',
-              cursor: 'pointer',
-              padding: '0 0 0 12px',
-              flex: '0 0 auto'
+              background: "none",
+              border: "none",
+              color: "inherit",
+              fontSize: "20px",
+              cursor: "pointer",
+              padding: "0 0 0 12px",
+              flex: "0 0 auto",
             }}
             aria-label="Dismiss error"
           >
@@ -52,30 +54,52 @@ export const WorkoutHistory: React.FC<WorkoutHistoryProps> = ({
   }
 
   return (
-    <div>
-      <h2>Workout History</h2>
-      <div style={{ display: "grid", gap: "12px" }}>
-        {entries.map((entry, index) => (
-          <div key={index} className="card">
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px" }}>
-              <div>
-                <p style={{ fontSize: "12px", color: "var(--text)", margin: "0 0 4px 0" }}>Date</p>
-                <p style={{ margin: "0", fontWeight: "bold" }}>
-                  {new Date(entry.date).toLocaleDateString()}
-                </p>
-              </div>
-              <div>
-                <p style={{ fontSize: "12px", color: "var(--text)", margin: "0 0 4px 0" }}>Workout</p>
-                <p style={{ margin: "0", fontWeight: "bold" }}>{entry.workout}</p>
-              </div>
-              <div>
-                <p style={{ fontSize: "12px", color: "var(--text)", margin: "0 0 4px 0" }}>Duration</p>
-                <p style={{ margin: "0", fontWeight: "bold" }}>{entry.duration}</p>
-              </div>
+    <div className="history-list">
+      {entries.map((entry, index) => (
+        <div key={index} className="history-row">
+          <div className="field-group">
+            <span className="icon-badge">
+              <CalendarIcon size={18} />
+            </span>
+            <div>
+              <p className="field-group-label">Date</p>
+              <p className="field-group-value">{new Date(entry.date).toLocaleDateString()}</p>
             </div>
           </div>
-        ))}
-      </div>
+
+          <div className="field-group">
+            <span className="icon-badge">
+              <ClipboardIcon size={18} />
+            </span>
+            <div>
+              <p className="field-group-label">Workout</p>
+              <p className="field-group-value">{entry.workout}</p>
+            </div>
+          </div>
+
+          <div className="field-group">
+            <span className="icon-badge">
+              <ClockIcon size={18} />
+            </span>
+            <div>
+              <p className="field-group-label">Duration</p>
+              <p className="field-group-value">{entry.duration}</p>
+            </div>
+          </div>
+
+          {entry.session_id && (
+            <Link
+              to={`/workout-history/${entry.session_id}`}
+              className="btn btn-primary"
+              style={{ whiteSpace: "nowrap" }}
+              aria-label={`View details for ${entry.workout} on ${new Date(entry.date).toLocaleDateString()}`}
+            >
+              View Details
+              <ArrowRightIcon size={15} />
+            </Link>
+          )}
+        </div>
+      ))}
     </div>
   );
 };

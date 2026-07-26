@@ -22,6 +22,7 @@ const EXERCISE_CATEGORIES = [
 export const CreateExerciseForm: React.FC<CreateExerciseFormProps> = ({ onCreated }) => {
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
+  const [loggingType, setLoggingType] = useState("weight_reps");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const { Toast, showToast } = useToast();
@@ -32,9 +33,10 @@ export const CreateExerciseForm: React.FC<CreateExerciseFormProps> = ({ onCreate
     setLoading(true);
 
     try {
-      await exercisesApi.create(name, category || undefined);
+      await exercisesApi.create(name, category || undefined, loggingType);
       setName("");
       setCategory("");
+      setLoggingType("weight_reps");
       showToast("Exercise created successfully!", "success");
       if (onCreated) onCreated();
     } catch (err: any) {
@@ -82,6 +84,23 @@ export const CreateExerciseForm: React.FC<CreateExerciseFormProps> = ({ onCreate
           </select>
         </div>
 
+        <div style={{ flex: 1 }}>
+          <label htmlFor="logging-type" style={{ display: "block", marginBottom: "5px" }}>
+            Logging Type:
+          </label>
+          <select
+            id="logging-type"
+            value={loggingType}
+            onChange={(e) => setLoggingType(e.target.value)}
+            className="input-field"
+          >
+            <option value="weight_reps">Weight & Reps</option>
+            <option value="reps_only">Reps Only</option>
+            <option value="weight_only">Weight Only</option>
+            <option value="cardio">Cardio</option>
+          </select>
+        </div>
+
         <button
           type="submit"
           disabled={loading}
@@ -100,7 +119,7 @@ export const CreateExerciseForm: React.FC<CreateExerciseFormProps> = ({ onCreate
             style={{
               background: 'none',
               border: 'none',
-              color: '#721c24',
+              color: 'var(--danger)',
               fontSize: '20px',
               cursor: 'pointer',
               padding: '0 0 0 12px',

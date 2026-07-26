@@ -25,10 +25,11 @@ class WorkoutSessionResponse(BaseModel):
 class AddWorkoutSetRequest(BaseModel):
     """Request to log a workout set."""
 
-    exercise_id: int = Field(..., gt=0)
+    workout_exercise_id: int = Field(..., gt=0)
     set_number: int = Field(..., gt=0)
-    weight: float = Field(..., gt=0)
-    reps: int = Field(..., gt=0)
+    weight: float | None = Field(default=None, gt=0)
+    reps: int | None = Field(default=None, gt=0)
+    duration_seconds: int | None = Field(default=None, gt=0)
     notes: str = Field(default="", max_length=500)
 
 
@@ -38,9 +39,11 @@ class WorkoutSetResponse(BaseModel):
     id: int
     workout_session_id: int
     exercise_id: int
+    workout_exercise_id: int | None
     set_number: int
-    weight: float
-    reps: int
+    weight: float | None
+    reps: int | None
+    duration_seconds: int | None
     notes: str
 
 
@@ -49,10 +52,12 @@ class WorkoutSetWithExerciseResponse(BaseModel):
 
     id: int
     exercise_id: int
+    workout_exercise_id: int | None
     exercise_name: str
     set_number: int
-    weight: float
-    reps: int
+    weight: float | None
+    reps: int | None
+    duration_seconds: int | None
     notes: str
 
 

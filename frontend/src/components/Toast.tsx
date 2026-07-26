@@ -43,9 +43,9 @@ export const useToast = () => {
     setToast({ message, type });
   };
 
-  const closeToast = () => {
+  const closeToast = React.useCallback(() => {
     setToast(null);
-  };
+  }, []);
 
   return {
     Toast: toast ? (

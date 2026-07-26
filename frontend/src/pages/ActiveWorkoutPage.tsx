@@ -2,47 +2,15 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ActiveWorkout } from "../features/sessions/ActiveWorkout";
 import { workoutSessionsApi, type WorkoutSet } from "../api/workoutSessionsApi";
-import { getWorkoutPlanDetail, getPreviousPerformance, type PreviousPerformanceResponse } from "../api/workoutPlansApi";
+import { getWorkoutPlanDetail, getPreviousPerformance, type PreviousPerformanceResponse, type WorkoutPlanDetail } from "../api/workoutPlansApi";
 import { exercisesApi } from "../api/exercisesApi";
+import { resolveSessionDay } from "../features/sessions/sessionDayResolver";
 import { Layout } from "../components/Layout";
 
 interface Exercise {
   id: number;
   name: string;
-}
-
-interface WorkoutPlan {
-  id: number;
-  user_id: number;
-  name: string;
-  created_at: string;
-  updated_at: string;
-}
-
-interface WorkoutExercise {
-  id: number;
-  plan_day_id: number;
-  exercise_id: number;
-  order_number: number;
-  target_sets: number | null;
-  target_reps: number | null;
-  target_weight: number | null;
-  exercise_name?: string;
-}
-
-interface PlanDay {
-  id: number;
-  label: string;
-  order_position: number;
-  weekdays: string[];
-  exercises: WorkoutExercise[];
-  created_at: string;
-  updated_at: string;
-}
-
-interface WorkoutPlanDetail {
-  plan: WorkoutPlan;
-  days: PlanDay[];
+  logging_type: string;
 }
 
 export default function ActiveWorkoutPage() {
@@ -96,10 +64,7 @@ export default function ActiveWorkoutPage() {
   }
 
   const handleFinish = () => {
-    // Navigate back to the plan detail page
-    if (session) {
-      navigate(`/workout-plans/${session.workout_plan_id}`);
-    }
+    navigate("/dashboard");
   };
 
   const handleRefreshPlanDetail = async () => {
@@ -147,8 +112,9 @@ export default function ActiveWorkoutPage() {
   );
   if (!session || !planDetail) return <Layout><div style={{ padding: "20px" }}>Session not found</div></Layout>;
 
-  // Find the matching day from the plan
-  const matchingDay = planDetail.days.find((d) => d.id === session.plan_day_id);
+  // Resolve the day from the plan using the helper function
+  const { matchingDay, dayLabel } = resolveSessionDay(planDetail, session.plan_day_id);
+
   if (!matchingDay) {
     return (
       <Layout>
@@ -186,12 +152,6 @@ export default function ActiveWorkoutPage() {
   return (
     <Layout>
       <div>
-        <button
-          onClick={() => navigate(`/workout-plans/${session.workout_plan_id}`)}
-          style={{ margin: "10px 20px", padding: "8px 16px" }}
-        >
-          Back to Plan
-        </button>
         <ActiveWorkout
           session={session}
           planExercises={matchingDay.exercises}
@@ -202,6 +162,8 @@ export default function ActiveWorkoutPage() {
           planId={planDetail.plan.id}
           dayId={matchingDay.id}
           planName={planDetail.plan.name}
+          dayLabel={dayLabel}
+          isQuickStart={!!planDetail.plan.is_quick_start}
           onPlanDetailRefresh={handleRefreshPlanDetail}
         />
       </div>

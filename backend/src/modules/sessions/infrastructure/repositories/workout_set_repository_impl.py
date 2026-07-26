@@ -17,9 +17,11 @@ class WorkoutSetRepositoryImpl(WorkoutSetRepository):
         model = WorkoutSetModel(
             workout_session_id=workout_set.workout_session_id,
             exercise_id=workout_set.exercise_id,
+            workout_exercise_id=workout_set.workout_exercise_id,
             set_number=workout_set.set_number,
             weight=workout_set.weight,
             reps=workout_set.reps,
+            duration_seconds=workout_set.duration_seconds,
             notes=workout_set.notes,
         )
         self.session.add(model)
@@ -33,9 +35,9 @@ class WorkoutSetRepositoryImpl(WorkoutSetRepository):
         return model.to_domain() if model else None
 
     def get_by_session_exercise_and_set_number(
-        self, session_id: int, exercise_id: int, set_number: int
+        self, session_id: int, workout_exercise_id: int, set_number: int
     ) -> WorkoutSet | None:
-        """Retrieve a workout set by session, exercise, and set number."""
+        """Retrieve a workout set by session, workout_exercise, and set number."""
         from sqlalchemy import and_
 
         model = (
@@ -43,7 +45,7 @@ class WorkoutSetRepositoryImpl(WorkoutSetRepository):
             .filter(
                 and_(
                     WorkoutSetModel.workout_session_id == session_id,
-                    WorkoutSetModel.exercise_id == exercise_id,
+                    WorkoutSetModel.workout_exercise_id == workout_exercise_id,
                     WorkoutSetModel.set_number == set_number,
                 )
             )
@@ -58,6 +60,7 @@ class WorkoutSetRepositoryImpl(WorkoutSetRepository):
             raise ValueError(f"WorkoutSet with id {workout_set.id} not found")
         model.weight = workout_set.weight
         model.reps = workout_set.reps
+        model.duration_seconds = workout_set.duration_seconds
         model.notes = workout_set.notes
         self.session.commit()
         return model.to_domain()
@@ -72,11 +75,11 @@ class WorkoutSetRepositoryImpl(WorkoutSetRepository):
         )
         return [m.to_domain() for m in models]
 
-    def count_by_session_and_exercise(self, session_id: int, exercise_id: int) -> int:
-        """Count sets for a specific exercise in a session."""
+    def count_by_session_and_exercise(self, session_id: int, workout_exercise_id: int) -> int:
+        """Count sets for a specific workout_exercise in a session."""
         return (
             self.session.query(WorkoutSetModel)
-            .filter_by(workout_session_id=session_id, exercise_id=exercise_id)
+            .filter_by(workout_session_id=session_id, workout_exercise_id=workout_exercise_id)
             .count()
         )
 

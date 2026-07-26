@@ -5,6 +5,7 @@ from ...domain.interfaces.workout_exercise_repository import WorkoutExerciseRepo
 from ...domain.interfaces.workout_plan_repository import WorkoutPlanRepository
 from ...domain.interfaces.plan_day_repository import PlanDayRepository
 from ...domain.interfaces.plan_week_repository import PlanWeekRepository
+from ...domain.services.week_resolver import resolve_effective_week
 
 
 class GetWorkoutPlanDetail:
@@ -56,43 +57,21 @@ class GetWorkoutPlanDetail:
         if not self.week_repository or not self.day_repository:
             return None
 
-        weeks = self.week_repository.list_by_plan(plan_id)
+        try:
+            weeks = self.week_repository.list_by_plan(plan_id)
+            all_days = self.day_repository.list_by_plan(plan_id)
 
-        # Find the week to start from
-        current_week = None
-        for w in weeks:
-            if w.week_number == week_number:
-                current_week = w
-                break
+            # Build a map of week_id -> [days for that week]
+            days_by_week_id = {}
+            for day in all_days:
+                if day.plan_week_id not in days_by_week_id:
+                    days_by_week_id[day.plan_week_id] = []
+                days_by_week_id[day.plan_week_id].append(day)
 
-        if not current_week:
+            # Use the shared resolution function
+            result = resolve_effective_week(week_number, weeks, days_by_week_id)
+            return result
+
+        except ValueError:
+            # Week not found or resolution failed
             return None
-
-        # Walk backward to find the nearest non-linked week
-        j = week_number
-        target_week = None
-        while j >= 1:
-            w = None
-            for week in weeks:
-                if week.week_number == j:
-                    w = week
-                    break
-
-            if w and w.mode != "linked":
-                target_week = w
-                break
-
-            j -= 1
-
-        if not target_week:
-            return None
-
-        # Get the days for this target week
-        all_days = self.day_repository.list_by_plan(plan_id)
-        effective_days = [d for d in all_days if d.plan_week_id == target_week.id]
-
-        return {
-            "resolved_week_number": target_week.week_number,
-            "mode": current_week.mode,
-            "days": effective_days,
-        }

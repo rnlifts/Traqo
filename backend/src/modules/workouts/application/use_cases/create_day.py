@@ -23,12 +23,8 @@ class CreateDay:
         plan_id: int,
         requesting_user_id: int,
         label: str,
-        weekdays: list[str] | None = None,  # Deprecated, kept for backward compatibility
     ) -> PlanDay:
-        """Create a new day in a plan.
-
-        Note: weekday tags are deprecated and ignored.
-        """
+        """Create a new day in a plan."""
         # Load and validate plan ownership
         plan = self.plan_repository.get_by_id(plan_id)
         if not plan:

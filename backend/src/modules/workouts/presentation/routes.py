@@ -51,6 +51,9 @@ from src.modules.workouts.application.use_cases.customize_week import (
 from src.modules.workouts.application.use_cases.match_previous_week import (
     MatchPreviousWeek,
 )
+from src.modules.workouts.application.use_cases.update_exercise_in_day import (
+    UpdateExerciseInDay,
+)
 from src.modules.workouts.application.use_cases.build_plan import (
     BuildPlan,
     BuildPlanDaySpec,
@@ -75,6 +78,9 @@ from src.modules.workouts.infrastructure.repositories.workout_exercise_repositor
 from src.modules.workouts.infrastructure.repositories.workout_plan_repository_impl import (
     WorkoutPlanRepositoryImpl,
 )
+from src.modules.workouts.infrastructure.repositories.workout_exercise_set_target_repository_impl import (
+    WorkoutExerciseSetTargetRepositoryImpl,
+)
 from .schemas import (
     CreateDayRequest,
     CreateWorkoutPlanRequest,
@@ -87,14 +93,81 @@ from .schemas import (
     WorkoutPlanResponse,
     WorkoutExerciseResponse,
     AddExerciseRequest,
+    UpdateExerciseInDayRequest,
     WorkoutExerciseDetailedResponse,
     PreviousPerformanceResponse,
     PreviousPerformanceExerciseResponse,
     PreviousPerformanceSetResponse,
     BuildPlanRequest,
+    SetTargetResponse,
+    SetTargetRequest,
 )
 
 workouts_router = APIRouter(prefix="/api/workout-plans", tags=["workouts"])
+
+
+def _build_workout_exercise_response(
+    exercise, db: Session, include_exercise_name: bool = False
+) -> WorkoutExerciseResponse | WorkoutExerciseDetailedResponse:
+    """Helper to build a WorkoutExerciseResponse with set_targets populated.
+
+    Args:
+        exercise: The WorkoutExercise domain entity.
+        db: Database session to fetch set targets.
+        include_exercise_name: If True, return WorkoutExerciseDetailedResponse; else WorkoutExerciseResponse.
+
+    Returns:
+        WorkoutExerciseResponse or WorkoutExerciseDetailedResponse with set_targets populated.
+    """
+    # Fetch set targets for this exercise
+    set_target_repo = WorkoutExerciseSetTargetRepositoryImpl(db)
+    set_targets = set_target_repo.list_by_workout_exercise(exercise.id)
+    set_targets_responses = [
+        SetTargetResponse(
+            set_number=st.set_number,
+            target_reps=st.target_reps,
+            target_weight=st.target_weight,
+            target_duration_seconds=st.target_duration_seconds,
+        )
+        for st in set_targets
+    ]
+
+    if include_exercise_name:
+        exercise_domain_repo = ExerciseRepositoryImpl(db)
+        exercise_entity = exercise_domain_repo.get_by_id(exercise.exercise_id)
+        exercise_name = exercise_entity.name if exercise_entity else "Unknown Exercise"
+        return WorkoutExerciseDetailedResponse(
+            id=exercise.id,
+            plan_day_id=exercise.plan_day_id,
+            exercise_id=exercise.exercise_id,
+            exercise_name=exercise_name,
+            order_number=exercise.order_number,
+            target_sets=exercise.target_sets,
+            target_reps=exercise.target_reps,
+            target_weight=exercise.target_weight,
+            target_duration_seconds=exercise.target_duration_seconds,
+            notes=exercise.notes,
+            has_reps=exercise.has_reps,
+            has_weight=exercise.has_weight,
+            has_duration=exercise.has_duration,
+            set_targets=set_targets_responses,
+        )
+    else:
+        return WorkoutExerciseResponse(
+            id=exercise.id,
+            plan_day_id=exercise.plan_day_id,
+            exercise_id=exercise.exercise_id,
+            order_number=exercise.order_number,
+            target_sets=exercise.target_sets,
+            target_reps=exercise.target_reps,
+            target_weight=exercise.target_weight,
+            target_duration_seconds=exercise.target_duration_seconds,
+            notes=exercise.notes,
+            has_reps=exercise.has_reps,
+            has_weight=exercise.has_weight,
+            has_duration=exercise.has_duration,
+            set_targets=set_targets_responses,
+        )
 
 
 @workouts_router.post("", response_model=WorkoutPlanResponse, status_code=status.HTTP_201_CREATED)
@@ -182,7 +255,12 @@ async def build_plan(
                         "target_sets": ex.target_sets,
                         "target_reps": ex.target_reps,
                         "target_weight": ex.target_weight,
+                        "target_duration_seconds": ex.target_duration_seconds,
                         "notes": ex.notes,
+                        "has_reps": ex.has_reps,
+                        "has_weight": ex.has_weight,
+                        "has_duration": ex.has_duration,
+                        "set_targets": [st.dict() for st in ex.set_targets],
                     }
                     for ex in day.exercises
                 ],
@@ -211,7 +289,12 @@ async def build_plan(
                                     "target_sets": ex.target_sets,
                                     "target_reps": ex.target_reps,
                                     "target_weight": ex.target_weight,
+                                    "target_duration_seconds": ex.target_duration_seconds,
                                     "notes": ex.notes,
+                                    "has_reps": ex.has_reps,
+                                    "has_weight": ex.has_weight,
+                                    "has_duration": ex.has_duration,
+                                    "set_targets": [st.dict() for st in ex.set_targets],
                                 }
                                 for ex in day.exercises
                             ],
@@ -279,21 +362,7 @@ async def build_plan(
         exercises = exercise_detail_repo.list_by_day(day.id)
         exercise_responses = []
         for ex in exercises:
-            exercise_entity = exercise_domain_repo.get_by_id(ex.exercise_id)
-            exercise_name = exercise_entity.name if exercise_entity else "Unknown Exercise"
-            exercise_responses.append(
-                WorkoutExerciseDetailedResponse(
-                    id=ex.id,
-                    plan_day_id=ex.plan_day_id,
-                    exercise_id=ex.exercise_id,
-                    exercise_name=exercise_name,
-                    order_number=ex.order_number,
-                    target_sets=ex.target_sets,
-                    target_reps=ex.target_reps,
-                    target_weight=ex.target_weight,
-                    notes=ex.notes,
-                )
-            )
+            exercise_responses.append(_build_workout_exercise_response(ex, db, include_exercise_name=True))
         return PlanDayDetailResponse(
             id=day.id,
             label=day.label,
@@ -332,6 +401,7 @@ async def build_plan(
                 name=plan.name,
                 unit_type=plan.unit_type,
                 total_units=plan.total_units,
+                is_quick_start=plan.is_quick_start,
                 created_at=plan.created_at,
                 updated_at=plan.updated_at,
             ),
@@ -350,6 +420,7 @@ async def build_plan(
                 name=plan.name,
                 unit_type=plan.unit_type,
                 total_units=plan.total_units,
+                is_quick_start=plan.is_quick_start,
                 created_at=plan.created_at,
                 updated_at=plan.updated_at,
             ),
@@ -389,21 +460,7 @@ async def get_workout_plan_detail(
         exercises = exercise_repo.list_by_day(day.id)
         exercise_responses = []
         for ex in exercises:
-            exercise_entity = exercise_domain_repo.get_by_id(ex.exercise_id)
-            exercise_name = exercise_entity.name if exercise_entity else "Unknown Exercise"
-            exercise_responses.append(
-                WorkoutExerciseDetailedResponse(
-                    id=ex.id,
-                    plan_day_id=ex.plan_day_id,
-                    exercise_id=ex.exercise_id,
-                    exercise_name=exercise_name,
-                    order_number=ex.order_number,
-                    target_sets=ex.target_sets,
-                    target_reps=ex.target_reps,
-                    target_weight=ex.target_weight,
-                    notes=ex.notes,
-                )
-            )
+            exercise_responses.append(_build_workout_exercise_response(ex, db, include_exercise_name=True))
         return PlanDayDetailResponse(
             id=day.id,
             label=day.label,
@@ -443,6 +500,7 @@ async def get_workout_plan_detail(
                 name=plan.name,
                 unit_type=plan.unit_type,
                 total_units=plan.total_units,
+                is_quick_start=plan.is_quick_start,
                 created_at=plan.created_at,
                 updated_at=plan.updated_at,
             ),
@@ -461,6 +519,7 @@ async def get_workout_plan_detail(
                 name=plan.name,
                 unit_type=plan.unit_type,
                 total_units=plan.total_units,
+                is_quick_start=plan.is_quick_start,
                 created_at=plan.created_at,
                 updated_at=plan.updated_at,
             ),
@@ -506,7 +565,7 @@ async def create_day(
     plan_repo = WorkoutPlanRepositoryImpl(db)
     day_repo = PlanDayRepositoryImpl(db)
     use_case = CreateDay(plan_repo, day_repo)
-    day = use_case.execute(plan_id, user_id, req.label, [])  # weekdays retired
+    day = use_case.execute(plan_id, user_id, req.label)
 
     return PlanDayResponse(
         id=day.id,
@@ -553,7 +612,7 @@ async def update_day(
     plan_repo = WorkoutPlanRepositoryImpl(db)
     day_repo = PlanDayRepositoryImpl(db)
     use_case = UpdateDay(plan_repo, day_repo)
-    day_data = use_case.execute(plan_id, day_id, user_id, req.label, [])  # weekdays retired
+    day_data = use_case.execute(plan_id, day_id, user_id, req.label, req.is_rest)
 
     return PlanDayResponse(
         id=day_data["id"],
@@ -626,19 +685,20 @@ async def get_previous_performance(
 
     # Build response
     exercises_response = []
-    for exercise_id in sorted(sets_by_exercise.keys()):
-        sets = sets_by_exercise[exercise_id]
+    for workout_exercise_id in sorted(sets_by_exercise.keys()):
+        sets = sets_by_exercise[workout_exercise_id]
         sets_response = [
             PreviousPerformanceSetResponse(
                 set_number=s.set_number,
                 weight=s.weight,
                 reps=s.reps,
+                duration_seconds=s.duration_seconds,
             )
             for s in sets
         ]
         exercises_response.append(
             PreviousPerformanceExerciseResponse(
-                exercise_id=exercise_id,
+                workout_exercise_id=workout_exercise_id,
                 sets=sets_response,
             )
         )
@@ -672,17 +732,12 @@ async def add_exercise_to_day(
         target_sets=req.target_sets,
         target_reps=req.target_reps,
         target_weight=req.target_weight,
+        target_duration_seconds=req.target_duration_seconds,
+        has_reps=req.has_reps,
+        has_weight=req.has_weight,
+        has_duration=req.has_duration,
     )
-    return WorkoutExerciseResponse(
-        id=workout_exercise.id,
-        plan_day_id=workout_exercise.plan_day_id,
-        exercise_id=workout_exercise.exercise_id,
-        order_number=workout_exercise.order_number,
-        target_sets=workout_exercise.target_sets,
-        target_reps=workout_exercise.target_reps,
-        target_weight=workout_exercise.target_weight,
-        notes=workout_exercise.notes,
-    )
+    return _build_workout_exercise_response(workout_exercise, db, include_exercise_name=False)
 
 
 @workouts_router.delete("/{plan_id}/days/{day_id}/exercises/{workout_exercise_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -715,16 +770,132 @@ async def reorder_day_exercise(
     use_case = ReorderDayExercise(plan_repo, day_repo, exercise_repo)
     updated = use_case.execute(plan_id, day_id, workout_exercise_id, user_id, req.direction)
 
-    return WorkoutExerciseResponse(
-        id=updated.id,
-        plan_day_id=updated.plan_day_id,
-        exercise_id=updated.exercise_id,
-        order_number=updated.order_number,
-        target_sets=updated.target_sets,
-        target_reps=updated.target_reps,
-        target_weight=updated.target_weight,
-        notes=updated.notes,
+    return _build_workout_exercise_response(updated, db, include_exercise_name=False)
+
+
+@workouts_router.put("/{plan_id}/days/{day_id}/exercises/{workout_exercise_id}", response_model=WorkoutExerciseResponse)
+async def update_exercise_in_day(
+    plan_id: int,
+    day_id: int,
+    workout_exercise_id: int,
+    req: UpdateExerciseInDayRequest,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """
+    Update an exercise's targets and notes in place.
+
+    This allows editing target_sets, target_reps, target_weight, target_duration_seconds,
+    has_reps, has_weight, has_duration, and notes without removing and re-adding the exercise.
+    exercise_id and order_number are immutable.
+
+    Request body (all fields optional):
+    {
+      "target_sets": 4,
+      "target_reps": "6",
+      "target_weight": 185.5,
+      "target_duration_seconds": 60,
+      "has_reps": true,
+      "has_weight": true,
+      "has_duration": false,
+      "notes": "pause at bottom"
+    }
+
+    Returns the updated exercise.
+    """
+    plan_repo = WorkoutPlanRepositoryImpl(db)
+    day_repo = PlanDayRepositoryImpl(db)
+    exercise_repo = WorkoutExerciseRepositoryImpl(db)
+    use_case = UpdateExerciseInDay(plan_repo, day_repo, exercise_repo)
+    exercise_data = use_case.execute(
+        plan_id,
+        day_id,
+        workout_exercise_id,
+        user_id,
+        target_sets=req.target_sets,
+        target_reps=req.target_reps,
+        target_weight=req.target_weight,
+        target_duration_seconds=req.target_duration_seconds,
+        notes=req.notes,
+        has_reps=req.has_reps,
+        has_weight=req.has_weight,
+        has_duration=req.has_duration,
     )
+
+    # Fetch the updated exercise and return full response with set_targets
+    updated_exercise = exercise_repo.get_by_id(exercise_data["id"])
+    return _build_workout_exercise_response(updated_exercise, db, include_exercise_name=False)
+
+
+@workouts_router.put("/{plan_id}/days/{day_id}/exercises/{workout_exercise_id}/set-targets", response_model=WorkoutExerciseDetailedResponse)
+async def update_exercise_set_targets(
+    plan_id: int,
+    day_id: int,
+    workout_exercise_id: int,
+    set_targets_list: list[SetTargetRequest],
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """
+    Replace all per-set targets for a workout exercise.
+
+    Atomically deletes all existing set targets for the exercise and replaces them
+    with the provided list. This is the primary way to edit the "Vary by set" table.
+
+    Request body: array of set target specs
+    [
+      {"set_number": 1, "target_reps": "8", "target_weight": 135.0},
+      {"set_number": 2, "target_reps": "6", "target_weight": 155.0}
+    ]
+
+    Empty array is allowed (clears all set targets).
+
+    Returns the updated exercise with its new set_targets list.
+    """
+    from src.modules.workouts.domain.entities.workout_exercise_set_target import WorkoutExerciseSetTarget
+
+    # Verify plan ownership and existence
+    plan_repo = WorkoutPlanRepositoryImpl(db)
+    plan = plan_repo.get_by_id(plan_id)
+    if not plan:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workout plan not found")
+    if plan.user_id != user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Unauthorized")
+
+    # Verify day exists and belongs to plan
+    day_repo = PlanDayRepositoryImpl(db)
+    day = day_repo.get_by_id(day_id)
+    if not day:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan day not found")
+    if day.workout_plan_id != plan_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan day not found")
+
+    # Verify exercise exists and belongs to day
+    exercise_repo = WorkoutExerciseRepositoryImpl(db)
+    exercise = exercise_repo.get_by_id(workout_exercise_id)
+    if not exercise:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exercise not found")
+    if exercise.plan_day_id != day_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exercise not found in day")
+
+    # Convert request items to domain entities
+    set_targets = [
+        WorkoutExerciseSetTarget(
+            workout_exercise_id=workout_exercise_id,
+            set_number=st.set_number,
+            target_reps=st.target_reps,
+            target_weight=st.target_weight,
+            target_duration_seconds=st.target_duration_seconds,
+        )
+        for st in set_targets_list
+    ]
+
+    # Atomically replace all set targets for this exercise
+    set_target_repo = WorkoutExerciseSetTargetRepositoryImpl(db)
+    set_target_repo.replace_all_for_exercise(workout_exercise_id, set_targets)
+
+    # Fetch the updated exercise and return with new set_targets
+    return _build_workout_exercise_response(exercise, db, include_exercise_name=True)
 
 
 # ===== Week Management Endpoints (for weeks-type plans) =====

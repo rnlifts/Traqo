@@ -25,6 +25,7 @@ from ...infrastructure.models.workout_plan_model import WorkoutPlanModel
 from ...infrastructure.models.plan_day_model import PlanDayModel
 from ...infrastructure.models.plan_week_model import PlanWeekModel
 from ...infrastructure.models.workout_exercise_model import WorkoutExerciseModel
+from ...infrastructure.models.workout_exercise_set_target_model import WorkoutExerciseSetTargetModel
 
 
 class BuildPlanDaySpec:
@@ -180,9 +181,25 @@ class BuildPlan:
                     target_sets=exercise_spec.get("target_sets"),
                     target_reps=exercise_spec.get("target_reps"),
                     target_weight=exercise_spec.get("target_weight"),
+                    target_duration_seconds=exercise_spec.get("target_duration_seconds"),
                     notes=exercise_spec.get("notes", ""),
+                    has_reps=exercise_spec.get("has_reps", True),
+                    has_weight=exercise_spec.get("has_weight", True),
+                    has_duration=exercise_spec.get("has_duration", False),
                 )
                 self.db.add(exercise_model)
+                self.db.flush()  # Get the exercise id for set_targets
+
+                # Add per-set targets if provided
+                for set_target_spec in exercise_spec.get("set_targets", []):
+                    set_target_model = WorkoutExerciseSetTargetModel(
+                        workout_exercise_id=exercise_model.id,
+                        set_number=set_target_spec["set_number"],
+                        target_reps=set_target_spec.get("target_reps"),
+                        target_weight=set_target_spec.get("target_weight"),
+                        target_duration_seconds=set_target_spec.get("target_duration_seconds"),
+                    )
+                    self.db.add(set_target_model)
 
         # Single commit at the end
         self.db.commit()
@@ -280,9 +297,25 @@ class BuildPlan:
                             target_sets=exercise_spec.get("target_sets"),
                             target_reps=exercise_spec.get("target_reps"),
                             target_weight=exercise_spec.get("target_weight"),
+                            target_duration_seconds=exercise_spec.get("target_duration_seconds"),
                             notes=exercise_spec.get("notes", ""),
+                            has_reps=exercise_spec.get("has_reps", True),
+                            has_weight=exercise_spec.get("has_weight", True),
+                            has_duration=exercise_spec.get("has_duration", False),
                         )
                         self.db.add(exercise_model)
+                        self.db.flush()  # Get the exercise id for set_targets
+
+                        # Add per-set targets if provided
+                        for set_target_spec in exercise_spec.get("set_targets", []):
+                            set_target_model = WorkoutExerciseSetTargetModel(
+                                workout_exercise_id=exercise_model.id,
+                                set_number=set_target_spec["set_number"],
+                                target_reps=set_target_spec.get("target_reps"),
+                                target_weight=set_target_spec.get("target_weight"),
+                                target_duration_seconds=set_target_spec.get("target_duration_seconds"),
+                            )
+                            self.db.add(set_target_model)
 
         # Single commit at the end
         self.db.commit()

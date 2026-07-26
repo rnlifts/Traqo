@@ -94,12 +94,24 @@ class InMemoryWorkoutExerciseRepository(WorkoutExerciseRepository):
         exercises = [e for e in self.exercises.values() if e.workout_plan_id == plan_id]
         return sorted(exercises, key=lambda e: e.order_number)
 
+    def list_by_day(self, day_id: int) -> list[WorkoutExercise]:
+        """Get all exercises for a specific plan day, ordered by order_number."""
+        exercises = [e for e in self.exercises.values() if e.plan_day_id == day_id]
+        return sorted(exercises, key=lambda e: e.order_number)
+
     def get_by_id(self, workout_exercise_id: int) -> WorkoutExercise | None:
         return self.exercises.get(workout_exercise_id)
 
     def remove(self, workout_exercise_id: int) -> None:
         if workout_exercise_id in self.exercises:
             del self.exercises[workout_exercise_id]
+
+    def update(self, workout_exercise: WorkoutExercise) -> WorkoutExercise:
+        """Update an existing workout_exercise with all its fields."""
+        if workout_exercise.id not in self.exercises:
+            return None
+        self.exercises[workout_exercise.id] = workout_exercise
+        return workout_exercise
 
     def update_order(self, workout_exercise_id: int, new_order_number: int) -> WorkoutExercise:
         if workout_exercise_id in self.exercises:

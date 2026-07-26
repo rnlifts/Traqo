@@ -33,8 +33,12 @@ class AddExerciseToDay:
         exercise_id: int,
         requesting_user_id: int,
         target_sets: int | None = None,
-        target_reps: int | None = None,
+        target_reps: str | None = None,
         target_weight: float | None = None,
+        target_duration_seconds: int | None = None,
+        has_reps: bool = True,
+        has_weight: bool = True,
+        has_duration: bool = False,
     ) -> WorkoutExercise:
         """Add an exercise to a plan day.
 
@@ -84,5 +88,9 @@ class AddExerciseToDay:
             target_sets=target_sets,
             target_reps=target_reps,
             target_weight=target_weight,
+            target_duration_seconds=target_duration_seconds,
+            has_reps=has_reps,
+            has_weight=has_weight,
+            has_duration=has_duration,
         )
         return self.exercise_repository_workout.add(workout_exercise)

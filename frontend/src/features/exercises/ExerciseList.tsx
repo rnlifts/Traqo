@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import type { Exercise } from "../../api/exercisesApi";
 import { exercisesApi } from "../../api/exercisesApi";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
@@ -72,7 +73,7 @@ export const ExerciseList: React.FC<ExerciseListProps> = ({ onDeleted }) => {
             style={{
               background: 'none',
               border: 'none',
-              color: '#721c24',
+              color: 'var(--danger)',
               fontSize: '20px',
               cursor: 'pointer',
               padding: '0 0 0 12px',
@@ -93,20 +94,29 @@ export const ExerciseList: React.FC<ExerciseListProps> = ({ onDeleted }) => {
             <div
               key={exercise.id}
               className="card"
-              style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
+              style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px" }}
             >
-              <span>
+              <span style={{ flex: 1 }}>
                 {exercise.name}
                 {exercise.category && ` — ${exercise.category}`}
               </span>
-              <button
-                onClick={() => handleDelete(exercise.id)}
-                disabled={deletingId === exercise.id}
-                className="btn btn-danger"
-                style={{ opacity: deletingId === exercise.id ? 0.6 : 1 }}
-              >
-                {deletingId === exercise.id ? "Deleting..." : "Delete"}
-              </button>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <Link
+                  to={`/exercises/${exercise.id}/progress`}
+                  className="btn btn-primary"
+                  style={{ fontSize: "14px", padding: "8px 12px" }}
+                >
+                  View Progress
+                </Link>
+                <button
+                  onClick={() => handleDelete(exercise.id)}
+                  disabled={deletingId === exercise.id}
+                  className="btn btn-danger"
+                  style={{ opacity: deletingId === exercise.id ? 0.6 : 1 }}
+                >
+                  {deletingId === exercise.id ? "Deleting..." : "Delete"}
+                </button>
+              </div>
             </div>
           ))}
         </div>

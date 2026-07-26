@@ -14,6 +14,7 @@ class WorkoutPlan:
         id: int | None = None,
         unit_type: Literal["days", "weeks"] | None = None,
         total_units: int | None = None,
+        is_quick_start: bool = False,
         created_at: datetime | None = None,
         updated_at: datetime | None = None,
     ):
@@ -22,5 +23,6 @@ class WorkoutPlan:
         self.name = name
         self.unit_type = unit_type
         self.total_units = total_units
+        self.is_quick_start = is_quick_start
         self.created_at = created_at or datetime.utcnow()
         self.updated_at = updated_at or datetime.utcnow()

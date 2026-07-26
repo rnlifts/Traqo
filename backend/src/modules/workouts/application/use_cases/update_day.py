@@ -24,11 +24,11 @@ class UpdateDay:
         day_id: int,
         requesting_user_id: int,
         label: str | None = None,
-        weekdays: list[str] | None = None,  # Deprecated, kept for backward compatibility
+        is_rest: bool | None = None,
     ) -> dict:
         """Update a plan day.
 
-        Note: weekday tags are deprecated and ignored.
+        Supports partial updates: only the fields provided will be changed.
         """
         # Load and validate plan ownership
         plan = self.plan_repository.get_by_id(plan_id)
@@ -48,11 +48,15 @@ class UpdateDay:
         if day.workout_plan_id != plan_id:
             raise PlanDayNotFoundError(f"Day {day_id} does not belong to plan {plan_id}")
 
-        # Validate and update label
+        # Update label if provided
         if label is not None:
             if not label or not label.strip():
                 raise ValueError("Day label cannot be empty")
             day.label = label
+
+        # Update is_rest if provided
+        if is_rest is not None:
+            day.is_rest = is_rest
 
         # Update the day
         updated_day = self.day_repository.update(day)

@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
 from src.infrastructure.database import get_db
+from src.infrastructure.rate_limiter import limiter
 from src.infrastructure.security.jwt_service import create_access_token
 from ..application.use_cases.login_user import LoginUser
 from ..application.use_cases.register_user import RegisterUser
@@ -15,7 +16,8 @@ password_hasher = BcryptPasswordHasher()
 
 
 @auth_router.post("/register", response_model=RegisterResponse, status_code=status.HTTP_201_CREATED)
-async def register(req: RegisterRequest, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+async def register(request: Request, req: RegisterRequest, response: Response, db: Session = Depends(get_db)):
     """Register a new user."""
     user_repository = UserRepositoryImpl(db)
     use_case = RegisterUser(user_repository, password_hasher)
@@ -24,7 +26,8 @@ async def register(req: RegisterRequest, db: Session = Depends(get_db)):
 
 
 @auth_router.post("/login", response_model=LoginResponse)
-async def login(req: LoginRequest, db: Session = Depends(get_db)):
+@limiter.limit("3/15minutes")
+async def login(request: Request, req: LoginRequest, response: Response, db: Session = Depends(get_db)):
     """Authenticate a user and return a JWT token."""
     user_repository = UserRepositoryImpl(db)
     use_case = LoginUser(user_repository, password_hasher)

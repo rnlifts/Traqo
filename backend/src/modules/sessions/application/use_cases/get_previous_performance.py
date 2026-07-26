@@ -19,7 +19,7 @@ class GetPreviousPerformance:
     def execute(
         self, plan_day_id: int, exclude_session_id: int | None = None
     ) -> tuple[datetime | None, dict[int, list[WorkoutSet]]]:
-        """Get the most recent finished session for a plan day and its sets grouped by exercise_id.
+        """Get the most recent finished session for a plan day and its sets grouped by workout_exercise_id.
 
         Args:
             plan_day_id: The plan day to find the previous session for.
@@ -27,9 +27,10 @@ class GetPreviousPerformance:
                 (e.g., the current in-progress session).
 
         Returns:
-            Tuple of (session_date, sets_by_exercise_id).
+            Tuple of (session_date, sets_by_workout_exercise_id).
             - session_date: The started_at datetime of the previous session, or None if no previous session.
-            - sets_by_exercise_id: Dict mapping exercise_id to list of WorkoutSet entities.
+            - sets_by_workout_exercise_id: Dict mapping workout_exercise_id to list of WorkoutSet entities.
+              Only includes sets with non-NULL workout_exercise_id (ambiguous sets are skipped).
               Empty dict if no previous session exists.
         """
         # Find the most recent finished session for this day
@@ -43,11 +44,14 @@ class GetPreviousPerformance:
         # Fetch all sets for this session
         sets = self.set_repository.list_by_session(session.id)
 
-        # Group sets by exercise_id
-        sets_by_exercise: dict[int, list[WorkoutSet]] = {}
+        # Group sets by workout_exercise_id (skip sets with NULL workout_exercise_id)
+        sets_by_workout_exercise: dict[int, list[WorkoutSet]] = {}
         for workout_set in sets:
-            if workout_set.exercise_id not in sets_by_exercise:
-                sets_by_exercise[workout_set.exercise_id] = []
-            sets_by_exercise[workout_set.exercise_id].append(workout_set)
+            # Skip sets with NULL workout_exercise_id (ambiguous historical data)
+            if workout_set.workout_exercise_id is None:
+                continue
+            if workout_set.workout_exercise_id not in sets_by_workout_exercise:
+                sets_by_workout_exercise[workout_set.workout_exercise_id] = []
+            sets_by_workout_exercise[workout_set.workout_exercise_id].append(workout_set)
 
-        return session.started_at, sets_by_exercise
+        return session.started_at, sets_by_workout_exercise

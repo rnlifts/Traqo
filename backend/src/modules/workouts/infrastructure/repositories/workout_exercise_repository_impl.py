@@ -24,6 +24,10 @@ class WorkoutExerciseRepositoryImpl(WorkoutExerciseRepository):
             target_reps=exercise.target_reps,
             target_weight=exercise.target_weight,
             notes=exercise.notes,
+            has_reps=exercise.has_reps,
+            has_weight=exercise.has_weight,
+            has_duration=exercise.has_duration,
+            target_duration_seconds=exercise.target_duration_seconds,
         )
         self.session.add(model)
         self.session.commit()
@@ -65,6 +69,23 @@ class WorkoutExerciseRepositoryImpl(WorkoutExerciseRepository):
         if model:
             self.session.delete(model)
             self.session.commit()
+
+    def update(self, exercise: WorkoutExercise) -> WorkoutExercise:
+        """Update an existing workout_exercise with all its fields."""
+        model = self.session.query(WorkoutExerciseModel).get(exercise.id)
+        if not model:
+            return None
+        model.target_sets = exercise.target_sets
+        model.target_reps = exercise.target_reps
+        model.target_weight = exercise.target_weight
+        model.notes = exercise.notes
+        model.order_number = exercise.order_number
+        model.has_reps = exercise.has_reps
+        model.has_weight = exercise.has_weight
+        model.has_duration = exercise.has_duration
+        model.target_duration_seconds = exercise.target_duration_seconds
+        self.session.commit()
+        return model.to_domain()
 
     def update_order(
         self, workout_exercise_id: int, new_order: int

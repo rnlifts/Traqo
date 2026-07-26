@@ -21,8 +21,25 @@ class AddExerciseRequest(BaseModel):
 
     exercise_id: int = Field(..., gt=0)
     target_sets: int | None = Field(None, gt=0)
-    target_reps: int | None = Field(None, gt=0)
+    target_reps: str | None = Field(None, max_length=20)
     target_weight: float | None = Field(None, ge=0)
+    target_duration_seconds: int | None = Field(None, gt=0)
+    has_reps: bool = True
+    has_weight: bool = True
+    has_duration: bool = False
+
+
+class UpdateExerciseInDayRequest(BaseModel):
+    """Update exercise in plan day request schema."""
+
+    target_sets: int | None = Field(None, gt=0)
+    target_reps: str | None = Field(None, max_length=20)
+    target_weight: float | None = Field(None, ge=0)
+    target_duration_seconds: int | None = Field(None, gt=0)
+    notes: str | None = Field(None, max_length=1000)
+    has_reps: bool | None = None
+    has_weight: bool | None = None
+    has_duration: bool | None = None
 
 
 class ReorderExerciseRequest(BaseModel):
@@ -41,6 +58,24 @@ class WorkoutPlanResponse(BaseModel):
     updated_at: datetime
 
 
+class SetTargetResponse(BaseModel):
+    """Per-set target response schema."""
+
+    set_number: int
+    target_reps: str | None
+    target_weight: float | None
+    target_duration_seconds: int | None
+
+
+class SetTargetRequest(BaseModel):
+    """Per-set target request schema for updating set targets."""
+
+    set_number: int = Field(..., gt=0)
+    target_reps: str | None = Field(None, max_length=20)
+    target_weight: float | None = Field(None, ge=0)
+    target_duration_seconds: int | None = Field(None, gt=0)
+
+
 class WorkoutExerciseResponse(BaseModel):
     """Workout exercise response schema."""
 
@@ -49,9 +84,14 @@ class WorkoutExerciseResponse(BaseModel):
     exercise_id: int
     order_number: int
     target_sets: int | None
-    target_reps: int | None
+    target_reps: str | None
     target_weight: float | None
+    target_duration_seconds: int | None
     notes: str = ""
+    has_reps: bool = True
+    has_weight: bool = True
+    has_duration: bool = False
+    set_targets: list[SetTargetResponse] = []
 
 
 class CreateDayRequest(BaseModel):
@@ -64,6 +104,7 @@ class UpdateDayRequest(BaseModel):
     """Update plan day request schema."""
 
     label: str | None = Field(None, min_length=1, max_length=255)
+    is_rest: bool | None = None
 
 
 class PlanDayResponse(BaseModel):
@@ -86,9 +127,14 @@ class WorkoutExerciseDetailedResponse(BaseModel):
     exercise_name: str
     order_number: int
     target_sets: int | None
-    target_reps: int | None
+    target_reps: str | None
     target_weight: float | None
+    target_duration_seconds: int | None
     notes: str = ""
+    has_reps: bool = True
+    has_weight: bool = True
+    has_duration: bool = False
+    set_targets: list[SetTargetResponse] = []
 
 
 class PlanDayDetailResponse(BaseModel):
@@ -121,6 +167,7 @@ class WorkoutPlanDetailResponse(BaseModel):
         name: str
         unit_type: str | None  # 'days' | 'weeks'
         total_units: int | None
+        is_quick_start: bool
         created_at: datetime
         updated_at: datetime
 
@@ -133,14 +180,15 @@ class PreviousPerformanceSetResponse(BaseModel):
     """Set logged in a previous workout session."""
 
     set_number: int
-    weight: float
-    reps: int
+    weight: float | None
+    reps: int | None
+    duration_seconds: int | None
 
 
 class PreviousPerformanceExerciseResponse(BaseModel):
-    """Exercise with its sets from a previous session."""
+    """Plan-exercise instance with its sets from a previous session."""
 
-    exercise_id: int
+    workout_exercise_id: int
     sets: list[PreviousPerformanceSetResponse]
 
 
@@ -156,9 +204,14 @@ class BuildPlanExerciseRequest(BaseModel):
 
     exercise_id: int = Field(..., gt=0)
     target_sets: int | None = Field(None, gt=0)
-    target_reps: int | None = Field(None, gt=0)
+    target_reps: str | None = Field(None, max_length=20)
     target_weight: float | None = Field(None, ge=0)
+    target_duration_seconds: int | None = Field(None, gt=0)
     notes: str = Field("", max_length=1000)
+    has_reps: bool = True
+    has_weight: bool = True
+    has_duration: bool = False
+    set_targets: list[SetTargetRequest] = []
 
 
 class BuildPlanDayRequest(BaseModel):

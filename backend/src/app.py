@@ -13,6 +13,7 @@ from src.modules.exercises.domain.exceptions import (
     UnauthorizedExerciseAccessError,
 )
 from src.modules.sessions.domain.exceptions import (
+    InvalidSetDataError,
     SessionAlreadyFinishedError,
     UnauthorizedWorkoutSessionAccessError,
     WorkoutSessionNotFoundError,
@@ -33,7 +34,14 @@ from src.modules.workouts.domain.exceptions import (
     InvalidPlanStructureError,
 )
 
-app = FastAPI(title="Traqo API", version="1.0.0")
+docs_enabled = settings.ENVIRONMENT != "production"
+app = FastAPI(
+    title="Traqo API",
+    version="1.0.0",
+    docs_url="/docs" if docs_enabled else None,
+    redoc_url="/redoc" if docs_enabled else None,
+    openapi_url="/openapi.json" if docs_enabled else None,
+)
 
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -49,6 +57,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Retry-After", "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"],
 )
 
 
@@ -138,6 +147,14 @@ async def session_already_finished_handler(request, exc):
     return JSONResponse(
         status_code=status.HTTP_409_CONFLICT,
         content={"error": "This session has already been finished"},
+    )
+
+
+@app.exception_handler(InvalidSetDataError)
+async def invalid_set_data_handler(request, exc):
+    return JSONResponse(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        content={"error": str(exc)},
     )
 
 

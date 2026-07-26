@@ -227,3 +227,187 @@ Sprint 7 (bug fix + polish, no schema changes)
         └─ Sprint 12 (progress views)  ← do last, most complex, most value once 8+10 exist
 Sprint 11 (rest timer + calendar) — independent, can slot in anywhere after Sprint 7
 ```
+
+**Status note (2026-07-20):** Sprints 8–12's underlying functionality was built (see `dev-log.md`, "Plan Builder v2" and "Sprint 12: Progress Views" entries — day/week-based plans, target sets/reps, pip-based active-workout logging with rest timer, and the progress/PR views are all implemented and verified). What follows is a separate, purely visual reskin pass across the whole app — see Part 3.
+
+---
+
+# Part 3: UI Reskin (Sprint 13)
+
+The owner provided a full design system spec (`docs/design-system.md` — read that file first, it's the authoritative palette/typography/component reference and documents a couple of deliberate deviations from the literal spec that shouldn't be "fixed" back). This is a **visual-only pass**: swap inline styles and ad-hoc colors for the shared tokens/classes already built in `frontend/src/index.css` and `frontend/src/App.css`. Do not change any business logic, API calls, or state management on any page — if a page's behavior seems off, that's a separate bug report, not something to fix silently while reskinning.
+
+## Already done (verified live, don't redo)
+Design token foundation, sidebar (`Layout.tsx`), Dashboard, Create Plan (Step 1), Workout Plans (list), Workout History, Plan Builder (week rail / day tabs / info card — the exercise input grid within Plan Builder still needs the final Table-row polish, see below).
+
+## Sprint 13 — Remaining pages
+
+Work through these in order, verify each live (render + no console errors + core interaction still works) before moving to the next — same discipline as every prior sprint. Read `docs/design-system.md` before starting any of these; don't invent new colors, radii, or spacing values.
+
+Each item below has a **Use case** (what the user is actually doing on this screen — read this first, the reskin has to preserve this exactly) and **Reskin task** (what to actually change).
+
+### 1. Plan Builder exercise grid (`PlanBuilder.tsx`)
+
+**Use case:** the user is inside a specific day of a plan (e.g. "Week 2 · Wed") building out what exercises belong there. For each exercise they set a *target* — planned sets/reps/weight, plus optional notes — which is what later pre-fills the logging screen during an actual workout (see Active Workout below). This is planning data, not performance data — no actual weight was lifted yet.
+
+**Reskin task:** the Name/Sets/Reps/Weight/Notes rows still use ad-hoc inline sizing. Apply the Table row spec (white bg, `--border`, 16px radius, `--bg-secondary` hover) using the existing `.exercise-head`/`.exercise-row` classes (update those classes' CSS if needed to match, rather than hand-rolling more inline styles).
+
+### 2. Session Setup (`SessionSetupPage.tsx`)
+
+**Use case:** the user has a multi-day or multi-week plan and is about to start a real workout — this screen is "which part of the plan am I doing today?" They pick a week (if the plan has weeks) then a day. If the resolved day is a rest day, or has zero exercises, the screen must block starting with a clear message (this validation is existing, working logic — don't touch it, just restyle it).
+
+**Reskin task:** week/day picker chips, use `.setup-chip`/`.setup-chip-row` (update their CSS to match the spec's chip treatment if not already aligned).
+
+### 3. Active Workout (`ActiveWorkout.tsx`) — the most interaction-heavy screen, read carefully
+
+**Use case:** the user is mid-workout, live-logging sets against the plan they started. The core interaction is a **pip** (small circular indicator) per planned set per exercise:
+- An **empty pip** = not logged yet. Tapping it opens a weight/reps/notes entry panel, **pre-filled from the exercise's target** (the values set in Plan Builder).
+- Submitting the panel **logs the set and flips the pip to "done"** (filled/checked), and **automatically starts a rest timer** (30/60/90/120s, user-selectable, with a live countdown, a "+15s" button, and a "Skip" button).
+- Tapping an **already-done pip** reopens the same panel, but this time **pre-filled with the actual saved values** (not the target) — this is edit-in-place; saving updates the set, and there's a delete option too.
+- A **"+" pip** at the end of an exercise's row lets the user log an *extra* set beyond what was planned — pre-filled from the most recently logged set for that exercise (not the original target).
+- Attempting to leave mid-workout shows an inline (non-native — this was deliberately built to avoid `window.confirm()`) exit-confirm banner.
+- "Finish Workout" goes through a `ConfirmDialog` and lands on the Session Summary screen (see below).
+
+**Reskin task:** set-logging pips, rest timer widget, exit-confirm banner. Use `.pip`/`.pip-row`, `.rest-widget`, `.exit-confirm` classes (update CSS to match spec tokens). **Do not simplify the pip/panel interaction model down to a plain form while restyling** — the pre-fill-from-target vs. pre-fill-from-actual-value distinction, and the auto-starting rest timer, are the entire point of this screen and easy to accidentally flatten while just "cleaning up the UI."
+
+### 4. Session Summary
+
+**Use case:** shown immediately after finishing a workout — a quick confirmation screen (checkmark, "Workout complete") with two stat counts: exercises completed / total, and sets completed / total. Not a data-entry screen, purely a summary.
+
+**Reskin task:** the post-workout completion screen (wherever it currently renders — check `ActiveWorkout.tsx`/`ActiveWorkoutPage.tsx` for where this lives). Use `.summary-wrap`/`.summary-stats` classes.
+
+### 5. Exercises (`ExerciseList.tsx`, `CreateExerciseForm.tsx`, `ExercisesPage.tsx`)
+
+**Use case:** simple personal CRUD — create/list/delete exercises the user owns, which then become available to add into any plan. Deleting an exercise that's currently used in a plan is blocked with a clear error (existing backend guard from Sprint 7 — don't touch, just make sure the error still displays correctly after restyling).
+
+**Reskin task:** card/button/input styling per spec, consistent with the Plans list page already done.
+
+### 6. Session Detail (`SessionDetail.tsx`/`SessionDetailPage.tsx`) — untouched, full reskin needed
+
+**Use case:** read-only drill-down, reached by clicking "View Details" on a row in Workout History. Shows exactly what happened in that one session: which exercises, which sets (weight/reps/notes), plus plan name/day/week context and total duration. If the session is somehow still in-progress (not finished), it shows a banner and a "Continue Workout" link instead of static history data — this is a real, existing state, not an edge case to skip.
+
+**Reskin task:** not touched at all yet. Full reskin using `.page-container`/`.card`/`.field-group` patterns already established on the History list page.
+
+### 7. Exercise Progress (`ExerciseProgress.tsx`/`ExerciseProgressPage.tsx`, `TrendChart.tsx`)
+
+**Use case:** reached from an exercise's "View Progress" link. Shows four **independently-tracked** personal-record stat tiles — heaviest weight, best estimated 1-rep-max (Epley formula), best session volume, most reps in a single set — each with the date it was achieved. A metric-selector switches a chart between plotting Est. 1RM / Volume / Best Weight over time. Below that, a reverse-chronological list of every session this exercise was logged in, with inline badges marking which sessions set a new PR. **Important existing rule: a user's first-ever logged set for an exercise is never itself flagged as a PR**, even though it technically becomes their current record — don't "fix" this while restyling, it's intentional (avoids a slightly absurd "PR!" badge on literally the first data point).
+
+**Reskin task:** PR stat tiles need the spec's card/badge treatment; `TrendChart`'s line/axis colors need to pull from the token palette (`--accent` for the line, `--border`/`--ink-faint` for gridlines/axis labels) instead of any hardcoded colors it currently has.
+
+---
+
+# Part 4: Duplicate-Exercise Key Collision (Sprint 14)
+
+**Use case:** A user creates a plan day with the same exercise appearing twice — e.g. "Bench Press" as a warm-up entry and again as a working-set entry, or the same exercise repeated across two different days in the same plan. Today, several code paths identify a logged set by `exercise_id` alone instead of the specific plan-exercise instance it belongs to (the `workout_exercises.id` row, aka `workout_exercise_id`). This was flagged by `reviewer` back in Sprint 8 as a real (if narrow) design gap, deliberately deferred rather than folded into that sprint, and has been sitting in the backlog since. Confirmed root cause (via codebase scan, 2026-07-21): **the `workout_sets` table has no `workout_exercise_id` column at all** — only `exercise_id` — so nothing downstream can distinguish two instances of the same exercise even in principle.
+
+**Symptom if unfixed:** logging a set against the second occurrence of a repeated exercise can silently overwrite or read the wrong instance's sets, previous-performance prefill, or displayed history — a correctness bug, not cosmetic, and it gets more entrenched the longer other features (progress views, UI reskin) build on top of the same `exercise_id`-keyed data.
+
+## Task 1 — Schema migration (backend, do first)
+
+- Add `workout_exercise_id` (nullable initially, FK → `workout_exercises.id`) to `workout_sets` (`backend/src/modules/sessions/infrastructure/models/workout_set_model.py`).
+- Decide and document a backfill strategy for existing rows: existing `workout_sets` only have `exercise_id` + `workout_session_id`, with no direct way to know which plan-day instance they were logged against if the plan had duplicates at logging time. For rows where the session's plan day had only one instance of that exercise, backfill is unambiguous (join session → plan day → workout_exercises). For rows where it was genuinely ambiguous (duplicate existed at the time), document them as unrecoverable and leave `workout_exercise_id` null — do not guess.
+- Route through `db-migration-checker` before this touches real data.
+
+## Task 2 — Backend: thread `workout_exercise_id` through the write/read paths
+
+Files identified (from the 2026-07-21 scan):
+- `add_workout_set.py` (~line 91-93) and `workout_set_repository_impl.py` (`get_by_session_exercise_and_set_number` ~line 35-52, `count_by_session_and_exercise` ~line 75-81) — currently key upserts on `(session_id, exercise_id, set_number)`; change to key on `(session_id, workout_exercise_id, set_number)`.
+- `get_workout_session_detail.py` (~line 95-108) — `SetDetail` response should carry `workout_exercise_id` so the frontend can disambiguate.
+- `get_previous_performance.py` (~line 46-53) — `sets_by_exercise` dict currently groups by `exercise_id`; regroup by `workout_exercise_id` so "last time" prefill reflects the correct plan-instance, not a merge of all instances.
+- `get_exercise_progress.py` (~line 100-172) — **decide and document intended semantics explicitly** before touching: should PRs/volume/progress stay global across all plan placements of an exercise ever logged (current behavior), or become per-instance? This is a product decision, not just a bug fix — my read is global PR tracking is almost certainly the right behavior (a PR is a PR regardless of which plan it was set in), so this file likely needs no change, just an explicit sign-off that it's intentional so a future pass doesn't "fix" it by mistake.
+
+## Task 3 — Frontend: key on `workout_exercise_id`, not `exercise_id`
+
+- `ActiveWorkout.tsx`: `getExerciseSets`, `openSetPanel`, the target lookup (`planExercises.find(...)`), the React list `key={we.exercise_id}` (~line 701), and all set-panel open/close + input `id`s (~lines 757, 786, 808, 833-852) — all need to switch from `exercise_id` to `we.id` (the `workout_exercise` row id).
+- `SessionDetail.tsx` (~line 97) — the `.filter((s) => s.exercise_id === exercise.exercise_id)` matching logged sets to a plan-day exercise needs to filter on `workout_exercise_id` instead, once the backend response carries it (Task 2).
+- `PlanBuilder.tsx` and `ExerciseProgress.tsx` — confirmed **already correct** (PlanBuilder already keys on `we.id`; ExerciseProgress operates on global per-exercise data by design, consistent with the Task 2 decision above) — do not touch either file in this sprint.
+
+## Verification (before calling this sprint done)
+
+This is a correctness fix, not a visual one — verification must prove the bug is actually gone, not just that the code compiles:
+1. Create a real plan day with the same exercise added twice (e.g. two "Bench Press" entries).
+2. Log different sets against each instance in a real active-workout session (e.g. instance 1: 135×10, instance 2: 185×5).
+3. Confirm via direct API/DB check that each instance's sets are stored under its own `workout_exercise_id` and do not collide, overwrite, or merge.
+4. Reload Session Detail and Previous-Performance prefill and confirm each instance shows its own correct data, not the other's.
+5. Confirm the migration backfill ran correctly against existing real data (spot-check a few pre-existing sessions) and that ambiguous rows were left null rather than guessed, per Task 1.
+
+## Verification (every page, before calling it done)
+
+- Renders with no console errors, on a **fresh browser tab** (this project has repeatedly hit stale-HMR-CSS false positives — always confirm on a fresh tab before concluding something is broken, and always confirm on a fresh tab before concluding something is *fixed*)
+- Colors/radii/spacing spot-checked via `getComputedStyle()` against the exact hex values in `docs/design-system.md`, not just eyeballed
+- Existing functionality on that page still works end-to-end (this is a reskin, regressions are not acceptable — e.g. Active Workout's pip logging, rest timer, and finish flow all need to still function exactly as before)
+- `git status` clean of anything unintended
+
+Report back with actual computed-style values and interaction results, not a claim. Update `dev-log.md` with the Sprint 13 entry once done.
+
+---
+
+# Part 5: Security & Correctness Hardening (Sprint 15)
+
+Findings from an independent code-review pass (2026-07-22), each re-verified live against real running code before being added here — several findings from the original review were already stale (fixed by Sprint 14) and are not repeated below. Do the tasks in this order: 1 and 2 are genuinely urgent (a live, exploitable vulnerability and a leaked credential), the rest are real but lower-stakes.
+
+## Task 1 — Fix IDOR on delete-set (do first, most urgent)
+
+**Confirmed exploitable, not theoretical** — verified with a real cross-user attack: registered two separate users, had User B delete User A's workout set using only User B's own (unrelated) session id. It succeeded (`204 No Content`) and the victim's set was genuinely gone.
+
+File: `backend/src/modules/sessions/application/use_cases/delete_workout_set.py:54-55`. The use case verifies the caller owns `session_id`, but never checks that `set_id` actually belongs to that session — so any authenticated user can delete any other user's set by pairing their own valid session id with someone else's set id.
+
+Fix: before deleting, load the set by `set_id` and verify its `workout_session_id` matches the `session_id` passed in (and thus, transitively, that the session belongs to `user_id`, already checked). If it doesn't match, raise the same kind of not-found/unauthorized error used elsewhere in this file — do not silently no-op, and do not leak whether a mismatched `set_id` exists at all (return the same error shape as "not found" either way, so this doesn't become an enumeration oracle).
+
+Verification: repeat the exact cross-user attack above after the fix and confirm it now fails (403/404, not 204), and that the victim's set is still present afterward.
+
+## Task 2 — Remove hardcoded database credentials from source
+
+File: `backend/src/config/settings.py:15-16`. The real database password (`HelloSql##33`) is hardcoded as the default value for `DATABASE_URL`/`TEST_DATABASE_URL`, and this file is committed to git (confirmed via `git show HEAD:...` — it's in history, not just the working tree). Note: `.env` itself is correctly gitignored and not tracked — the leak is specifically the default value baked into the committed Python source, not the `.env` file.
+
+Steps:
+1. Change the defaults in `settings.py` to non-functional placeholders (e.g. `"postgresql://user:password@localhost:5432/traqo_dev"`) so nothing sensitive ships in source, while still requiring a real `.env` (which is already gitignored) to run locally.
+2. **Rotate the actual PostgreSQL password** — the current one is compromised by having been in git history, changing the default in code alone does not undo that exposure. Update the local Postgres user's password and the real `.env` file to match.
+3. Confirm `.env` is still gitignored (it is — verified) and do a final `git log -p -- backend/src/config/settings.py` read-through to make sure no other file still carries the old password as a fallback.
+4. Do the same check for `JWT_SECRET_KEY`'s default (`"dev-jwt-secret-key-change-me"`) — it's not a real secret today, but confirm the real `.env` overrides it with a properly random value, since anyone who can guess/read this default can forge valid JWTs otherwise.
+
+Verification: confirm the app still starts and authenticates correctly against the rotated password (real `.env`, not the placeholder default), and that `git show HEAD:backend/src/config/settings.py` no longer contains a real credential.
+
+## Task 3 — Surface the real username after registration (UX correctness bug)
+
+Not a security issue, but a real bug that can lock a user out of an account they just created. `backend/src/modules/auth/domain/services/username_generator.py` silently appends a random suffix (e.g. `john` → `john_4487`) if the requested name is taken — confirmed live: registering the same display name three times in a row creates three separate real accounts with usernames `dupenametest`, `dupenametest_4487`, `dupenametest_1362`. `frontend/src/features/auth/RegisterPage.tsx:18-22` discards the register API response entirely and just redirects to `/login` with a generic success message — the user is never told their actual assigned username.
+
+Fix: have `RegisterPage.tsx` read the `username` field from the register response and show it back to the user before redirecting (e.g. "Account created! Your username is `john_4487` — use this to log in," with the redirect either delayed or requiring a click-through, not instant). Do not change the backend's suffixing behavior itself — that's a reasonable way to guarantee uniqueness without a hard registration failure, it's only the frontend that's silently swallowing the result.
+
+Verification: register with a name you know is already taken (create one first, then try the same name again) and confirm the UI actually displays the real suffixed username, then confirm you can log in with exactly that displayed value.
+
+## Task 4 — Rate limiting on auth endpoints
+
+`backend/src/modules/auth/presentation/routes.py` — confirmed zero rate-limiting anywhere in the backend (`grep` for limiter/throttle across `src/` returns nothing). `/api/auth/login` and `/api/auth/register` accept unlimited attempts.
+
+Fix: add a rate limiter (e.g. `slowapi`, which wraps FastAPI cleanly) scoped to these two endpoints — a reasonable starting point is something like 5-10 attempts per minute per IP. This doesn't need to be elaborate; the goal is closing the unlimited-brute-force gap, not building full account-lockout infrastructure.
+
+## Task 5 — Explicit transaction handling on multi-step writes
+
+`backend/src/infrastructure/database.py:26-35` (`get_db`) — no explicit `rollback()` on exception; each repository method calls `self.session.commit()` individually, so a multi-step use case (e.g. `BuildPlan`, which creates a plan, then days, then exercises) can leave partially-committed data if a later step fails.
+
+Fix: move to a unit-of-work pattern for multi-step use cases specifically — commit once at the end of the use case, or wrap the use case body in an explicit `try/except` that calls `db.rollback()` on failure. Scope this to use cases that do more than one write (`BuildPlan` is the clearest example); single-write use cases are already fine as-is.
+
+Verification: pick one multi-step use case (e.g. `BuildPlan`), deliberately trigger a failure partway through (e.g. an invalid exercise id on the second day), and confirm via direct DB query that nothing from that request was persisted — not just that the API returned an error.
+
+## Task 6 — Missing indexes
+
+Add `index=True` to: `backend/src/modules/workouts/infrastructure/models/workout_plan_model.py` (`user_id`), `backend/src/modules/workouts/infrastructure/models/workout_exercise_model.py` (`plan_day_id`), `backend/src/modules/workouts/infrastructure/models/plan_day_model.py` (`workout_plan_id`). Route through a migration, not a raw model edit against the live DB.
+
+## Task 7 — CORS origin from configuration
+
+`backend/src/app.py:36-42` — `allow_origins=["http://localhost:5173"]` is hardcoded. Move to a `settings.CORS_ORIGINS` list read from `.env`, defaulting to the current localhost value for dev. This has already caused a real incident (Sprint 8 dev-log: a stale process pushed the dev server to port 5174, breaking all API calls) — configurable origins would have made that a one-line `.env` fix instead of a code change.
+
+## Task 8 — Uniqueness constraint on exercise names
+
+`backend/src/modules/exercises/infrastructure/models/exercise_model.py` — add a unique constraint on `(user_id, name)`, plus a migration. Decide and document what happens on conflict: reject with a clear error ("You already have an exercise named X"), rather than a raw DB constraint violation surfacing to the user.
+
+## Task 9 — Remove dead `plan_day_schedule` code
+
+`backend/src/modules/workouts/infrastructure/models/plan_day_schedule_model.py` and its usages in `backend/src/modules/workouts/infrastructure/repositories/plan_day_repository_impl.py`. Confirmed the underlying table doesn't exist in the live DB (`to_regclass('plan_day_schedule')` returns null) and confirmed nothing in `application/` or `presentation/` calls these repository methods — this is fully dead, unreachable code left over from before Plan Builder v2. Delete the model file and the dead methods in the repository. Low priority, but leaving it risks a bad migration the next time someone runs `alembic revision --autogenerate` without knowing to exclude it.
+
+## Verification standard for this sprint
+
+Every fix here must be proven with a real request/attack/query, not a source-code read — this is exactly the standard that caught the two most serious findings in the first place. In particular:
+- Task 1's fix must be proven by literally repeating the cross-user delete attack and confirming it now fails.
+- Task 2's rotation must be proven by confirming the app authenticates against the *new* password and fails against the old one.
+- Task 3 must be proven by an actual duplicate-name registration in the browser, reading the real displayed username, and logging in with it.

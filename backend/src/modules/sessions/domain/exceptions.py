@@ -14,3 +14,9 @@ class SessionAlreadyFinishedError(Exception):
     """Raised when attempting to modify a finished session (add set, finish again, etc.)."""
 
     pass
+
+
+class InvalidSetDataError(Exception):
+    """Raised when logged set data is invalid for the exercise's logging type."""
+
+    pass

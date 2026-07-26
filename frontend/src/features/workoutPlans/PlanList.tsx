@@ -2,24 +2,21 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   listWorkoutPlans,
-  createWorkoutPlan,
   deleteWorkoutPlan,
 } from "../../api/workoutPlansApi";
+import type { WorkoutPlan } from "../../api/workoutPlansApi";
 import { workoutSessionsApi } from "../../api/workoutSessionsApi";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { useToast } from "../../components/Toast";
 
-interface WorkoutPlan {
-  id: number;
-  user_id: number;
-  name: string;
-  created_at: string;
-  updated_at: string;
+function planSummary(plan: WorkoutPlan): string {
+  if (!plan.total_units) return "";
+  const unit = plan.unit_type === "weeks" ? "WEEK" : "DAY";
+  return `${plan.total_units} ${unit}${plan.total_units === 1 ? "" : "S"}`;
 }
 
 export default function PlanList() {
   const [plans, setPlans] = useState<WorkoutPlan[]>([]);
-  const [newPlanName, setNewPlanName] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [quickStarting, setQuickStarting] = useState(false);
@@ -48,23 +45,6 @@ export default function PlanList() {
     }
   }
 
-  async function handleCreatePlan(e: React.FormEvent) {
-    e.preventDefault();
-    if (!newPlanName.trim()) return;
-
-    try {
-      await createWorkoutPlan(newPlanName);
-      setNewPlanName("");
-      setError("");
-      showToast("Workout plan created successfully!", "success");
-      await loadPlans();
-    } catch (err: any) {
-      const errorMsg =
-        err.response?.data?.error || (err as Error).message || "Failed to create plan";
-      setError(errorMsg);
-    }
-  }
-
   async function handleQuickStart() {
     setQuickStarting(true);
     try {
@@ -78,7 +58,7 @@ export default function PlanList() {
     }
   }
 
-  async function handleDeletePlan(planId: number) {
+  function handleDeletePlan(planId: number) {
     setDeleteConfirm({ isOpen: true, planId });
   }
 
@@ -104,47 +84,22 @@ export default function PlanList() {
 
   return (
     <div className="page-container">
-      <h2>Workout Plans</h2>
-
-      <div style={{ marginBottom: "20px" }}>
-        <form onSubmit={handleCreatePlan} style={{ display: "flex", gap: "10px", marginBottom: "12px" }}>
-          <input
-            type="text"
-            placeholder="New plan name"
-            value={newPlanName}
-            onChange={(e) => setNewPlanName(e.target.value)}
-            className="input-field"
-          />
-          <button type="submit" className="btn btn-primary">Create Plan</button>
-        </form>
-        <div style={{ display: "flex", justifyContent: "center" }}>
-          <p style={{ margin: "0 12px", color: "var(--text)" }}>or</p>
-        </div>
-        <div style={{ textAlign: "center" }}>
-          <button
-            onClick={handleQuickStart}
-            disabled={quickStarting}
-            className="btn btn-success"
-            style={{ opacity: quickStarting ? 0.6 : 1 }}
-          >
-            {quickStarting ? "Starting..." : "Log Today's Workout"}
-          </button>
-        </div>
-      </div>
+      <p className="kicker">Your ledger</p>
+      <h1 className="page-title">Workout Plans</h1>
 
       {error && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} className="error-message">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }} className="error-message">
           <span>{error}</span>
           <button
             onClick={() => setError("")}
             style={{
-              background: 'none',
-              border: 'none',
-              color: '#721c24',
-              fontSize: '20px',
-              cursor: 'pointer',
-              padding: '0 0 0 12px',
-              flex: '0 0 auto'
+              background: "none",
+              border: "none",
+              color: "inherit",
+              fontSize: "20px",
+              cursor: "pointer",
+              padding: "0 0 0 12px",
+              flex: "0 0 auto",
             }}
             aria-label="Dismiss error"
           >
@@ -153,32 +108,56 @@ export default function PlanList() {
         </div>
       )}
 
-      <div style={{ display: "grid", gap: "12px" }}>
-        {plans.length > 0 ? (
-          plans.map((plan) => (
-            <div key={plan.id} className="card">
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span
-                  onClick={() => navigate(`/workout-plans/${plan.id}`)}
-                  style={{ cursor: "pointer", fontWeight: "bold", flex: 1 }}
-                >
-                  {plan.name}
-                </span>
+      <button className="create-tile" onClick={() => navigate("/workout-plans/new")}>
+        <span className="plus">+</span>
+        <span>
+          <span className="label">Create exercise plan</span>
+          <div className="sub">Name it, set the length, fill in the days.</div>
+        </span>
+      </button>
+
+      <div style={{ marginTop: "10px" }}>
+        <button onClick={handleQuickStart} disabled={quickStarting} className="btn-link">
+          {quickStarting ? "Starting…" : "Or log today's workout without a plan →"}
+        </button>
+      </div>
+
+      <p className="section-label">Saved plans</p>
+      {plans.length > 0 ? (
+        <div className="plan-grid">
+          {plans.map((plan) => (
+            <div key={plan.id} className="plan-card">
+              <button
+                className="delete-x"
+                onClick={() => handleDeletePlan(plan.id)}
+                aria-label="Delete plan"
+              >
+                ✕
+              </button>
+              <div className="name" onClick={() => navigate(`/workout-plans/${plan.id}/edit`)}>
+                {plan.name}
+              </div>
+              {planSummary(plan) && <div className="meta">{planSummary(plan)}</div>}
+              <div className="card-actions">
                 <button
-                  onClick={() => handleDeletePlan(plan.id)}
-                  className="btn btn-danger"
+                  className="btn-start"
+                  onClick={() => navigate(`/workout-plans/${plan.id}/start`)}
                 >
-                  Delete
+                  ▶ Start
+                </button>
+                <button
+                  className="btn-edit"
+                  onClick={() => navigate(`/workout-plans/${plan.id}/edit`)}
+                >
+                  Edit
                 </button>
               </div>
             </div>
-          ))
-        ) : (
-          <div className="empty-state">
-            <p>No workout plans yet. Create one to get started!</p>
-          </div>
-        )}
-      </div>
+          ))}
+        </div>
+      ) : (
+        <p className="empty-note">Nothing saved yet — plans you create will show up here.</p>
+      )}
 
       <ConfirmDialog
         isOpen={deleteConfirm.isOpen}

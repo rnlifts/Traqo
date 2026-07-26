@@ -4,6 +4,9 @@ export interface WorkoutPlan {
   id: number;
   user_id: number;
   name: string;
+  unit_type?: 'days' | 'weeks';
+  total_units?: number;
+  is_quick_start?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -14,8 +17,14 @@ export interface WorkoutExercise {
   exercise_id: number;
   order_number: number;
   target_sets: number | null;
-  target_reps: number | null;
+  target_reps: string | null;
   target_weight: number | null;
+  target_duration_seconds: number | null;
+  has_reps: boolean;
+  has_weight: boolean;
+  has_duration: boolean;
+  set_targets: { set_number: number; target_reps: string | null; target_weight: number | null; target_duration_seconds: number | null }[];
+  notes?: string;
   exercise_name?: string;
 }
 
@@ -23,25 +32,35 @@ export interface PlanDay {
   id: number;
   label: string;
   order_position: number;
-  weekdays: string[];
+  is_rest?: boolean;
+  weekdays?: string[];
   exercises: WorkoutExercise[];
-  created_at: string;
-  updated_at: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface PlanWeek {
+  week_number: number;
+  mode: 'base' | 'linked' | 'custom';
+  resolved_week_number?: number;
+  days: PlanDay[];
 }
 
 export interface WorkoutPlanDetail {
   plan: WorkoutPlan;
-  days: PlanDay[];
+  days?: PlanDay[] | null;
+  weeks?: PlanWeek[] | null;
 }
 
 export interface PreviousPerformanceSet {
   set_number: number;
-  weight: number;
-  reps: number;
+  weight: number | null;
+  reps: number | null;
+  duration_seconds: number | null;
 }
 
 export interface PreviousPerformanceExercise {
-  exercise_id: number;
+  workout_exercise_id: number;
   sets: PreviousPerformanceSet[];
 }
 
@@ -90,10 +109,10 @@ export const workoutPlansApi = {
     return response.data;
   },
 
-  async updateDay(planId: number, dayId: number, label: string, weekdays: string[]): Promise<PlanDay> {
+  async updateDay(planId: number, dayId: number, updates: { label?: string; is_rest?: boolean; weekdays?: string[] }): Promise<PlanDay> {
     const response = await client.put<PlanDay>(
       `/workout-plans/${planId}/days/${dayId}`,
-      { label, weekdays }
+      updates
     );
     return response.data;
   },
@@ -107,13 +126,21 @@ export const workoutPlansApi = {
     dayId: number,
     exerciseId: number,
     targetSets?: number,
-    targetReps?: number,
-    targetWeight?: number
+    targetReps?: string | number,
+    targetWeight?: number,
+    targetDurationSeconds?: number,
+    hasReps?: boolean,
+    hasWeight?: boolean,
+    hasDuration?: boolean
   ): Promise<WorkoutExercise> {
     const body: any = { exercise_id: exerciseId };
     if (targetSets !== undefined) body.target_sets = targetSets;
     if (targetReps !== undefined) body.target_reps = targetReps;
     if (targetWeight !== undefined) body.target_weight = targetWeight;
+    if (targetDurationSeconds !== undefined) body.target_duration_seconds = targetDurationSeconds;
+    if (hasReps !== undefined) body.has_reps = hasReps;
+    if (hasWeight !== undefined) body.has_weight = hasWeight;
+    if (hasDuration !== undefined) body.has_duration = hasDuration;
 
     const response = await client.post<WorkoutExercise>(
       `/workout-plans/${planId}/days/${dayId}/exercises`,
@@ -152,6 +179,50 @@ export const workoutPlansApi = {
     const url = `/workout-plans/${planId}/days/${dayId}/previous-performance${queryString ? "?" + queryString : ""}`;
     const response = await client.get<PreviousPerformanceResponse>(url);
     return response.data;
+  },
+
+  async buildPlan(payload: {
+    name: string;
+    unit_type: 'days' | 'weeks';
+    total_units: number;
+    days?: Array<{ label: string; is_rest: boolean; order_position: number; exercises: Array<{ exercise_id: number; target_sets?: number; target_reps?: number; target_weight?: number; notes?: string }> }>;
+    weeks?: Array<{ week_number: number; mode: 'base' | 'linked' | 'custom'; days?: Array<{ label: string; is_rest: boolean; order_position: number; exercises: Array<{ exercise_id: number; target_sets?: number; target_reps?: number; target_weight?: number; notes?: string }> }> }>;
+  }): Promise<WorkoutPlanDetail> {
+    const response = await client.post<WorkoutPlanDetail>("/workout-plans/build", payload);
+    return response.data;
+  },
+
+  async updateExerciseInDay(
+    planId: number,
+    dayId: number,
+    workoutExerciseId: number,
+    updates: { target_sets?: number | null; target_reps?: string | null; target_weight?: number | null; target_duration_seconds?: number | null; has_reps?: boolean; has_weight?: boolean; has_duration?: boolean; notes?: string }
+  ): Promise<WorkoutExercise> {
+    const response = await client.put<WorkoutExercise>(
+      `/workout-plans/${planId}/days/${dayId}/exercises/${workoutExerciseId}`,
+      updates
+    );
+    return response.data;
+  },
+
+  async replaceSetTargets(
+    planId: number,
+    dayId: number,
+    workoutExerciseId: number,
+    targets: { set_number: number; target_reps: string | null; target_weight: number | null; target_duration_seconds: number | null }[]
+  ): Promise<void> {
+    await client.put(
+      `/workout-plans/${planId}/days/${dayId}/exercises/${workoutExerciseId}/set-targets`,
+      targets
+    );
+  },
+
+  async customizeWeek(planId: number, weekNumber: number): Promise<void> {
+    await client.post(`/workout-plans/${planId}/weeks/${weekNumber}/customize`, {});
+  },
+
+  async matchPreviousWeek(planId: number, weekNumber: number): Promise<void> {
+    await client.post(`/workout-plans/${planId}/weeks/${weekNumber}/match-previous`, {});
   },
 
   // Legacy plan-level exercise functions (kept for backward compatibility)
@@ -258,10 +329,9 @@ export async function listDays(planId: number): Promise<PlanDay[]> {
 export async function updateDay(
   planId: number,
   dayId: number,
-  label: string,
-  weekdays: string[]
+  updates: { label?: string; is_rest?: boolean; weekdays?: string[] }
 ): Promise<PlanDay> {
-  return workoutPlansApi.updateDay(planId, dayId, label, weekdays);
+  return workoutPlansApi.updateDay(planId, dayId, updates);
 }
 
 export async function deleteDay(planId: number, dayId: number): Promise<void> {
@@ -273,10 +343,14 @@ export async function addExerciseToDay(
   dayId: number,
   exerciseId: number,
   targetSets?: number,
-  targetReps?: number,
-  targetWeight?: number
+  targetReps?: string | number,
+  targetWeight?: number,
+  targetDurationSeconds?: number,
+  hasReps?: boolean,
+  hasWeight?: boolean,
+  hasDuration?: boolean
 ): Promise<WorkoutExercise> {
-  return workoutPlansApi.addExerciseToDay(planId, dayId, exerciseId, targetSets, targetReps, targetWeight);
+  return workoutPlansApi.addExerciseToDay(planId, dayId, exerciseId, targetSets, targetReps, targetWeight, targetDurationSeconds, hasReps, hasWeight, hasDuration);
 }
 
 export async function removeExerciseFromDay(
@@ -302,4 +376,40 @@ export async function getPreviousPerformance(
   excludeSessionId?: number
 ): Promise<PreviousPerformanceResponse> {
   return workoutPlansApi.getPreviousPerformance(planId, dayId, excludeSessionId);
+}
+
+export async function buildPlan(payload: {
+  name: string;
+  unit_type: 'days' | 'weeks';
+  total_units: number;
+  days?: Array<{ label: string; is_rest: boolean; order_position: number; exercises: Array<{ exercise_id: number; target_sets?: number; target_reps?: number; target_weight?: number; notes?: string }> }>;
+  weeks?: Array<{ week_number: number; mode: 'base' | 'linked' | 'custom'; days?: Array<{ label: string; is_rest: boolean; order_position: number; exercises: Array<{ exercise_id: number; target_sets?: number; target_reps?: number; target_weight?: number; notes?: string }> }> }>;
+}): Promise<WorkoutPlanDetail> {
+  return workoutPlansApi.buildPlan(payload);
+}
+
+export async function updateExerciseInDay(
+  planId: number,
+  dayId: number,
+  workoutExerciseId: number,
+  updates: { target_sets?: number | null; target_reps?: string | null; target_weight?: number | null; target_duration_seconds?: number | null; has_reps?: boolean; has_weight?: boolean; has_duration?: boolean; notes?: string }
+): Promise<WorkoutExercise> {
+  return workoutPlansApi.updateExerciseInDay(planId, dayId, workoutExerciseId, updates);
+}
+
+export async function replaceSetTargets(
+  planId: number,
+  dayId: number,
+  workoutExerciseId: number,
+  targets: { set_number: number; target_reps: string | null; target_weight: number | null; target_duration_seconds: number | null }[]
+): Promise<void> {
+  return workoutPlansApi.replaceSetTargets(planId, dayId, workoutExerciseId, targets);
+}
+
+export async function customizeWeek(planId: number, weekNumber: number): Promise<void> {
+  return workoutPlansApi.customizeWeek(planId, weekNumber);
+}
+
+export async function matchPreviousWeek(planId: number, weekNumber: number): Promise<void> {
+  return workoutPlansApi.matchPreviousWeek(planId, weekNumber);
 }

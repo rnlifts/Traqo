@@ -94,6 +94,7 @@ DELETE /api/workouts/{id}
 **In scope:**
 - Authentication — register/login by name + password. System auto-generates a unique username. No email or password recovery yet (planned for V2).
 - Workout Plans — including day-of-week scheduling and target sets/reps/weight per plan exercise (added 2026-07-19 per `docs/ux-improvement-plan.md`; see `docs/sprints.md` for the sprint sequence)
+- Exercise logging types (added 2026-07-26) — each plan-exercise carries its own field-presence flags (`has_reps`/`has_weight`/`has_duration`) rather than a fixed enum on the exercise itself. A trainer configures which fields apply per exercise in Plan Builder (cross-to-remove Reps/Weight, add Duration); a client following that plan sees only the configured fields, fixed. Quick-start sessions (`is_quick_start`) are the one place a non-trainer can configure fields inline, gated to the first set of a never-logged exercise. Reps supports a free-text fixed-or-range value (e.g. `"10"` or `"10-12"`); Duration is stored as seconds, displayed as hh:mm:ss. Optional per-set target overrides ("Vary by set") live in a separate `workout_exercise_set_targets` table. Backend validation is deliberately permissive (a logged set just needs at least one of weight/reps/duration non-null) — the flags are a UI-display concern, not a backend-enforced constraint, so editing a plan later never invalidates already-logged data.
 - Workout Sessions — including previous-performance prefill (last session's actual weight/reps for an exercise)
 - Exercises
 - Workout History — including progress-over-time views: per-exercise history, volume trend, estimated 1RM, PR detection (added 2026-07-19, reversing the earlier "out of scope" call — see `docs/ux-improvement-plan.md` Section 3.D for rationale and `docs/requirements.md` for the updated non-goals)
@@ -106,7 +107,9 @@ DELETE /api/workouts/{id}
 - Nutrition tracking
 - A shared/global exercise library
 
-**Note on scope changes:** this file has already been formally revised once (2026-07-19) to bring in what was originally deferred. Treat that as evidence scope *can* change, not as license to reinterpret "out of scope" items yourself — always make the change explicit here and in `docs/requirements.md` when it happens, the way this one was.
+**Note on scope changes:** this file has already been formally revised twice (2026-07-19, 2026-07-26) to bring in what was originally deferred. Treat that as evidence scope *can* change, not as license to reinterpret "out of scope" items yourself — always make the change explicit here and in `docs/requirements.md` when it happens, the way these were.
+
+**Planned future rework (not yet scheduled):** the current exercise CRUD module (`frontend/src/features/exercises/`) is expected to be replaced with a default built-in exercise library, drag-and-drop selection into plans, and autocomplete — see project memory `traqo-exercise-module-future-plan` for detail. Don't over-invest in this module beyond what a given task actually needs.
 
 ---
 
@@ -159,4 +162,4 @@ For everything else, run the full pipeline and bring the person the final result
 
 ---
 
-*Last updated: 2026-07-19. Update this file directly (not the skill) when stack, architecture, or scope changes.*
+*Last updated: 2026-07-26. Update this file directly (not the skill) when stack, architecture, or scope changes.*

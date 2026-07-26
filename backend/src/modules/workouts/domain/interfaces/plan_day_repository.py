@@ -30,28 +30,3 @@ class PlanDayRepository(ABC):
     def delete(self, day_id: int) -> None:
         """Delete a plan day by id."""
         pass
-
-    @abstractmethod
-    def get_weekdays_for_day(self, day_id: int) -> list[str]:
-        """Get list of weekdays assigned to a plan day (e.g., ['Monday', 'Thursday'])."""
-        pass
-
-    @abstractmethod
-    def add_weekday(self, day_id: int, weekday: str) -> None:
-        """Add a weekday to a plan day."""
-        pass
-
-    @abstractmethod
-    def remove_weekday(self, day_id: int, weekday: str) -> None:
-        """Remove a weekday from a plan day."""
-        pass
-
-    @abstractmethod
-    def clear_weekdays(self, day_id: int) -> None:
-        """Remove all weekdays from a plan day."""
-        pass
-
-    @abstractmethod
-    def get_days_by_weekday_in_plan(self, plan_id: int, weekday: str) -> list[PlanDay]:
-        """Get all days in a plan that are tagged to a specific weekday."""
-        pass

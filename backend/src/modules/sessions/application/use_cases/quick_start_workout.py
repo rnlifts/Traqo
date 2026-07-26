@@ -37,6 +37,10 @@ class QuickStartWorkout:
         2. A PlanDay labeled "Day 1" with no weekday assignments
         3. A WorkoutSession for that day
 
+        If step 2 or step 3 fails, whatever was already created in earlier
+        steps is deleted before the error is re-raised, so a failed quick-start
+        never leaves an orphaned plan or day behind.
+
         Args:
             user_id: The user starting the quick workout.
 
@@ -48,23 +52,33 @@ class QuickStartWorkout:
         plan_name = f"Quick Workout - {today.strftime('%b %d')}"
 
         # Step 1: Create and persist the plan
-        plan = WorkoutPlan(user_id=user_id, name=plan_name)
+        plan = WorkoutPlan(user_id=user_id, name=plan_name, is_quick_start=True)
         created_plan = self.plan_repository.create(plan)
 
-        # Step 2: Create and persist the day
-        plan_day = PlanDay(
-            workout_plan_id=created_plan.id,
-            label="Day 1",
-            order_position=1,
-        )
-        created_day = self.day_repository.create(plan_day)
+        created_day = None
+        try:
+            # Step 2: Create and persist the day
+            plan_day = PlanDay(
+                workout_plan_id=created_plan.id,
+                label="Day 1",
+                order_position=1,
+            )
+            created_day = self.day_repository.create(plan_day)
 
-        # Step 3: Create and return the session
-        session = WorkoutSession(
-            user_id=user_id,
-            workout_plan_id=created_plan.id,
-            plan_day_id=created_day.id,
-            started_at=datetime.utcnow(),
-            completed_at=None,
-        )
-        return self.session_repository.create(session)
+            # Step 3: Create and return the session
+            session = WorkoutSession(
+                user_id=user_id,
+                workout_plan_id=created_plan.id,
+                plan_day_id=created_day.id,
+                started_at=datetime.utcnow(),
+                completed_at=None,
+            )
+            return self.session_repository.create(session)
+        except Exception:
+            # Something failed after the plan was created — clean up
+            # everything created so far, in reverse order, so we don't
+            # leave orphaned data behind.
+            if created_day is not None:
+                self.day_repository.delete(created_day.id)
+            self.plan_repository.delete(created_plan.id)
+            raise

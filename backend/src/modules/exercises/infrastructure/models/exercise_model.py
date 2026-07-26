@@ -15,5 +15,7 @@ class ExerciseModel(Base):
     name = Column(String(255), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     category = Column(String(50), nullable=True)
+    # One of: "weight_reps", "reps_only", "weight_only", "cardio"
+    logging_type = Column(String(20), nullable=False, default="weight_reps")
 
     __table_args__ = (UniqueConstraint("user_id", "name", name="uq_exercises_user_id_name"),)

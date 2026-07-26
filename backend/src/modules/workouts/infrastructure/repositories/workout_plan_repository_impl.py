@@ -20,6 +20,7 @@ class WorkoutPlanRepositoryImpl(WorkoutPlanRepository):
             name=plan.name,
             unit_type=plan.unit_type,
             total_units=plan.total_units,
+            is_quick_start=plan.is_quick_start,
             created_at=plan.created_at,
             updated_at=plan.updated_at,
         )
