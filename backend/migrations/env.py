@@ -1,8 +1,14 @@
 import logging
+import os
+import sys
 from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
+
+# Make `src` importable regardless of the current working directory
+# (e.g. when a host runs alembic from inside this migrations/ folder).
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.config.settings import settings
 from src.infrastructure.database import Base
