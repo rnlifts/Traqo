@@ -1,0 +1,227 @@
+[
+  {
+    "name": "Assisted Normal Grip Pullup",
+    "muscle_group": "back",
+    "equipment": "assisted pull-up machine",
+    "video_url": "https://www.youtube.com/watch?v=8ygapPMYK1I",
+    "image_url": null
+  },
+  {
+    "name": "Assisted Parallel Pullup",
+    "muscle_group": "back",
+    "equipment": "assisted pull-up machine",
+    "video_url": "https://www.youtube.com/watch?v=GdsRZAeeDUc",
+    "image_url": null
+  },
+  {
+    "name": "Assisted Underhand Pullup",
+    "muscle_group": "back",
+    "equipment": "assisted pull-up machine",
+    "video_url": "https://www.youtube.com/watch?v=L4ChTwrXTjc",
+    "image_url": null
+  },
+  {
+    "name": "Assisted Wide Grip Pullup",
+    "muscle_group": "back",
+    "equipment": "assisted pull-up machine",
+    "video_url": "https://www.youtube.com/watch?v=0tiC6RUZL8Y",
+    "image_url": null
+  },
+  {
+    "name": "Barbell Bent Over Row",
+    "muscle_group": "back",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=6FZHJGzMFEc",
+    "image_url": null
+  },
+  {
+    "name": "Barbell Row to Chest",
+    "muscle_group": "back",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=UPGuwx7GQ9s",
+    "image_url": null
+  },
+  {
+    "name": "Barbell Flexion Row",
+    "muscle_group": "back",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=Lt3d1UKq7RQ",
+    "image_url": null
+  },
+  {
+    "name": "Cambered Bar Row",
+    "muscle_group": "back",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=jiowkUMomlw",
+    "image_url": null
+  },
+  {
+    "name": "Chest Supported Row",
+    "muscle_group": "back",
+    "equipment": "machine",
+    "video_url": "https://www.youtube.com/watch?v=0UBRfiO4zDs",
+    "image_url": null
+  },
+  {
+    "name": "Dumbbell Pullover",
+    "muscle_group": "back",
+    "equipment": "dumbbell",
+    "video_url": "https://www.youtube.com/watch?v=jQjWlIwG4sI",
+    "image_url": null
+  },
+  {
+    "name": "Hammer High Row",
+    "muscle_group": "back",
+    "equipment": "machine",
+    "video_url": "https://www.youtube.com/watch?v=gg5hwJuv6KI",
+    "image_url": null
+  },
+  {
+    "name": "Hammer Low Row",
+    "muscle_group": "back",
+    "equipment": "machine",
+    "video_url": "https://www.youtube.com/watch?v=opjbouBmUWg",
+    "image_url": null
+  },
+  {
+    "name": "Incline Dumbbell Row",
+    "muscle_group": "back",
+    "equipment": "dumbbell",
+    "video_url": "https://www.youtube.com/watch?v=tZUYS7X50so",
+    "image_url": null
+  },
+  {
+    "name": "Inverted Row",
+    "muscle_group": "back",
+    "equipment": "bodyweight",
+    "video_url": "https://www.youtube.com/watch?v=KOaCM1HMwU0",
+    "image_url": null
+  },
+  {
+    "name": "Machine Chest Supported Row",
+    "muscle_group": "back",
+    "equipment": "machine",
+    "video_url": "https://www.youtube.com/watch?v=_FrrYQxA6kc",
+    "image_url": null
+  },
+  {
+    "name": "Machine Pullover",
+    "muscle_group": "back",
+    "equipment": "machine",
+    "video_url": "https://www.youtube.com/watch?v=oxpAl14EYyc",
+    "image_url": null
+  },
+  {
+    "name": "Normal Grip Pulldown",
+    "muscle_group": "back",
+    "equipment": "cable",
+    "video_url": "https://www.youtube.com/watch?v=EUIri47Epcg",
+    "image_url": null
+  },
+  {
+    "name": "Normal Grip Pullup",
+    "muscle_group": "back",
+    "equipment": "bodyweight",
+    "video_url": "https://www.youtube.com/watch?v=iWpoegdfgtc",
+    "image_url": null
+  },
+  {
+    "name": "Parallel Pulldown",
+    "muscle_group": "back",
+    "equipment": "cable",
+    "video_url": "https://www.youtube.com/watch?v=--utaPT7XYQ",
+    "image_url": null
+  },
+  {
+    "name": "Parallel Grip Pullup",
+    "muscle_group": "back",
+    "equipment": "bodyweight",
+    "video_url": "https://www.youtube.com/watch?v=XWt6FQAK5wM",
+    "image_url": null
+  },
+  {
+    "name": "Seal Row",
+    "muscle_group": "back",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=4H2ItXwUTp8",
+    "image_url": null
+  },
+  {
+    "name": "Seated Cable Row",
+    "muscle_group": "back",
+    "equipment": "cable",
+    "video_url": "https://www.youtube.com/watch?v=UCXxvVItLoM",
+    "image_url": null
+  },
+  {
+    "name": "Two Arm Dumbbell Row",
+    "muscle_group": "back",
+    "equipment": "dumbbell",
+    "video_url": "https://www.youtube.com/watch?v=5PoEksoJNaw",
+    "image_url": null
+  },
+  {
+    "name": "Single Arm Supported Dumbbell Row",
+    "muscle_group": "back",
+    "equipment": "dumbbell",
+    "video_url": "https://www.youtube.com/watch?v=DMo3HJoawrU",
+    "image_url": null
+  },
+  {
+    "name": "Smith Machine Row",
+    "muscle_group": "back",
+    "equipment": "smith machine",
+    "video_url": "https://www.youtube.com/watch?v=3QcJggd_L24",
+    "image_url": null
+  },
+  {
+    "name": "Straight Arm Pulldown",
+    "muscle_group": "back",
+    "equipment": "cable",
+    "video_url": "https://www.youtube.com/watch?v=G9uNaXGTJ4w",
+    "image_url": null
+  },
+  {
+    "name": "T Bar Row",
+    "muscle_group": "back",
+    "equipment": "t-bar",
+    "video_url": "https://www.youtube.com/watch?v=yPis7nlbqdY",
+    "image_url": null
+  },
+  {
+    "name": "Underhand EZ Bar Row",
+    "muscle_group": "back",
+    "equipment": "ez bar",
+    "video_url": "https://www.youtube.com/watch?v=H260SUUyJBM",
+    "image_url": null
+  },
+  {
+    "name": "Underhand Pulldown",
+    "muscle_group": "back",
+    "equipment": "cable",
+    "video_url": "https://www.youtube.com/watch?v=VprlTxpB1rk",
+    "image_url": null
+  },
+  {
+    "name": "Wide Grip Pulldown",
+    "muscle_group": "back",
+    "equipment": "cable",
+    "video_url": "https://www.youtube.com/watch?v=YCKPD4BSD2E",
+    "image_url": null
+  },
+  {
+    "name": "Wide Grip Pullup",
+    "muscle_group": "back",
+    "equipment": "bodyweight",
+    "video_url": "https://www.youtube.com/watch?v=GRgWPT9XSQQ",
+    "image_url": null
+  },
+  {
+    "name": "Underhand Pullup",
+    "muscle_group": "back",
+    "equipment": "bodyweight",
+    "video_url": "https://www.youtube.com/watch?v=9JC1EwqezGY",
+    "image_url": null
+  }
+]
+

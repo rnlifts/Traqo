@@ -3,7 +3,6 @@ import Home from './pages/Home';
 import { RegisterPage } from './features/auth/RegisterPage';
 import { LoginPage } from './features/auth/LoginPage';
 import { Dashboard } from './pages/Dashboard';
-import { ExercisesPage } from './pages/ExercisesPage';
 import WorkoutPlansPage from './pages/WorkoutPlansPage';
 import CreatePlanPage from './pages/CreatePlanPage';
 import EditPlanPage from './pages/EditPlanPage';
@@ -31,14 +30,6 @@ function App() {
             element={
               <ProtectedRoute>
                 <Dashboard />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/exercises"
-            element={
-              <ProtectedRoute>
-                <ExercisesPage />
               </ProtectedRoute>
             }
           />

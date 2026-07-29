@@ -15,6 +15,8 @@ from ..application.use_cases.finish_workout import FinishWorkout
 from ..application.use_cases.get_exercise_progress import GetExerciseProgress
 from ..application.use_cases.get_workout_history import GetWorkoutHistory
 from ..application.use_cases.get_workout_session_detail import GetWorkoutSessionDetail
+from ..application.use_cases.discard_workout_session import DiscardWorkoutSession
+from ..application.use_cases.get_unresolved_session import GetUnresolvedSession
 from ..application.use_cases.quick_start_workout import QuickStartWorkout
 from ..application.use_cases.start_workout import StartWorkout
 from ..infrastructure.repositories.workout_session_repository_impl import (
@@ -91,6 +93,36 @@ async def quick_start_workout(
         session_id=session.id,
         message="Quick workout started",
     )
+
+
+@sessions_router.get("/unresolved", response_model=dict)
+async def get_unresolved_session(
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """Get the user's unresolved session if one exists."""
+    session_repo = WorkoutSessionRepositoryImpl(db)
+    plan_repo = WorkoutPlanRepositoryImpl(db)
+    day_repo = PlanDayRepositoryImpl(db)
+    week_repo = PlanWeekRepositoryImpl(db)
+    use_case = GetUnresolvedSession(session_repo, plan_repo, day_repo, week_repo)
+    result = use_case.execute(user_id)
+
+    if result:
+        return {
+            "session": {
+                "id": result.session.id,
+                "user_id": result.session.user_id,
+                "workout_plan_id": result.session.workout_plan_id,
+                "plan_day_id": result.session.plan_day_id,
+                "started_at": result.session.started_at,
+                "completed_at": result.session.completed_at,
+                "plan_name": result.plan_name,
+                "day_label": result.day_label,
+                "week_number": result.week_number,
+            }
+        }
+    return {"session": None}
 
 
 @sessions_router.get("/{session_id}", response_model=WorkoutSessionDetailResponse)
@@ -209,6 +241,19 @@ async def finish_workout(
     use_case = FinishWorkout(session_repo)
     use_case.execute(user_id, session_id)
     return FinishWorkoutResponse(message="Workout completed")
+
+
+@sessions_router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def discard_workout_session(
+    session_id: int,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """Discard an unresolved workout session and its sets."""
+    session_repo = WorkoutSessionRepositoryImpl(db)
+    use_case = DiscardWorkoutSession(session_repo)
+    use_case.execute(user_id, session_id)
+    return None
 
 
 async def get_workout_history_handler(

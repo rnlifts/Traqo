@@ -3,7 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../features/auth/AuthContext';
 import { useUnsavedChanges } from '../contexts/UnsavedChangesContext';
 import { ConfirmDialog } from './ConfirmDialog';
-import { GridIcon, DumbbellIcon, ClipboardIcon, HistoryIcon, LogoutIcon } from './icons';
+import { GridIcon, ClipboardIcon, HistoryIcon, LogoutIcon } from './icons';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -11,7 +11,6 @@ interface LayoutProps {
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', Icon: GridIcon },
-  { path: '/exercises', label: 'Exercises', Icon: DumbbellIcon },
   { path: '/workout-plans', label: 'Plans', Icon: ClipboardIcon },
   { path: '/workout-history', label: 'History', Icon: HistoryIcon },
 ];

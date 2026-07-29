@@ -1265,6 +1265,10 @@
   nav button[aria-label='Toggle menu'] {
     display: block !important;
   }
+
+  .plan-action-cards-grid {
+    grid-template-columns: 1fr !important;
+  }
 }
 
 /* Add-exercise form — same self-labeled field-cell layout as .exercise-row,

@@ -146,3 +146,18 @@ class ExerciseProgressResponse(BaseModel):
     exercise_name: str
     sessions: list[ProgressSessionEntryResponse]
     personal_records: PersonalRecordsResponse
+
+
+class UnresolvedSessionResponse(BaseModel):
+    """Enriched unresolved session with resolved metadata."""
+
+    session: WorkoutSessionResponse
+    plan_name: str
+    day_label: str | None
+    week_number: int | None
+
+
+class GetUnresolvedSessionResponse(BaseModel):
+    """Response containing unresolved session or null."""
+
+    session: UnresolvedSessionResponse | None

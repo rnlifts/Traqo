@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 
 from src.config.settings import settings
 
-from src.modules.auth.domain.exceptions import InvalidCredentialsError
+from src.modules.auth.domain.exceptions import InvalidCredentialsError, UsernameAlreadyTakenError
 from src.modules.exercises.domain.exceptions import (
     DuplicateExerciseNameError,
     ExerciseInUseError,
@@ -16,6 +16,7 @@ from src.modules.sessions.domain.exceptions import (
     InvalidSetDataError,
     SessionAlreadyFinishedError,
     UnauthorizedWorkoutSessionAccessError,
+    UnresolvedSessionExistsError,
     WorkoutSessionNotFoundError,
 )
 from src.modules.workouts.domain.exceptions import (
@@ -150,6 +151,14 @@ async def session_already_finished_handler(request, exc):
     )
 
 
+@app.exception_handler(UnresolvedSessionExistsError)
+async def unresolved_session_exists_handler(request, exc):
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={"error": "You have an unfinished workout — resolve it before starting a new one."},
+    )
+
+
 @app.exception_handler(InvalidSetDataError)
 async def invalid_set_data_handler(request, exc):
     return JSONResponse(
@@ -238,6 +247,14 @@ async def invalid_credentials_handler(request, exc):
     )
 
 
+@app.exception_handler(UsernameAlreadyTakenError)
+async def username_already_taken_handler(request, exc):
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={"error": "That username is already taken."},
+    )
+
+
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request, exc):
     return JSONResponse(
@@ -271,6 +288,7 @@ async def health():
 # Register routers (imported after exception handlers to ensure they're set up first)
 from src.modules.auth.presentation.routes import auth_router
 from src.modules.exercises.presentation.routes import exercises_router
+from src.modules.exercise_library.presentation.routes import exercise_library_router
 from src.modules.sessions.presentation.routes import (
     sessions_router,
     get_workout_history_handler,
@@ -284,6 +302,7 @@ from src.modules.workouts.presentation.routes import workouts_router
 
 app.include_router(auth_router)
 app.include_router(exercises_router)
+app.include_router(exercise_library_router)
 app.include_router(workouts_router)
 app.include_router(sessions_router)
 

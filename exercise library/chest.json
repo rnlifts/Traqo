@@ -1,0 +1,236 @@
+[
+  {
+    "name": "Cable Flye",
+    "muscle_group": "chest",
+    "equipment": "cable",
+    "video_url": "https://www.youtube.com/watch?v=4mfLHnFL0Uw",
+    "image_url": null
+  },
+  {
+    "name": "Cable Bent Flye",
+    "muscle_group": "chest",
+    "equipment": "cable",
+    "video_url": "https://www.youtube.com/watch?v=Cj6P91eFXkM",
+    "image_url": null
+  },
+  {
+    "name": "Cable Underhand Flye",
+    "muscle_group": "chest",
+    "equipment": "cable",
+    "video_url": "https://www.youtube.com/watch?v=e_8HLu59-to",
+    "image_url": null
+  },
+  {
+    "name": "Cambered Bar Bench Press",
+    "muscle_group": "chest",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=_9VlfuYYC7w",
+    "image_url": null
+  },
+  {
+    "name": "Deficit Pushup",
+    "muscle_group": "chest",
+    "equipment": "bodyweight",
+    "video_url": "https://www.youtube.com/watch?v=gmNlqsE3Onc",
+    "image_url": null
+  },
+  {
+    "name": "Flat Dumbbell Bench Press",
+    "muscle_group": "chest",
+    "equipment": "dumbbell",
+    "video_url": "https://www.youtube.com/watch?v=YQ2s_Y7g5Qk",
+    "image_url": null
+  },
+  {
+    "name": "Flat Dumbbell Flye",
+    "muscle_group": "chest",
+    "equipment": "dumbbell",
+    "video_url": "https://www.youtube.com/watch?v=JFm8KbhjibM",
+    "image_url": null
+  },
+  {
+    "name": "Flat Dumbbell Press Flye",
+    "muscle_group": "chest",
+    "equipment": "dumbbell",
+    "video_url": "https://www.youtube.com/watch?v=BhlL-esnitU",
+    "image_url": null
+  },
+  {
+    "name": "Flat Hammer Machine Press",
+    "muscle_group": "chest",
+    "equipment": "machine",
+    "video_url": "https://www.youtube.com/watch?v=aV1U_mK3XOs",
+    "image_url": null
+  },
+  {
+    "name": "Hammer Machine Chest Press",
+    "muscle_group": "chest",
+    "equipment": "machine",
+    "video_url": "https://www.youtube.com/watch?v=0Wa9CfRXUkA",
+    "image_url": null
+  },
+  {
+    "name": "High Incline Dumbbell Press",
+    "muscle_group": "chest",
+    "equipment": "dumbbell",
+    "video_url": "https://www.youtube.com/watch?v=GFYrRBoov3w",
+    "image_url": null
+  },
+  {
+    "name": "Incline Dumbbell Flye",
+    "muscle_group": "chest",
+    "equipment": "dumbbell",
+    "video_url": "https://www.youtube.com/watch?v=8oR5hBwbIBc",
+    "image_url": null
+  },
+  {
+    "name": "Incline Dumbbell Press",
+    "muscle_group": "chest",
+    "equipment": "dumbbell",
+    "video_url": "https://www.youtube.com/watch?v=5CECBjd7HLQ",
+    "image_url": null
+  },
+  {
+    "name": "Incline Dumbbell Press Flye",
+    "muscle_group": "chest",
+    "equipment": "dumbbell",
+    "video_url": "https://www.youtube.com/watch?v=lTfiohnjbyM",
+    "image_url": null
+  },
+  {
+    "name": "Incline Machine Chest Press",
+    "muscle_group": "chest",
+    "equipment": "machine",
+    "video_url": "https://www.youtube.com/watch?v=TrTSvn5-MTk",
+    "image_url": null
+  },
+  {
+    "name": "Incline Medium Grip Bench Press",
+    "muscle_group": "chest",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=lJ2o89kcnxY",
+    "image_url": null
+  },
+  {
+    "name": "Incline Narrow Grip Bench Press",
+    "muscle_group": "chest",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=Zfi0KcIJi6c",
+    "image_url": null
+  },
+  {
+    "name": "Incline Wide Grip Bench Press",
+    "muscle_group": "chest",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=FxQ0XEoFYQk",
+    "image_url": null
+  },
+  {
+    "name": "Low Incline Dumbbell Press",
+    "muscle_group": "chest",
+    "equipment": "dumbbell",
+    "video_url": "https://www.youtube.com/watch?v=B09ZkYsnKko",
+    "image_url": null
+  },
+  {
+    "name": "Machine Chest Press",
+    "muscle_group": "chest",
+    "equipment": "machine",
+    "video_url": "https://www.youtube.com/watch?v=NwzUje3z0qY",
+    "image_url": null
+  },
+  {
+    "name": "Machine Flye",
+    "muscle_group": "chest",
+    "equipment": "machine",
+    "video_url": "https://www.youtube.com/watch?v=FDay9wFe5uE",
+    "image_url": null
+  },
+  {
+    "name": "Medium Grip Bench Press",
+    "muscle_group": "chest",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=gMgvBspQ9lk",
+    "image_url": null
+  },
+  {
+    "name": "Narrow Pushup",
+    "muscle_group": "chest",
+    "equipment": "bodyweight",
+    "video_url": "https://www.youtube.com/watch?v=Lz1aFtuNvEQ",
+    "image_url": null
+  },
+  {
+    "name": "Narrow Grip Bench Press",
+    "muscle_group": "chest",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=FiQUzPtS90E",
+    "image_url": null
+  },
+  {
+    "name": "Pec Deck Flye",
+    "muscle_group": "chest",
+    "equipment": "machine",
+    "video_url": "https://www.youtube.com/watch?v=O-OBCfyh9Fw",
+    "image_url": null
+  },
+  {
+    "name": "Pushup",
+    "muscle_group": "chest",
+    "equipment": "bodyweight",
+    "video_url": "https://www.youtube.com/watch?v=mm6_WcoCVTA",
+    "image_url": null
+  },
+  {
+    "name": "Smith Machine Bench Press",
+    "muscle_group": "chest",
+    "equipment": "smith machine",
+    "video_url": "https://www.youtube.com/watch?v=O5viuEPDXKY",
+    "image_url": null
+  },
+  {
+    "name": "Smith Machine Incline Press",
+    "muscle_group": "chest",
+    "equipment": "smith machine",
+    "video_url": "https://www.youtube.com/watch?v=8urE8Z8AMQ4",
+    "image_url": null
+  },
+  {
+    "name": "Smith Machine Narrow Grip Bench Press",
+    "muscle_group": "chest",
+    "equipment": "smith machine",
+    "video_url": "https://www.youtube.com/watch?v=qf_FTh3QyYs",
+    "image_url": null
+  },
+  {
+    "name": "Smith Machine Narrow Grip Incline Press",
+    "muscle_group": "chest",
+    "equipment": "smith machine",
+    "video_url": "https://www.youtube.com/watch?v=PYijbpxFAv8",
+    "image_url": null
+  },
+  {
+    "name": "Smith Machine Wide Grip Bench Press",
+    "muscle_group": "chest",
+    "equipment": "smith machine",
+    "video_url": "https://www.youtube.com/watch?v=AK0ycfB_kYo",
+    "image_url": null
+  },
+  {
+    "name": "Smith Machine Wide Grip Incline Press",
+    "muscle_group": "chest",
+    "equipment": "smith machine",
+    "video_url": "https://www.youtube.com/watch?v=SHL81neluiI",
+    "image_url": null
+  },
+  {
+    "name": "Wide Grip Bench Press",
+    "muscle_group": "chest",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=EeE3f4VWFDo",
+    "image_url": null
+  }
+]
+
+
+

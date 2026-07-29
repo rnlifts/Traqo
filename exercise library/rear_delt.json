@@ -1,0 +1,72 @@
+[
+  {
+    "name": "Bent Lateral Raise",
+    "muscle_group": "rear delts",
+    "equipment": "dumbbell",
+    "video_url": "https://www.youtube.com/watch?v=34gVHrkaiz0",
+    "image_url": null
+  },
+  {
+    "name": "Cable Cross Body Bent Lateral Raise",
+    "muscle_group": "rear delts",
+    "equipment": "cable",
+    "video_url": "https://www.youtube.com/watch?v=f0g5NkYiWUY",
+    "image_url": null
+  },
+  {
+    "name": "Cable Rope Facepull",
+    "muscle_group": "rear delts",
+    "equipment": "cable",
+    "video_url": "https://www.youtube.com/watch?v=-MODnZdnmAQ",
+    "image_url": null
+  },
+  {
+    "name": "Cable Single Arm Rear Delt Raise",
+    "muscle_group": "rear delts",
+    "equipment": "cable",
+    "video_url": "https://www.youtube.com/watch?v=qz1OLup4W_M",
+    "image_url": null
+  },
+  {
+    "name": "Dumbbell Facepull",
+    "muscle_group": "rear delts",
+    "equipment": "dumbbell",
+    "video_url": "https://www.youtube.com/watch?v=nzTY7j9ocR8",
+    "image_url": null
+  },
+  {
+    "name": "Incline Dumbbell Facepull",
+    "muscle_group": "rear delts",
+    "equipment": "dumbbell",
+    "video_url": "https://www.youtube.com/watch?v=90cE3rCLtmo",
+    "image_url": null
+  },
+  {
+    "name": "Incline Dumbbell Lateral Raise",
+    "muscle_group": "rear delts",
+    "equipment": "dumbbell",
+    "video_url": "https://www.youtube.com/watch?v=z3PRz2aVA10",
+    "image_url": null
+  },
+  {
+    "name": "Kneeling Cable Facepull",
+    "muscle_group": "rear delts",
+    "equipment": "cable",
+    "video_url": "https://www.youtube.com/watch?v=8CGMuud1ANw",
+    "image_url": null
+  },
+  {
+    "name": "Machine Reverse Flye",
+    "muscle_group": "rear delts",
+    "equipment": "machine",
+    "video_url": "https://www.youtube.com/watch?v=5YK4bgzXDp0",
+    "image_url": null
+  },
+  {
+    "name": "Barbell Facepull",
+    "muscle_group": "rear delts",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=hPWYuhJMUhU",
+    "image_url": null
+  }
+]

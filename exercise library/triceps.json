@@ -1,0 +1,121 @@
+[
+  {
+    "name": "Barbell Triceps Overhead Extension",
+    "muscle_group": "triceps",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=q5X9thiKofE",
+    "image_url": null
+  },
+  {
+    "name": "Assisted Dip",
+    "muscle_group": "triceps",
+    "equipment": "assisted dip machine",
+    "video_url": "https://www.youtube.com/watch?v=yZ83t4mrPrI",
+    "image_url": null
+  },
+  {
+    "name": "Barbell Skullcrusher",
+    "muscle_group": "triceps",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=l3rHYPtMUo8",
+    "image_url": null
+  },
+  {
+    "name": "Cable Overhead Triceps Extension",
+    "muscle_group": "triceps",
+    "equipment": "cable",
+    "video_url": "https://www.youtube.com/watch?v=1u18yJELsh0",
+    "image_url": null
+  },
+  {
+    "name": "Cable Single Arm Pushdown",
+    "muscle_group": "triceps",
+    "equipment": "cable",
+    "video_url": "https://www.youtube.com/watch?v=Cp_bShvMY4c",
+    "image_url": null
+  },
+  {
+    "name": "Cable Triceps Pushdown",
+    "muscle_group": "triceps",
+    "equipment": "cable",
+    "video_url": "https://www.youtube.com/watch?v=6Fzep104f0s",
+    "image_url": null
+  },
+  {
+    "name": "Dip",
+    "muscle_group": "triceps",
+    "equipment": "bodyweight",
+    "video_url": "https://www.youtube.com/watch?v=4LA1kF7yCGo",
+    "image_url": null
+  },
+  {
+    "name": "Dumbbell Skullcrusher",
+    "muscle_group": "triceps",
+    "equipment": "dumbbell",
+    "video_url": "https://www.youtube.com/watch?v=jPjhQ2hsAds",
+    "image_url": null
+  },
+  {
+    "name": "EZ Bar Overhead Triceps Extension",
+    "muscle_group": "triceps",
+    "equipment": "ez bar",
+    "video_url": "https://www.youtube.com/watch?v=IdZ7HXnatko",
+    "image_url": null
+  },
+  {
+    "name": "Inverted Skullcrusher",
+    "muscle_group": "triceps",
+    "equipment": "bodyweight",
+    "video_url": "https://www.youtube.com/watch?v=1lrjpLuXH4w",
+    "image_url": null
+  },
+  {
+    "name": "Machine Triceps Extension",
+    "muscle_group": "triceps",
+    "equipment": "machine",
+    "video_url": "https://www.youtube.com/watch?v=Bx8ga1BLHLE",
+    "image_url": null
+  },
+  {
+    "name": "Machine Triceps Pushdown",
+    "muscle_group": "triceps",
+    "equipment": "machine",
+    "video_url": "https://www.youtube.com/watch?v=OChuGyCSC7U",
+    "image_url": null
+  },
+  {
+    "name": "Rope Overhead Triceps Extension",
+    "muscle_group": "triceps",
+    "equipment": "cable",
+    "video_url": "https://www.youtube.com/watch?v=kqidUIf1eJE",
+    "image_url": null
+  },
+  {
+    "name": "Rope Pushdown",
+    "muscle_group": "triceps",
+    "equipment": "cable",
+    "video_url": "https://www.youtube.com/watch?v=-xa-6cQaZKY",
+    "image_url": null
+  },
+  {
+    "name": "Seated EZ Bar Overhead Triceps Extension",
+    "muscle_group": "triceps",
+    "equipment": "ez bar",
+    "video_url": "https://www.youtube.com/watch?v=gcRZqG8t44c",
+    "image_url": null
+  },
+  {
+    "name": "JM Press",
+    "muscle_group": "triceps",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=Tih5iHyELsE",
+    "image_url": null
+  },
+  {
+    "name": "Seated Barbell Overhead Triceps Extension",
+    "muscle_group": "triceps",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=ktU2H0DDmwk",
+    "image_url": null
+  }
+]

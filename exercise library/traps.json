@@ -1,0 +1,72 @@
+[
+  {
+    "name": "Barbell Bent Shrug",
+    "muscle_group": "traps",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=d9daNDIXtK8",
+    "image_url": null
+  },
+  {
+    "name": "Barbell Shrug",
+    "muscle_group": "traps",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=M_MjF5Nm_h4",
+    "image_url": null
+  },
+  {
+    "name": "Cable Bent Shrug",
+    "muscle_group": "traps",
+    "equipment": "cable",
+    "video_url": "https://www.youtube.com/watch?v=nOn_Bz0zrwQ",
+    "image_url": null
+  },
+  {
+    "name": "Cable Shrug",
+    "muscle_group": "traps",
+    "equipment": "cable",
+    "video_url": "https://www.youtube.com/watch?v=YykmcX2b-LY",
+    "image_url": null
+  },
+  {
+    "name": "Cable Side Shrug",
+    "muscle_group": "traps",
+    "equipment": "cable",
+    "video_url": "https://www.youtube.com/watch?v=2zaT3WAgZi0",
+    "image_url": null
+  },
+  {
+    "name": "Cable Single Arm Side Shrug",
+    "muscle_group": "traps",
+    "equipment": "cable",
+    "video_url": "https://www.youtube.com/watch?v=BeIcUXQ3RDc",
+    "image_url": null
+  },
+  {
+    "name": "Dumbbell Bent Shrug",
+    "muscle_group": "traps",
+    "equipment": "dumbbell",
+    "video_url": "https://www.youtube.com/watch?v=5z7ZtboxbBY",
+    "image_url": null
+  },
+  {
+    "name": "Dumbbell Lean Shrug",
+    "muscle_group": "traps",
+    "equipment": "dumbbell",
+    "video_url": "https://www.youtube.com/watch?v=GH_l85Ky3vA",
+    "image_url": null
+  },
+  {
+    "name": "Dumbbell Shrug",
+    "muscle_group": "traps",
+    "equipment": "dumbbell",
+    "video_url": "https://www.youtube.com/watch?v=_t3lrPI6Ns4",
+    "image_url": null
+  },
+  {
+    "name": "Seated Dumbbell Shrug",
+    "muscle_group": "traps",
+    "equipment": "dumbbell",
+    "video_url": "https://www.youtube.com/watch?v=zgToz5FiI-E",
+    "image_url": null
+  }
+]

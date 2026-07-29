@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from ...domain.entities.workout_session import WorkoutSession
+from ...domain.exceptions import UnresolvedSessionExistsError
 from ...domain.interfaces.workout_session_repository import WorkoutSessionRepository
 from src.modules.workouts.domain.entities.plan_day import PlanDay
 from src.modules.workouts.domain.entities.workout_plan import WorkoutPlan
@@ -47,6 +48,13 @@ class QuickStartWorkout:
         Returns:
             The created WorkoutSession (ready for exercise logging).
         """
+        # Check if user has an unresolved session already
+        unresolved = self.session_repository.find_unresolved_by_user(user_id)
+        if unresolved:
+            raise UnresolvedSessionExistsError(
+                "You have an unfinished workout — resolve it before starting a new one."
+            )
+
         # Generate plan name with today's date
         today = datetime.utcnow()
         plan_name = f"Quick Workout - {today.strftime('%b %d')}"

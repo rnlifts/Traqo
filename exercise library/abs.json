@@ -1,0 +1,93 @@
+[
+  {
+    "name": "Hanging Knee Raise",
+    "muscle_group": "abs",
+    "equipment": "bodyweight",
+    "video_url": "https://www.youtube.com/watch?v=RD_A-Z15ER4",
+    "image_url": null
+  },
+  {
+    "name": "Hanging Straight Leg Raise",
+    "muscle_group": "abs",
+    "equipment": "bodyweight",
+    "video_url": "https://www.youtube.com/watch?v=7FwGZ8qY5OU",
+    "image_url": null
+  },
+  {
+    "name": "Machine Crunch",
+    "muscle_group": "abs",
+    "equipment": "machine",
+    "video_url": "https://www.youtube.com/watch?v=-OUSBPnHvsQ",
+    "image_url": null
+  },
+  {
+    "name": "Modified Candlestick",
+    "muscle_group": "abs",
+    "equipment": "bodyweight",
+    "video_url": "https://www.youtube.com/watch?v=T_X5rb3G5lk",
+    "image_url": null
+  },
+  {
+    "name": "Reaching Situp",
+    "muscle_group": "abs",
+    "equipment": "bodyweight",
+    "video_url": "https://www.youtube.com/watch?v=pXg8qppif7I",
+    "image_url": null
+  },
+  {
+    "name": "Rope Crunch",
+    "muscle_group": "abs",
+    "equipment": "cable",
+    "video_url": "https://www.youtube.com/watch?v=6GMKPQVERzw",
+    "image_url": null
+  },
+  {
+    "name": "Slant Board Situp",
+    "muscle_group": "abs",
+    "equipment": "slant board",
+    "video_url": "https://www.youtube.com/watch?v=DAnTf16NcT0",
+    "image_url": null
+  },
+  {
+    "name": "V-Up",
+    "muscle_group": "abs",
+    "equipment": "bodyweight",
+    "video_url": "https://www.youtube.com/watch?v=BIOM5eSsJ_8",
+    "image_url": null
+  },
+  {
+    "name": "Front Plank with Limb Raises",
+    "muscle_group": "abs",
+    "equipment": "bodyweight",
+    "video_url": "https://www.youtube.com/watch?v=DrRSNSidnQc",
+    "image_url": null
+  },
+  {
+    "name": "Front Plank",
+    "muscle_group": "abs",
+    "equipment": "bodyweight",
+    "video_url": "https://www.youtube.com/watch?v=Ff4_A3y7JR0",
+    "image_url": null
+  },
+  {
+    "name": "Hollow Body Hold",
+    "muscle_group": "abs",
+    "equipment": "bodyweight",
+    "video_url": "https://www.youtube.com/watch?v=eJh4JmC80Q8",
+    "image_url": null
+  },
+  {
+    "name": "Side Plank with Limb Raises",
+    "muscle_group": "abs",
+    "equipment": "bodyweight",
+    "video_url": "https://www.youtube.com/watch?v=rNDhOJjF8TI",
+    "image_url": null
+  },
+  {
+    "name": "Side Plank",
+    "muscle_group": "abs",
+    "equipment": "bodyweight",
+    "video_url": "https://www.youtube.com/watch?v=KzEakx0Oja8",
+    "image_url": null
+  }
+]

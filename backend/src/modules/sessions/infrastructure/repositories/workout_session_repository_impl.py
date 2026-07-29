@@ -74,3 +74,21 @@ class WorkoutSessionRepositoryImpl(WorkoutSessionRepository):
 
         model = query.order_by(WorkoutSessionModel.started_at.desc()).first()
         return model.to_domain() if model else None
+
+    def find_unresolved_by_user(self, user_id: int) -> WorkoutSession | None:
+        """Return the user's most recent session with completed_at IS NULL, or None."""
+        model = (
+            self.session.query(WorkoutSessionModel)
+            .filter_by(user_id=user_id)
+            .filter(WorkoutSessionModel.completed_at.is_(None))
+            .order_by(WorkoutSessionModel.started_at.desc())
+            .first()
+        )
+        return model.to_domain() if model else None
+
+    def delete(self, session_id: int) -> None:
+        """Permanently delete a session and (via DB cascade) its sets."""
+        model = self.session.query(WorkoutSessionModel).get(session_id)
+        if model:
+            self.session.delete(model)
+            self.session.commit()

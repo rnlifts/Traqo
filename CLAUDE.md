@@ -1,84 +1,46 @@
 # CLAUDE.md — Traqo Project Context
 
-This file holds project-specific facts for Traqo. It's read once per session by the `traqo-development` skill for context, and is not meant to be re-read on every step. It should only be edited when the project's stack, architecture, or scope actually changes — not automatically.
-
-For *how* Claude should work (workflow, teaching style, review process), see the `traqo-development` skill — this file is facts only, not behavior.
+Project-specific facts for Traqo, read once per session by the `traqo-development` skill. Edit only when stack, architecture, scope, or deployment actually change — not automatically. For *how* Claude should work (workflow, review process), see the `traqo-development` skill; this file is facts only.
 
 ---
 
 ## Project Overview
 
-**Name:** Traqo
-**What it is:** A fitness application for tracking workouts, exercises, sets, reps, weight, and workout history.
-**Why it exists:** Both to build a professional-quality app and to learn professional software engineering principles along the way — not just to make it work.
+**Name:** Traqo — a fitness app for tracking workouts, exercises, sets, reps, weight, and workout history.
+**Why it exists:** to build a professional-quality app and learn professional software engineering principles along the way.
 
 ---
 
 ## Tech Stack
 
-- **Frontend:** React (feature-based architecture, reusable components)
-- **Backend:** Python FastAPI (migrated from Flask — see `docs/migration-fastapi.md` for the migration plan and rationale)
-- **Database:** PostgreSQL
-- **ORM:** SQLAlchemy
-- **Authentication:** JWT
-- **Version Control:** Git
-- **Project Management:** Jira (future)
-
-Frontend and backend are separate applications.
+- **Frontend:** React + Vite (feature-based architecture)
+- **Backend:** Python FastAPI (migrated from Flask — see `docs/migration-fastapi.md`)
+- **Database:** PostgreSQL, SQLAlchemy ORM, Alembic migrations
+- **Auth:** JWT, bcrypt password hashing
+- **Hosting:** Railway (see Deployment section below)
+- Frontend and backend are separate applications, deployed as separate Railway services.
 
 ---
 
 ## Architecture
 
 Backend: **Clean Architecture** + **Modular Monolith**, organized by feature.
-Frontend: feature-based architecture, reusable components.
+Dependency direction: `Presentation → Application → Domain`. Infrastructure implements interfaces used by inner layers. **Domain must never depend on FastAPI, SQLAlchemy, PostgreSQL, JWT, HTTP, or any external library.**
 
-### Dependency direction (backend)
+- **Presentation** — routes, request validation, HTTP responses. No business logic.
+- **Application** — use cases (Register User, Finish Workout, etc.). Coordinates workflow.
+- **Domain** — entities, value objects, business rules, interfaces. No framework code.
+- **Infrastructure** — DB models, repository impls, JWT, password hashing, rate limiting.
 
-```
-Presentation → Application → Domain
-```
+Every backend feature module (`auth`, `workouts`, `exercises`, `sessions`) follows this same `domain/ application/ infrastructure/ presentation/` structure.
 
-Infrastructure implements interfaces used by the inner layers (dependency inversion).
-
-The **Domain** layer must never depend on: Flask, SQLAlchemy, PostgreSQL, JWT, HTTP, or any external library.
-
-### Layer responsibilities
-
-- **Presentation** — routes, controllers, request validation, HTTP responses. No business logic.
-- **Application** — use cases (e.g. Register User, Login User, Create Workout, Finish Workout). Coordinates workflow.
-- **Domain** — entities, value objects, business rules, interfaces. No framework-specific code.
-- **Infrastructure** — database, SQLAlchemy models, repository implementations, JWT, password hashing, external services.
-
-### Folder structure
-
-Every feature follows the same structure:
-
-```
-modules/
-  auth/
-    domain/
-    application/
-    infrastructure/
-    presentation/
-  workouts/
-    domain/
-    application/
-    infrastructure/
-    presentation/
-  exercises/
-    domain/
-    application/
-    infrastructure/
-    presentation/
-```
+Frontend: feature-based (`features/<name>/`), with shared `components/`, `api/`, `contexts/`, `utils/`.
 
 ---
 
 ## API Style
 
-REST API. Always return JSON. Use proper HTTP status codes.
-
+REST, JSON, proper status codes:
 ```
 GET    /api/workouts
 POST   /api/auth/login
@@ -92,74 +54,52 @@ DELETE /api/workouts/{id}
 ## Current MVP Scope
 
 **In scope:**
-- Authentication — register/login by name + password. System auto-generates a unique username. No email or password recovery yet (planned for V2).
-- Workout Plans — including day-of-week scheduling and target sets/reps/weight per plan exercise (added 2026-07-19 per `docs/ux-improvement-plan.md`; see `docs/sprints.md` for the sprint sequence)
-- Exercise logging types (added 2026-07-26) — each plan-exercise carries its own field-presence flags (`has_reps`/`has_weight`/`has_duration`) rather than a fixed enum on the exercise itself. A trainer configures which fields apply per exercise in Plan Builder (cross-to-remove Reps/Weight, add Duration); a client following that plan sees only the configured fields, fixed. Quick-start sessions (`is_quick_start`) are the one place a non-trainer can configure fields inline, gated to the first set of a never-logged exercise. Reps supports a free-text fixed-or-range value (e.g. `"10"` or `"10-12"`); Duration is stored as seconds, displayed as hh:mm:ss. Optional per-set target overrides ("Vary by set") live in a separate `workout_exercise_set_targets` table. Backend validation is deliberately permissive (a logged set just needs at least one of weight/reps/duration non-null) — the flags are a UI-display concern, not a backend-enforced constraint, so editing a plan later never invalidates already-logged data.
-- Workout Sessions — including previous-performance prefill (last session's actual weight/reps for an exercise)
-- Exercises
-- Workout History — including progress-over-time views: per-exercise history, volume trend, estimated 1RM, PR detection (added 2026-07-19, reversing the earlier "out of scope" call — see `docs/ux-improvement-plan.md` Section 3.D for rationale and `docs/requirements.md` for the updated non-goals)
+- Auth — register/login by name + password, auto-generated unique username. No email/password recovery yet.
+- Workout Plans — day-of-week scheduling, target sets/reps/weight per plan exercise.
+- Exercise logging types (2026-07-26) — each plan-exercise carries field-presence flags (`has_reps`/`has_weight`/`has_duration`) instead of a fixed enum. Trainer configures fields per exercise in Plan Builder; a client following that plan sees only the configured fields. Quick-start sessions allow inline field config on a never-logged exercise's first set. Reps is free-text (`"10"` or `"10-12"`); Duration stored in seconds. Optional per-set overrides ("Vary by set") live in `workout_exercise_set_targets`. Backend validation is deliberately permissive (one of weight/reps/duration non-null) — the flags are UI-display only, never backend-enforced.
+- Workout Sessions — previous-performance prefill, quick-start vs. real-plan sessions (real plans strictly follow the plan: no ad-hoc exercises/sets mid-workout; quick-start allows both).
+- Exercises, Workout History (progress-over-time views: per-exercise history, volume trend, est. 1RM, PR detection).
 
-**Explicitly out of scope for now** (don't build or suggest without the person expanding scope first):
-- Notifications
-- Social features
-- Trainer portal
-- AI features
-- Nutrition tracking
-- A shared/global exercise library
+**Explicitly out of scope** (don't build without the person expanding scope first): notifications, social features, trainer portal, AI features, nutrition tracking, a shared/global exercise library.
 
-**Note on scope changes:** this file has already been formally revised twice (2026-07-19, 2026-07-26) to bring in what was originally deferred. Treat that as evidence scope *can* change, not as license to reinterpret "out of scope" items yourself — always make the change explicit here and in `docs/requirements.md` when it happens, the way these were.
+**Planned future rework (unscheduled):** current exercise CRUD (`frontend/src/features/exercises/`) expected to be replaced with a default built-in library + drag-and-drop + autocomplete — see memory `traqo-exercise-module-future-plan`.
 
-**Planned future rework (not yet scheduled):** the current exercise CRUD module (`frontend/src/features/exercises/`) is expected to be replaced with a default built-in exercise library, drag-and-drop selection into plans, and autocomplete — see project memory `traqo-exercise-module-future-plan` for detail. Don't over-invest in this module beyond what a given task actually needs.
+---
+
+## Deployment (Railway)
+
+**Live (as of 2026-07-26):** frontend `https://traqo.up.railway.app`, backend `https://backend-production-a6d4.up.railway.app` (Railway-generated domains — if either is renamed in the dashboard, `CORS_ORIGINS` on the backend **must** be updated to match, or every request breaks with a CORS 400).
+
+- One Railway project (`disciplined-determination`), three services: `frontend`, `backend`, `Postgres`, all in the `production` environment.
+- Backend: root dir `backend`, start `python run.py` (reads `$PORT`, defaults 5000 locally). `backend/.python-version` is **pinned to 3.11** — SQLAlchemy 2.0.23 crashes on Python 3.13's stricter typing internals, which is what Railway defaults to otherwise.
+- Frontend: root dir `frontend`, build `npm run build`, start `npx serve -s dist -l $PORT` (the `-s` flag is required for React Router's client-side routes to survive a page refresh).
+- Backend env vars: `ENVIRONMENT=production` (disables `/docs`, enforces real `SECRET_KEY`/`JWT_SECRET_KEY` — refuses to boot with dev-default secrets), `DATABASE_URL=${{Postgres.DATABASE_URL}}`, `CORS_ORIGINS=<frontend URL>`.
+- Frontend env var: `VITE_API_BASE_URL=<backend URL>/api` — baked in at **build** time, must be set before a build runs.
+
+**Migrations on Railway — known-broken automation, do it manually:**
+Railway's `preDeployCommand` config is unreliable on this project (config updates didn't consistently take effect across many attempts; root-caused to Railpack likely auto-injecting its own `alembic upgrade head` for any repo with a detected `alembic.ini`, ignoring explicit overrides). Instead:
+1. Install Railway CLI, `railway login --browserless` (user approves the link — needs a real logged-in browser, can't be done headlessly).
+2. `railway link` to the project/environment/service, then from `backend/migrations`: `railway run python -m alembic upgrade head` — but this runs *locally* with Railway's env vars injected, and `DATABASE_URL` resolves to `postgres.railway.internal` (private network, unreachable from outside Railway). Use the Postgres service's **`DATABASE_PUBLIC_URL`** instead (`railway service Postgres && railway variables`), passed explicitly: `DATABASE_URL="<public-url>" python -m alembic upgrade head` from `backend/migrations`.
+3. `migrations/env.py` adds the backend root to `sys.path` explicitly (fixed 2026-07-26) so `from src...` imports work regardless of cwd — don't remove this, it's what makes migrations portable across environments that invoke alembic differently.
+
+**Alembic revision IDs must be ≤32 characters** — `alembic_version.version_num` is `VARCHAR(32)`; a longer id fails silently mid-migration (the DDL runs, then the version-bookkeeping UPDATE fails, and Postgres's transactional DDL rolls the whole thing back).
+
+**Schema drift risk:** `workout_sets.workout_exercise_id` existed in local dev (added via an ad-hoc script, since deleted) for a long time before anyone noticed it was never captured as an Alembic migration — production only got it 2026-07-26, after a live 500 error surfaced it. Any local DB change must go through a proper migration file, never a manual `ALTER TABLE` or throwaway script, or it will silently work locally and break in production.
 
 ---
 
 ## Coding Standards
 
-- Keep functions small, classes focused.
-- Prefer composition over inheritance.
-- Use type hints where practical.
-- Write docstrings for public classes and functions.
-- Avoid duplicate code.
+Keep functions small, classes focused. Prefer composition over inheritance. Use type hints where practical. Avoid duplicate code. No unnecessary comments — code should read clearly on its own.
 
 ---
 
-## Development Pipeline (PM Orchestration)
+## Working Process
 
-Claude acts as Project Manager (PM) for Traqo: plans, delegates, and reviews — does not write implementation code directly unless explicitly asked. Requirements come in at product/feature level; PM fills in technical gaps and implementation decisions using judgment and this file, and only escalates genuine product-level ambiguity to the person.
+Claude acts as PM for Traqo: plans, delegates task specs to an implementing agent, and **independently verifies every claim live** (real browser/API calls, real DB queries) rather than trusting the agent's own "verified" self-report — this has repeatedly caught real bugs the agent's own testing missed. Task specs go to `task_specs/` as structured files (Objective/Context/Requirements/Do NOT/Acceptance criteria); the agent implements, PM verifies against the actual running app before considering a task done.
 
-### Subagents (`.claude/agents/`)
-
-- **coder** (Haiku) — implements well-specified coding tasks exactly as scoped, no re-architecting.
-- **reviewer** (Sonnet) — security/correctness review after coder finishes, especially auth and password-handling changes.
-- **ux-researcher** (Sonnet) — researches and designs UX/UI improvements and feature specs; produces written specs, does not implement.
-- **test-writer** (Haiku) — writes and runs tests covering coder's new/changed functionality; reports pass/fail and coverage gaps, does not fix implementation code.
-- **db-migration-checker** (Sonnet) — verifies schema/data migrations are safe and reversible before they run against real data; flags risk rather than approving by default.
-
-### Pipeline order for new features/fixes
-
-1. **ux-researcher** — produces a spec first, for anything user-facing.
-2. **coder** — implements from the approved spec, via the `structured-dev-workflow` skill's 7-step process (clarify → architecture check → plan → approval → work → review → dev-log entry). PM stands in for "the person" at step 2 (clarify), step 4 (plan approval), and step 6 (review, directly or via `reviewer` for security-sensitive work) — these are not relayed to the person unless the ambiguity is genuinely product-level, not technical.
-3. **test-writer** — writes and runs tests against coder's output.
-4. **db-migration-checker** — only if the change touches schema or data.
-5. **reviewer** — final security/correctness check.
-6. Report to the person for final approval.
-
-### Communication between steps
-
-- Specs, plans, or anything meant to be read by a later agent or by the person directly go to a file in `docs/` (e.g. `docs/feature-spec-{name}.md`); the next agent in the chain reads that file rather than working from a summary of it.
-- Short, transient handoffs (coder's implementation report, test-writer's pass/fail results, reviewer's findings) can stay verbal unless significant enough to warrant a written record.
-- Every subagent reports back in the same format: what was done, files touched, deviations from spec, and a recommendation for next step.
-
-### When to stop and ask vs. proceed automatically
-
-Steps 1–5 run automatically without checking in, including PM approving coder's plans. Stop and surface the output to the person before proceeding if:
-- The requirement itself is ambiguous at a product level (not technical)
-- The change touches authentication or password handling
-- The change touches payments or billing
-- The change touches user data or database schema in a way that could be destructive or hard to reverse
-
-For everything else, run the full pipeline and bring the person the final result with reviewer's sign-off.
+Stop and surface to the person (don't proceed automatically) when: the requirement is ambiguous at a product level, the change touches auth/payments/user-data-destructively, or it's a genuinely irreversible action (bulk data deletion, force-push, etc.) — for those, hand over the exact command/SQL rather than running it directly if execution is blocked or inappropriate.
 
 ---
 
-*Last updated: 2026-07-26. Update this file directly (not the skill) when stack, architecture, or scope changes.*
+*Last updated: 2026-07-27.*

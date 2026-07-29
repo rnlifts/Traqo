@@ -51,3 +51,13 @@ class WorkoutSessionRepository(ABC):
             The most recent finished session, or None if no finished session exists.
         """
         pass
+
+    @abstractmethod
+    def find_unresolved_by_user(self, user_id: int) -> "WorkoutSession | None":
+        """Return the user's most recent session with completed_at IS NULL, or None."""
+        pass
+
+    @abstractmethod
+    def delete(self, session_id: int) -> None:
+        """Permanently delete a session and (via DB cascade) its sets."""
+        pass

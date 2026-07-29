@@ -1,0 +1,72 @@
+[
+  {
+    "name": "Barbell Upright Row",
+    "muscle_group": "side delt (shoulder)",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=um3VVzqunPU",
+    "image_url": null
+  },
+  {
+    "name": "Cable Cross Body Lateral Raise",
+    "muscle_group": "side delt (shoulder)",
+    "equipment": "cable",
+    "video_url": "https://www.youtube.com/watch?v=2OMbdPF7mz4",
+    "image_url": null
+  },
+  {
+    "name": "Cable Upright Row",
+    "muscle_group": "side delt (shoulder)",
+    "equipment": "cable",
+    "video_url": "https://www.youtube.com/watch?v=qr3ziolhjvQ",
+    "image_url": null
+  },
+  {
+    "name": "Dumbbell Upright Row",
+    "muscle_group": "side delt (shoulder)",
+    "equipment": "dumbbell",
+    "video_url": "https://www.youtube.com/watch?v=Ub6QruNKfbY",
+    "image_url": null
+  },
+  {
+    "name": "Lateral Raise",
+    "muscle_group": "side delt (shoulder)",
+    "equipment": "dumbbell",
+    "video_url": "https://www.youtube.com/watch?v=OuG1smZTsQQ",
+    "image_url": null
+  },
+  {
+    "name": "Leaning Cable Lateral Raise",
+    "muscle_group": "side delt (shoulder)",
+    "equipment": "cable",
+    "video_url": "https://www.youtube.com/watch?v=lq7eLC30b9w",
+    "image_url": null
+  },
+  {
+    "name": "Machine Lateral Raise",
+    "muscle_group": "side delt (shoulder)",
+    "equipment": "machine",
+    "video_url": "https://www.youtube.com/watch?v=0o07iGKUarI",
+    "image_url": null
+  },
+  {
+    "name": "Smith Machine Upright Row",
+    "muscle_group": "side delt (shoulder)",
+    "equipment": "smith machine",
+    "video_url": "https://www.youtube.com/watch?v=QIpa-9dtkgA",
+    "image_url": null
+  },
+  {
+    "name": "Thumbs Down Lateral Raise",
+    "muscle_group": "side delt (shoulder)",
+    "equipment": "dumbbell",
+    "video_url": "https://www.youtube.com/watch?v=D1f7d1OcobY",
+    "image_url": null
+  },
+  {
+    "name": "Top Hold Lateral Raise",
+    "muscle_group": "side delt (shoulder)",
+    "equipment": "dumbbell",
+    "video_url": "https://www.youtube.com/watch?v=SKf8wHlIFX0",
+    "image_url": null
+  }
+]

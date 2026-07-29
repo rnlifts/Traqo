@@ -20,3 +20,9 @@ class InvalidSetDataError(Exception):
     """Raised when logged set data is invalid for the exercise's logging type."""
 
     pass
+
+
+class UnresolvedSessionExistsError(Exception):
+    """Raised when a user tries to start a new session while an unresolved session exists."""
+
+    pass

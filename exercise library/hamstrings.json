@@ -1,0 +1,86 @@
+[
+  {
+    "name": "45 Degree Back Raise",
+    "muscle_group": "hamstrings",
+    "equipment": "back extension",
+    "video_url": "https://www.youtube.com/watch?v=5_ejbGfdAQE",
+    "image_url": null
+  },
+  {
+    "name": "Dumbbell Stiff Legged Deadlift",
+    "muscle_group": "hamstrings",
+    "equipment": "dumbbell",
+    "video_url": "https://www.youtube.com/watch?v=cYKYGwcg0U8",
+    "image_url": null
+  },
+  {
+    "name": "Glute Ham Raise",
+    "muscle_group": "hamstrings",
+    "equipment": "glute ham developer",
+    "video_url": "https://www.youtube.com/watch?v=SBGYSfoqyfU",
+    "image_url": null
+  },
+  {
+    "name": "High Bar Good Morning",
+    "muscle_group": "hamstrings",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=dEJ0FTm-CEk",
+    "image_url": null
+  },
+  {
+    "name": "Low Bar Good Morning",
+    "muscle_group": "hamstrings",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=mnxn-7SO9Ks",
+    "image_url": null
+  },
+  {
+    "name": "Lying Leg Curl",
+    "muscle_group": "hamstrings",
+    "equipment": "machine",
+    "video_url": "https://www.youtube.com/watch?v=n5WDXD_mpVY",
+    "image_url": null
+  },
+  {
+    "name": "Seated Leg Curl",
+    "muscle_group": "hamstrings",
+    "equipment": "machine",
+    "video_url": "https://www.youtube.com/watch?v=Orxowest56U",
+    "image_url": null
+  },
+  {
+    "name": "Single Leg Leg Curl",
+    "muscle_group": "hamstrings",
+    "equipment": "machine",
+    "video_url": "https://www.youtube.com/watch?v=N6FVnaasdq0",
+    "image_url": null
+  },
+  {
+    "name": "Stiff Legged Deadlift",
+    "muscle_group": "hamstrings",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=CN_7cz3P-1U",
+    "image_url": null
+  },
+  {
+    "name": "Stiff-Legged Deadlift from 12 Inch Blocks",
+    "muscle_group": "hamstrings",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=nYi-rVXnRD0",
+    "image_url": null
+  },
+  {
+    "name": "Stiff Legged Deadlift from 4 Inch Blocks",
+    "muscle_group": "hamstrings",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=P-RWTcby_G4",
+    "image_url": null
+  },
+  {
+    "name": "Stiff Legged Deadlift from 8 Inch Blocks",
+    "muscle_group": "hamstrings",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=nQQ30A-R25M",
+    "image_url": null
+  }
+]

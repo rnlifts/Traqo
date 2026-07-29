@@ -2,29 +2,38 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../features/auth/AuthContext";
 import { Layout } from "../components/Layout";
-import { UserIcon, ChevronDownIcon } from "../components/icons";
-import type { WorkoutHistoryEntry } from "../api/workoutSessionsApi";
+import { useToast } from "../components/Toast";
+import { ConfirmDialog } from "../components/ConfirmDialog";
+import { PlanActionCards } from "../components/PlanActionCards";
+import type { WorkoutHistoryEntry, WorkoutSession } from "../api/workoutSessionsApi";
 import { workoutSessionsApi } from "../api/workoutSessionsApi";
 
 export const Dashboard: React.FC = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
+  const { Toast, showToast } = useToast();
   const [recentWorkouts, setRecentWorkouts] = useState<WorkoutHistoryEntry[]>([]);
+  const [unresolvedSession, setUnresolvedSession] = useState<WorkoutSession | null>(null);
   const [loading, setLoading] = useState(true);
+  const [discardConfirm, setDiscardConfirm] = useState(false);
 
   useEffect(() => {
-    const fetchRecentWorkouts = async () => {
+    const fetchData = async () => {
       try {
-        const data = await workoutSessionsApi.getWorkoutHistory();
-        setRecentWorkouts(data.slice(0, 3));
+        const [historyData, sessionData] = await Promise.all([
+          workoutSessionsApi.getWorkoutHistory(),
+          workoutSessionsApi.getUnresolvedSession(),
+        ]);
+        setRecentWorkouts(historyData.slice(0, 3));
+        setUnresolvedSession(sessionData);
       } catch (error) {
-        console.error("Failed to load recent workouts:", error);
+        console.error("Failed to load dashboard data:", error);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchRecentWorkouts();
+    fetchData();
   }, []);
 
   const formatDate = (dateString: string) => {
@@ -39,32 +48,84 @@ export const Dashboard: React.FC = () => {
   return (
     <Layout>
       <div className="page-container">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
-          <div>
-            <p className="kicker">Welcome back</p>
-            <h1 className="page-title">{currentUser?.display_name}</h1>
-          </div>
-          <div style={{ textAlign: 'right' }}>
-            <p style={{ fontSize: '12px', color: 'var(--text)', opacity: 0.7, margin: '0 0 8px 0', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              Login Username
-            </p>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 14px', border: '2px solid var(--accent)', borderRadius: '20px', backgroundColor: 'var(--bg-secondary)', width: 'fit-content', marginLeft: 'auto' }}>
-              <UserIcon size={18} style={{ color: 'var(--text-h)', flexShrink: 0 }} />
-              <span style={{ fontSize: '14px', fontFamily: 'monospace', fontWeight: '500', color: 'var(--text-h)' }}>
-                @{currentUser?.username}
-              </span>
-              <ChevronDownIcon size={16} style={{ color: 'var(--text-h)', flexShrink: 0, marginLeft: '2px' }} />
-            </div>
-          </div>
+        <div style={{ marginBottom: '24px' }}>
+          <p className="kicker">Welcome back</p>
+          <h1 className="page-title">{currentUser?.display_name}</h1>
         </div>
 
-        <button className="create-tile" onClick={() => navigate("/workout-plans/new")}>
-          <span className="plus">+</span>
-          <span>
-            <span className="label">Create exercise plan</span>
-            <div className="sub">Name it, set the length, fill in the days.</div>
-          </span>
-        </button>
+        <PlanActionCards />
+
+        {unresolvedSession && (
+          <div style={{
+            backgroundColor: 'var(--info-soft, #dbeafe)',
+            border: '1px solid var(--info, #3b82f6)',
+            borderRadius: '8px',
+            padding: '16px',
+            marginBottom: '24px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}>
+            <div>
+              <strong>You have an unfinished workout</strong>
+              <p style={{ marginTop: '4px', fontSize: '14px', color: 'var(--text-h)' }}>
+                <strong>{unresolvedSession.plan_name}</strong> ({unresolvedSession.day_label || 'Day'})
+                {' · '} started {new Date(unresolvedSession.started_at).toLocaleDateString()}
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                className="btn btn-secondary"
+                onClick={() => navigate(`/workout-sessions/${unresolvedSession.id}`)}
+              >
+                Resume
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={async () => {
+                  try {
+                    await workoutSessionsApi.finishWorkout(unresolvedSession.id);
+                    setUnresolvedSession(null);
+                    showToast('Workout marked as finished!', 'success');
+                  } catch (error) {
+                    console.error('Failed to finish workout:', error);
+                    showToast('Failed to finish workout', 'error');
+                  }
+                }}
+              >
+                Mark as Finished
+              </button>
+              <button
+                className="btn btn-danger"
+                onClick={() => setDiscardConfirm(true)}
+              >
+                Discard
+              </button>
+            </div>
+          </div>
+        )}
+
+        <ConfirmDialog
+          isOpen={discardConfirm}
+          title="Discard Workout"
+          message="This will permanently delete today's logged sets for this workout. This can't be undone."
+          confirmText="Discard"
+          cancelText="Cancel"
+          isDangerous
+          onConfirm={async () => {
+            if (!unresolvedSession) return;
+            try {
+              await workoutSessionsApi.discardSession(unresolvedSession.id);
+              setUnresolvedSession(null);
+              setDiscardConfirm(false);
+              showToast('Workout discarded.', 'success');
+            } catch (error) {
+              console.error('Failed to discard workout:', error);
+              showToast('Failed to discard workout', 'error');
+            }
+          }}
+          onCancel={() => setDiscardConfirm(false)}
+        />
 
         <p className="section-label">Recent workouts</p>
         {loading ? (
@@ -88,6 +149,7 @@ export const Dashboard: React.FC = () => {
         ) : (
           <p className="empty-note">No workouts yet — start one from a plan to see it here.</p>
         )}
+        {Toast}
       </div>
     </Layout>
   );

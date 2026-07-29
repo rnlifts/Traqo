@@ -1,0 +1,30 @@
+[
+  {
+    "name": "Cable Wrist Curl",
+    "muscle_group": "forearms",
+    "equipment": "cable",
+    "video_url": "https://www.youtube.com/watch?v=WVAaKJvToe0",
+    "image_url": null
+  },
+  {
+    "name": "Dumbbell Bench Wrist Curl",
+    "muscle_group": "forearms",
+    "equipment": "dumbbell",
+    "video_url": "https://www.youtube.com/watch?v=2wPpcJBe03o",
+    "image_url": null
+  },
+  {
+    "name": "Dumbbell Standing Wrist Curl",
+    "muscle_group": "forearms",
+    "equipment": "dumbbell",
+    "video_url": "https://www.youtube.com/watch?v=iQ4JjOK73PE",
+    "image_url": null
+  },
+  {
+    "name": "Barbell Standing Wrist Curl",
+    "muscle_group": "forearms",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=lfQR7oVS8eo",
+    "image_url": null
+  }
+]

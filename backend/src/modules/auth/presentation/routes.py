@@ -7,9 +7,10 @@ from src.infrastructure.security.jwt_service import create_access_token
 from ..application.use_cases.login_user import LoginUser
 from ..application.use_cases.register_user import RegisterUser
 from ..domain.exceptions import InvalidCredentialsError
+from ..domain.services.username_validator import UsernameValidator
 from ..infrastructure.repositories.user_repository_impl import UserRepositoryImpl
 from ..infrastructure.security.bcrypt_password_hasher import BcryptPasswordHasher
-from .schemas import LoginRequest, LoginResponse, RegisterRequest, RegisterResponse
+from .schemas import CheckUsernameResponse, LoginRequest, LoginResponse, RegisterRequest, RegisterResponse
 
 auth_router = APIRouter(prefix="/api/auth", tags=["auth"])
 password_hasher = BcryptPasswordHasher()
@@ -21,8 +22,29 @@ async def register(request: Request, req: RegisterRequest, response: Response, d
     """Register a new user."""
     user_repository = UserRepositoryImpl(db)
     use_case = RegisterUser(user_repository, password_hasher)
-    user = use_case.execute(req.display_name, req.password)
+    user = use_case.execute(req.display_name, req.username, req.password)
     return RegisterResponse(message="Account created successfully", username=user.username)
+
+
+@auth_router.get("/check-username", response_model=CheckUsernameResponse)
+@limiter.limit("20/minute")
+async def check_username(username: str, request: Request, response: Response, db: Session = Depends(get_db)):
+    """Check if a username is available."""
+    # Normalize the username
+    normalized = UsernameValidator.normalize(username)
+
+    # Check format first (cheap, no DB query)
+    is_valid, error_message = UsernameValidator.validate_format(normalized)
+    if not is_valid:
+        return CheckUsernameResponse(available=False, reason=error_message)
+
+    # Check if username exists in database
+    user_repository = UserRepositoryImpl(db)
+    if user_repository.exists_by_username(normalized):
+        return CheckUsernameResponse(available=False, reason="Username is already taken")
+
+    # Username is available
+    return CheckUsernameResponse(available=True)
 
 
 @auth_router.post("/login", response_model=LoginResponse)

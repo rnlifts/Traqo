@@ -1,0 +1,184 @@
+[
+  {
+    "name": "Barbell Hip Thrust",
+    "muscle_group": "glutes",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=EF7jXP17DPE",
+    "image_url": null
+  },
+  {
+    "name": "Barbell Walking Lunge",
+    "muscle_group": "glutes",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=_meXEWq5MOQ",
+    "image_url": null
+  },
+  {
+    "name": "Cable Pull Through",
+    "muscle_group": "glutes",
+    "equipment": "cable",
+    "video_url": "https://www.youtube.com/watch?v=pv8e6OSyETE",
+    "image_url": null
+  },
+  {
+    "name": "Deadlift",
+    "muscle_group": "glutes",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=AweC3UaM14o",
+    "image_url": null
+  },
+  {
+    "name": "Deficit 25s Deadlift",
+    "muscle_group": "glutes",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=kvWcDHH62j0",
+    "image_url": null
+  },
+  {
+    "name": "Deficit Deadlift",
+    "muscle_group": "glutes",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=X-uKkAukJVA",
+    "image_url": null
+  },
+  {
+    "name": "Dumbbell Walking Lunge",
+    "muscle_group": "glutes",
+    "equipment": "dumbbell",
+    "video_url": "https://www.youtube.com/watch?v=eFWCn5iEbTU",
+    "image_url": null
+  },
+  {
+    "name": "Machine Glute Kickback",
+    "muscle_group": "glutes",
+    "equipment": "machine",
+    "video_url": "https://www.youtube.com/watch?v=NLDBFtSNhqg",
+    "image_url": null
+  },
+  {
+    "name": "Machine Hip Thrust",
+    "muscle_group": "glutes",
+    "equipment": "machine",
+    "video_url": "https://www.youtube.com/watch?v=ZSPmIyX9RZs",
+    "image_url": null
+  },
+  {
+    "name": "Reverse Lunge",
+    "muscle_group": "glutes",
+    "equipment": "bodyweight",
+    "video_url": "https://www.youtube.com/watch?v=TQfhY5oJ_Sc",
+    "image_url": null
+  },
+  {
+    "name": "Single Leg Hip Thrust",
+    "muscle_group": "glutes",
+    "equipment": "bodyweight",
+    "video_url": "https://www.youtube.com/watch?v=lzDgRRuBdqY",
+    "image_url": null
+  },
+  {
+    "name": "Split Squat",
+    "muscle_group": "glutes",
+    "equipment": "bodyweight",
+    "video_url": "https://www.youtube.com/watch?v=jNihW0WDIL4",
+    "image_url": null
+  },
+  {
+    "name": "Sumo Deadlift",
+    "muscle_group": "glutes",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=pfSMst14EFk",
+    "image_url": null
+  },
+  {
+    "name": "Sumo Deficit Deadlift",
+    "muscle_group": "glutes",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=bnYekgCKfv0",
+    "image_url": null
+  },
+  {
+    "name": "Sumo Squat",
+    "muscle_group": "glutes",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=4eDJa5MnAmY",
+    "image_url": null
+  },
+  {
+    "name": "Trap Bar Deadlift",
+    "muscle_group": "glutes",
+    "equipment": "trap bar",
+    "video_url": "https://www.youtube.com/watch?v=v709aJKv-gM",
+    "image_url": null
+  },
+  {
+    "name": "DB Reverse Lunge",
+    "muscle_group": "glutes",
+    "equipment": "dumbbell",
+    "video_url": "https://www.youtube.com/watch?v=D-c2CWwEweo",
+    "image_url": null
+  },
+  {
+    "name": "DB Split Squat",
+    "muscle_group": "glutes",
+    "equipment": "dumbbell",
+    "video_url": "https://www.youtube.com/watch?v=pjAewD4LxXs",
+    "image_url": null
+  },
+  {
+    "name": "Single Leg DB Hip Thrust",
+    "muscle_group": "glutes",
+    "equipment": "dumbbell",
+    "video_url": "https://www.youtube.com/watch?v=CSXVj047Ss4",
+    "image_url": null
+  },
+  {
+    "name": "Deadlift from 4 Inch Blocks",
+    "muscle_group": "glutes",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=-cf8izxkSCM",
+    "image_url": null
+  },
+  {
+    "name": "Deadlift from 8 Inch Blocks",
+    "muscle_group": "glutes",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=0Dq4XibjBWU",
+    "image_url": null
+  },
+  {
+    "name": "Deadlift from 12 Inch Blocks",
+    "muscle_group": "glutes",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=Db5iv-hi1ik",
+    "image_url": null
+  },
+  {
+    "name": "Barbell Split Squat",
+    "muscle_group": "glutes",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=VfsPxffCAd0",
+    "image_url": null
+  },
+  {
+    "name": "Wide Stance Belt Squat",
+    "muscle_group": "glutes",
+    "equipment": "belt squat",
+    "video_url": "https://www.youtube.com/watch?v=LU2GYsqkgAQ",
+    "image_url": null
+  },
+  {
+    "name": "Machine Hip Abductor",
+    "muscle_group": "hip abductors",
+    "equipment": "machine",
+    "video_url": "https://youtu.be/G_8LItOiZ0Q",
+    "image_url": null
+  },
+  {
+    "name": "Machine Hip Adductor",
+    "muscle_group": "hip adductors",
+    "equipment": "machine",
+    "video_url": "https://youtu.be/e9AqTFMmP18",
+    "image_url": null
+  }
+]

@@ -135,4 +135,15 @@ export const workoutSessionsApi = {
     );
     return response.data;
   },
+
+  async getUnresolvedSession(): Promise<WorkoutSession | null> {
+    const response = await client.get<{ session: WorkoutSession | null }>(
+      "/workout-sessions/unresolved"
+    );
+    return response.data.session;
+  },
+
+  async discardSession(sessionId: number): Promise<void> {
+    await client.delete(`/workout-sessions/${sessionId}`);
+  },
 };

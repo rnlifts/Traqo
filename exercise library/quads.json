@@ -1,0 +1,103 @@
+[
+  {
+    "name": "Feet Forward Smith Squat",
+    "muscle_group": "quadriceps",
+    "equipment": "smith machine",
+    "video_url": "https://www.youtube.com/watch?v=-eO_VydErV0",
+    "image_url": null
+  },
+  {
+    "name": "Front Squat Cross Grip",
+    "muscle_group": "quadriceps",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=0DQvn2qsOG4",
+    "image_url": null
+  },
+  {
+    "name": "Front Squat",
+    "muscle_group": "quadriceps",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=HHxNbhP16UE",
+    "image_url": null
+  },
+  {
+    "name": "Hack Squat",
+    "muscle_group": "quadriceps",
+    "equipment": "machine",
+    "video_url": "https://www.youtube.com/watch?v=rYgNArpwE7E",
+    "image_url": null
+  },
+  {
+    "name": "High Bar Squat",
+    "muscle_group": "quadriceps",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=i7J5h7BJ07g",
+    "image_url": null
+  },
+  {
+    "name": "Leg Extension",
+    "muscle_group": "quadriceps",
+    "equipment": "machine",
+    "video_url": "https://www.youtube.com/watch?v=m0FOpMEgero",
+    "image_url": null
+  },
+  {
+    "name": "Leg Press",
+    "muscle_group": "quadriceps",
+    "equipment": "leg press",
+    "video_url": "https://www.youtube.com/watch?v=yZmx_Ac3880",
+    "image_url": null
+  },
+  {
+    "name": "Narrow Stance Squat",
+    "muscle_group": "quadriceps",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=1IIPcUCKxcE",
+    "image_url": null
+  },
+  {
+    "name": "High Bar Half Squat",
+    "muscle_group": "quadriceps",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=dDHLBiswGNA",
+    "image_url": null
+  },
+  {
+    "name": "High Bar Parallel Squat",
+    "muscle_group": "quadriceps",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=8w94JRax4yg",
+    "image_url": null
+  },
+  {
+    "name": "High Bar Quarter Squat",
+    "muscle_group": "quadriceps",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=q3mO8UssOWQ",
+    "image_url": null
+  },
+  {
+    "name": "High Bar Third Squat",
+    "muscle_group": "quadriceps",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=ZNZfURzjrnM",
+    "image_url": null
+  },
+  {
+    "name": "Barbell Split Squat",
+    "muscle_group": "quadriceps",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=VfsPxffCAd0",
+    "image_url": null
+  },
+  {
+    "name": "Belt Squat",
+    "muscle_group": "quadriceps",
+    "equipment": "belt squat",
+    "video_url": "https://www.youtube.com/watch?v=L__-j2v_LPM",
+    "image_url": null
+  }
+  
+  
+
+]

@@ -1,0 +1,114 @@
+[
+  {
+    "name": "Alternating Dumbbell Curl",
+    "muscle_group": "biceps",
+    "equipment": "dumbbell",
+    "video_url": "https://www.youtube.com/watch?v=iixND1P2lik",
+    "image_url": null
+  },
+  {
+    "name": "Barbell Curl Narrow Grip",
+    "muscle_group": "biceps",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=pUS6HBQjRmc",
+    "image_url": null
+  },
+  {
+    "name": "Barbell Curl Normal Grip",
+    "muscle_group": "biceps",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=JnLFSFurrqQ",
+    "image_url": null
+  },
+  {
+    "name": "Cable EZ Bar Curl Wide Grip",
+    "muscle_group": "biceps",
+    "equipment": "cable",
+    "video_url": "https://www.youtube.com/watch?v=yuozln3CC94",
+    "image_url": null
+  },
+  {
+    "name": "Cable EZ Bar Curl",
+    "muscle_group": "biceps",
+    "equipment": "cable",
+    "video_url": "https://www.youtube.com/watch?v=opFVuRi_3b8",
+    "image_url": null
+  },
+  {
+    "name": "Dumbbell Single Arm Preacher Curl",
+    "muscle_group": "biceps",
+    "equipment": "dumbbell",
+    "video_url": "https://www.youtube.com/watch?v=fuK3nFvwgXk",
+    "image_url": null
+  },
+  {
+    "name": "Dumbbell Spider Curl",
+    "muscle_group": "biceps",
+    "equipment": "dumbbell",
+    "video_url": "https://www.youtube.com/watch?v=ke2shAeQ0O8",
+    "image_url": null
+  },
+  {
+    "name": "Dumbbell Twist Curl",
+    "muscle_group": "biceps",
+    "equipment": "dumbbell",
+    "video_url": "https://www.youtube.com/watch?v=tRXw8HQ7-oA",
+    "image_url": null
+  },
+  {
+    "name": "EZ Bar Curl Narrow Grip",
+    "muscle_group": "biceps",
+    "equipment": "ez bar",
+    "video_url": "https://www.youtube.com/watch?v=cdmnvo3augg",
+    "image_url": null
+  },
+  {
+    "name": "EZ Bar Curl Wide Grip",
+    "muscle_group": "biceps",
+    "equipment": "ez bar",
+    "video_url": "https://www.youtube.com/watch?v=EK747VC37yE",
+    "image_url": null
+  },
+  {
+    "name": "EZ Bar Preacher Curl",
+    "muscle_group": "biceps",
+    "equipment": "ez bar",
+    "video_url": "https://www.youtube.com/watch?v=sxA__DoLsgo",
+    "image_url": null
+  },
+  {
+    "name": "EZ Bar Spider Curl",
+    "muscle_group": "biceps",
+    "equipment": "ez bar",
+    "video_url": "https://www.youtube.com/watch?v=WG3vdcq__I0",
+    "image_url": null
+  },
+  {
+    "name": "Hammer Curl",
+    "muscle_group": "biceps",
+    "equipment": "dumbbell",
+    "video_url": "https://www.youtube.com/watch?v=XOEL4MgekYE",
+    "image_url": null
+  },
+  {
+    "name": "Incline Dumbbell Curl",
+    "muscle_group": "biceps",
+    "equipment": "dumbbell",
+    "video_url": "https://www.youtube.com/watch?v=aTYlqC_JacQ",
+    "image_url": null
+  },
+  {
+    "name": "Machine Preacher Curl",
+    "muscle_group": "biceps",
+    "equipment": "machine",
+    "video_url": "https://www.youtube.com/watch?v=Ja6ZlIDONac",
+    "image_url": null
+  },
+  {
+    "name": "Rope Twist Curl",
+    "muscle_group": "biceps",
+    "equipment": "cable",
+    "video_url": "https://www.youtube.com/watch?v=2CDKTFFp5fA",
+    "image_url": null
+  }
+]

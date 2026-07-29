@@ -1,0 +1,37 @@
+[
+  {
+    "name": "Calf Machine",
+    "muscle_group": "calves",
+    "equipment": "machine",
+    "video_url": "https://www.youtube.com/watch?v=N3awlEyTY98",
+    "image_url": null
+  },
+  {
+    "name": "Leg Press Calves",
+    "muscle_group": "calves",
+    "equipment": "leg press",
+    "video_url": "https://www.youtube.com/watch?v=KxEYX_cuesM",
+    "image_url": null
+  },
+  {
+    "name": "Single Leg Stair Calves",
+    "muscle_group": "calves",
+    "equipment": "bodyweight",
+    "video_url": "https://www.youtube.com/watch?v=_gEx2ijsmNM",
+    "image_url": null
+  },
+  {
+    "name": "Smith Machine Calves",
+    "muscle_group": "calves",
+    "equipment": "smith machine",
+    "video_url": "https://www.youtube.com/watch?v=hh5516HCu4k",
+    "image_url": null
+  },
+  {
+    "name": "Stair Calves",
+    "muscle_group": "calves",
+    "equipment": "bodyweight",
+    "video_url": "https://www.youtube.com/watch?v=__qfDhdByMY",
+    "image_url": null
+  }
+]

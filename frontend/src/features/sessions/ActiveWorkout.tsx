@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import type { WorkoutSet, WorkoutSession } from "../../api/workoutSessionsApi";
 import { workoutSessionsApi } from "../../api/workoutSessionsApi";
 import type { PreviousPerformanceResponse } from "../../api/workoutPlansApi";
@@ -63,6 +64,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
   onPlanDetailRefresh,
 }) => {
   const { setHasUnsavedChanges } = useUnsavedChanges();
+  const navigate = useNavigate();
   const [loggedSets, setLoggedSets] = useState<WorkoutSet[]>(initialSets);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -72,7 +74,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
 
   // Exit confirmation state
   const [showExitConfirm, setShowExitConfirm] = useState(false);
-  const [exiting, setExiting] = useState(false);
+  const [discardConfirm, setDiscardConfirm] = useState(false);
 
   // Rename plan state
   const [isRenamingPlan, setIsRenamingPlan] = useState(false);
@@ -429,16 +431,23 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
     }
   };
 
-  // Handle exit workout — marks the session as finished, same as a normal completed workout
-  const handleExit = async () => {
-    setExiting(true);
+  // Handle save & exit — session stays unresolved, sets already persisted
+  const handleSaveAndExit = () => {
+    setHasUnsavedChanges(false);
+    setShowExitConfirm(false);
+    navigate("/dashboard");
+  };
+
+  // Handle discard — delete the session and its sets
+  const handleDiscard = async () => {
     try {
-      await workoutSessionsApi.finishWorkout(session.id);
+      await workoutSessionsApi.discardSession(session.id);
       setShowExitConfirm(false);
-      setWorkoutFinished(true);
+      setDiscardConfirm(false);
+      showToast("Workout discarded.", "success");
+      navigate("/dashboard");
     } catch (err: any) {
-      setError(err.response?.data?.error || "Failed to end workout");
-      setExiting(false);
+      setError(err.response?.data?.error || "Failed to discard workout");
     }
   };
 
@@ -657,7 +666,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
           }}
         >
           <span style={{ color: "var(--danger)", fontSize: "14px", flex: 1, fontWeight: "500" }}>
-            End this workout now? It will be marked as finished with the sets you've logged so far.
+            Save your progress and exit, or discard this workout?
           </span>
           <div style={{ display: "flex", gap: "8px" }}>
             <button
@@ -668,20 +677,33 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
               Keep going
             </button>
             <button
-              onClick={handleExit}
-              disabled={exiting}
-              className="btn btn-danger"
-              style={{
-                padding: "8px 12px",
-                fontSize: "13px",
-                opacity: exiting ? 0.6 : 1,
-              }}
+              onClick={handleSaveAndExit}
+              className="btn btn-primary"
+              style={{ padding: "8px 12px", fontSize: "13px" }}
             >
-              {exiting ? "Exiting..." : "End workout"}
+              Save & Exit
+            </button>
+            <button
+              onClick={() => setDiscardConfirm(true)}
+              className="btn btn-danger"
+              style={{ padding: "8px 12px", fontSize: "13px" }}
+            >
+              Discard
             </button>
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={discardConfirm}
+        title="Discard Workout"
+        message="This will permanently delete today's logged sets for this workout. This can't be undone."
+        confirmText="Discard"
+        cancelText="Cancel"
+        isDangerous
+        onConfirm={handleDiscard}
+        onCancel={() => setDiscardConfirm(false)}
+      />
 
       {/* Rest timer widget */}
       {restTimeRemaining > 0 && (

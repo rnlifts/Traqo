@@ -105,6 +105,11 @@ export default function SessionSetupPage() {
       showToast('Workout started!', 'success');
       navigate(`/workout-sessions/${response.session_id}`);
     } catch (err: any) {
+      if (err.response?.status === 409) {
+        showToast("Finish or discard your unresolved workout before starting a new one", "error");
+        navigate("/dashboard");
+        return;
+      }
       const errorMsg = err.response?.data?.error || (err as Error).message || 'Failed to start workout';
       setError(errorMsg);
       setStartingSession(false);
@@ -118,10 +123,23 @@ export default function SessionSetupPage() {
     try {
       const days = getDisplayedDays();
       const newDay = await workoutPlansApi.createDay(Number(planId), `Day ${days.length + 1}`);
-      const response = await workoutSessionsApi.startWorkout(Number(planId), newDay.id);
+      let response;
+      try {
+        response = await workoutSessionsApi.startWorkout(Number(planId), newDay.id);
+      } catch (startErr: any) {
+        // startWorkout failed after the day was already created — clean up the
+        // orphaned day so a blocked/failed attempt doesn't leave empty junk behind.
+        await workoutPlansApi.deleteDay(Number(planId), newDay.id).catch(() => {});
+        throw startErr;
+      }
       showToast('Workout started!', 'success');
       navigate(`/workout-sessions/${response.session_id}`);
     } catch (err: any) {
+      if (err.response?.status === 409) {
+        showToast("Finish or discard your unresolved workout before starting a new one", "error");
+        navigate("/dashboard");
+        return;
+      }
       const errorMsg = err.response?.data?.error || (err as Error).message || 'Failed to start a new workout';
       setError(errorMsg);
       setLoggingNewToday(false);

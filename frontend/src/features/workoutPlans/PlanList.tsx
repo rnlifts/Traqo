@@ -5,9 +5,9 @@ import {
   deleteWorkoutPlan,
 } from "../../api/workoutPlansApi";
 import type { WorkoutPlan } from "../../api/workoutPlansApi";
-import { workoutSessionsApi } from "../../api/workoutSessionsApi";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { useToast } from "../../components/Toast";
+import { PlanActionCards } from "../../components/PlanActionCards";
 
 function planSummary(plan: WorkoutPlan): string {
   if (!plan.total_units) return "";
@@ -19,7 +19,6 @@ export default function PlanList() {
   const [plans, setPlans] = useState<WorkoutPlan[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
-  const [quickStarting, setQuickStarting] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<{
     isOpen: boolean;
     planId: number | null;
@@ -42,19 +41,6 @@ export default function PlanList() {
       );
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function handleQuickStart() {
-    setQuickStarting(true);
-    try {
-      const response = await workoutSessionsApi.quickStart();
-      navigate(`/workout-sessions/${response.session_id}`);
-    } catch (err: any) {
-      const errorMsg =
-        err.response?.data?.error || (err as Error).message || "Failed to start quick workout";
-      setError(errorMsg);
-      setQuickStarting(false);
     }
   }
 
@@ -108,19 +94,7 @@ export default function PlanList() {
         </div>
       )}
 
-      <button className="create-tile" onClick={() => navigate("/workout-plans/new")}>
-        <span className="plus">+</span>
-        <span>
-          <span className="label">Create exercise plan</span>
-          <div className="sub">Name it, set the length, fill in the days.</div>
-        </span>
-      </button>
-
-      <div style={{ marginTop: "10px" }}>
-        <button onClick={handleQuickStart} disabled={quickStarting} className="btn-link">
-          {quickStarting ? "Starting…" : "Or log today's workout without a plan →"}
-        </button>
-      </div>
+      <PlanActionCards />
 
       <p className="section-label">Saved plans</p>
       {plans.length > 0 ? (
@@ -162,7 +136,7 @@ export default function PlanList() {
       <ConfirmDialog
         isOpen={deleteConfirm.isOpen}
         title="Delete Workout Plan"
-        message="Are you sure you want to delete this workout plan? This action cannot be undone."
+        message="Are you sure you want to delete this workout plan? This will permanently delete the plan and all of its logged workout history. This cannot be undone."
         confirmText="Delete"
         cancelText="Cancel"
         isDangerous={true}

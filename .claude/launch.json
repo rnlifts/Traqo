@@ -5,14 +5,14 @@
       "name": "backend",
       "runtimeExecutable": "C:\\Users\\user\\Desktop\\Traqo\\backend\\venv\\Scripts\\python.exe",
       "runtimeArgs": ["run.py"],
-      "cwd": "C:\\Users\\user\\Desktop\\Traqo\\backend",
+      "cwd": "backend",
       "port": 5000
     },
     {
       "name": "frontend",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
-      "cwd": "C:\\Users\\user\\Desktop\\Traqo\\frontend",
+      "cwd": "frontend",
       "port": 5173
     }
   ]

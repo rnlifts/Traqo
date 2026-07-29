@@ -21,7 +21,8 @@ import { exercisesApi } from '../../api/exercisesApi';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { useToast } from '../../components/Toast';
 import { DurationInput } from '../../components/DurationInput';
-import { TrashIcon } from '../../components/icons';
+import { TrashIcon, InfoIcon } from '../../components/icons';
+import { ExerciseLibrarySidebar } from '../exerciseLibrary/ExerciseLibrarySidebar';
 
 interface PlanDraft {
   name: string;
@@ -87,21 +88,8 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
   const [activeDayIndex, setActiveDayIndex] = useState(0);
   const [isRenamingPlan, setIsRenamingPlan] = useState(false);
   const [renamePlanName, setRenamePlanName] = useState(draftName);
-  const [addingExercise, setAddingExercise] = useState(false);
-  const [exerciseName, setExerciseName] = useState('');
-  const [targetSets, setTargetSets] = useState('');
-  const [targetReps, setTargetReps] = useState('');
-  const [targetWeight, setTargetWeight] = useState('');
-  const [targetDurationSeconds, setTargetDurationSeconds] = useState<number | null>(null);
-  const [notes, setNotes] = useState('');
-
-  // Field configuration state
-  const [formHasReps, setFormHasReps] = useState(true);
-  const [formHasWeight, setFormHasWeight] = useState(true);
-  const [formHasDuration, setFormHasDuration] = useState(false);
 
   // Track whether at least one exercise has been added (for hint text)
-  const [hasAddedAtLeastOne, setHasAddedAtLeastOne] = useState(false);
   const [showBackConfirm, setShowBackConfirm] = useState(false);
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
   const [isQuickStart, setIsQuickStart] = useState(false);
@@ -369,100 +357,111 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
     }
   }
 
-  async function handleAddExercise(e: React.FormEvent) {
-    e.preventDefault();
-    if (!exerciseName.trim()) return;
+  // Core logic: find-or-create exercise and add to current day
+  // Shared by both form submission and sidebar quick-add
+  async function addExerciseToCurrentDay(
+    name: string,
+    targetSetsValue: string | null,
+    targetRepsValue: string | null,
+    targetWeightValue: string | null,
+    targetDurationValue: number | null,
+    hasReps: boolean,
+    hasWeight: boolean,
+    hasDuration: boolean,
+    notesValue: string,
+  ) {
+    if (!name.trim()) throw new Error('Exercise name required');
 
     const days = getActiveDays();
     const currentDay = days[activeDayIndex];
-    if (!currentDay) return;
+    if (!currentDay) throw new Error('No active day');
 
-    try {
-      // Find or create exercise
-      const existingExercise = availableExercises.find(
-        (ex) => ex.name.toLowerCase() === exerciseName.toLowerCase()
-      );
+    // Find or create exercise
+    const existingExercise = availableExercises.find(
+      (ex) => ex.name.toLowerCase() === name.toLowerCase()
+    );
 
-      let exerciseId: number;
-      if (existingExercise) {
-        exerciseId = existingExercise.id;
+    let exerciseId: number;
+    if (existingExercise) {
+      exerciseId = existingExercise.id;
+    } else {
+      const newExercise = await exercisesApi.create(name);
+      exerciseId = newExercise.id;
+      setAvailableExercises([...availableExercises, newExercise]);
+    }
+
+    const sets = targetSetsValue ? Number(targetSetsValue) : undefined;
+    const reps = hasReps && targetRepsValue ? targetRepsValue : undefined;
+    const weight = hasWeight && targetWeightValue ? Number(targetWeightValue) : undefined;
+    const durationSeconds = hasDuration && targetDurationValue ? targetDurationValue : undefined;
+
+    if (props.isCreateMode) {
+      // Add to draft
+      const newExercise: WorkoutExercise = {
+        id: -(Date.now() + Math.random()),
+        plan_day_id: currentDay.id,
+        exercise_id: exerciseId,
+        order_number: (currentDay.exercises.length || 0) + 1,
+        target_sets: sets || null,
+        target_reps: reps || null,
+        target_weight: weight || null,
+        target_duration_seconds: durationSeconds || null,
+        has_reps: hasReps,
+        has_weight: hasWeight,
+        has_duration: hasDuration,
+        set_targets: [],
+        notes: notesValue || '',
+        exercise_name: name,
+      };
+
+      if (draftUnitType === 'days') {
+        setDraftDays((prev) =>
+          prev.map((d) =>
+            d.id === currentDay.id
+              ? { ...d, exercises: [...d.exercises, newExercise] }
+              : d
+          )
+        );
       } else {
-        const newExercise = await exercisesApi.create(exerciseName);
-        exerciseId = newExercise.id;
-        setAvailableExercises([...availableExercises, newExercise]);
+        setDraftWeeks((prev) =>
+          prev.map((week, wIdx) => {
+            if (wIdx === activeWeekIndex) {
+              return {
+                ...week,
+                days: week.days.map((d) =>
+                  d.id === currentDay.id
+                    ? { ...d, exercises: [...d.exercises, newExercise] }
+                    : d
+                ),
+              };
+            }
+            return week;
+          })
+        );
       }
+    } else if (planId) {
+      // Edit mode - call API
+      await addExerciseToDay(planId, currentDay.id, exerciseId, sets, reps, weight, durationSeconds, hasReps, hasWeight, hasDuration);
+      showToast('Exercise added!', 'success');
+      await loadPlanForEdit();
+    }
+  }
 
-      const sets = targetSets ? Number(targetSets) : undefined;
-
-      // Use the field configuration flags to determine what to send
-      const reps = formHasReps && targetReps ? targetReps : undefined; // target_reps is now a string
-      const weight = formHasWeight && targetWeight ? Number(targetWeight) : undefined;
-      const durationSeconds = formHasDuration && targetDurationSeconds ? targetDurationSeconds : undefined;
-
-      if (props.isCreateMode) {
-        // Add to draft
-        const newExercise: WorkoutExercise = {
-          id: -(Date.now() + Math.random()),
-          plan_day_id: currentDay.id,
-          exercise_id: exerciseId,
-          order_number: (currentDay.exercises.length || 0) + 1,
-          target_sets: sets || null,
-          target_reps: reps || null,
-          target_weight: weight || null,
-          target_duration_seconds: durationSeconds || null,
-          has_reps: formHasReps,
-          has_weight: formHasWeight,
-          has_duration: formHasDuration,
-          set_targets: [],
-          notes: notes || '',
-          exercise_name: exerciseName,
-        };
-
-        if (draftUnitType === 'days') {
-          setDraftDays((prev) =>
-            prev.map((d) =>
-              d.id === currentDay.id
-                ? { ...d, exercises: [...d.exercises, newExercise] }
-                : d
-            )
-          );
-        } else {
-          setDraftWeeks((prev) =>
-            prev.map((week, wIdx) => {
-              if (wIdx === activeWeekIndex) {
-                return {
-                  ...week,
-                  days: week.days.map((d) =>
-                    d.id === currentDay.id
-                      ? { ...d, exercises: [...d.exercises, newExercise] }
-                      : d
-                  ),
-                };
-              }
-              return week;
-            })
-          );
-        }
-      } else if (planId) {
-        // Edit mode - call API with new fields
-        await addExerciseToDay(planId, currentDay.id, exerciseId, sets, reps, weight, durationSeconds, formHasReps, formHasWeight, formHasDuration);
-        showToast('Exercise added!', 'success');
-        await loadPlanForEdit();
-      }
-
-      // Mark that at least one exercise has been added (for hint text)
-      setHasAddedAtLeastOne(true);
-
-      // Reset form fields only (keep field configuration flags for next exercise)
-      setExerciseName('');
-      setTargetSets('');
-      setTargetReps('');
-      setTargetWeight('');
-      setTargetDurationSeconds(null);
-      setNotes('');
-
-      setAddingExercise(false);
-      setError('');
+  // Quick-add from sidebar: add exercise immediately with default targets
+  async function handleQuickAddExercise(name: string) {
+    try {
+      await addExerciseToCurrentDay(
+        name,
+        null, // targetSets: empty
+        null, // targetReps: empty
+        null, // targetWeight: empty
+        null, // targetDuration: empty
+        true, // has_reps: default to true
+        true, // has_weight: default to true
+        false, // has_duration: default to false
+        '' // notes: empty
+      );
+      showToast(`${name} added to ${draftUnitType === 'days' ? 'day' : 'week'}!`, 'success');
     } catch (err) {
       setError((err as Error).message);
     }
@@ -665,7 +664,9 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
   const isLinkedWeek = draftUnitType === 'weeks' && draftWeeks[activeWeekIndex]?.mode === 'linked';
 
   return (
-    <div className="page-container">
+    <div style={{ display: 'flex', height: '100vh' }}>
+      {/* Main Content */}
+      <div className="page-container" style={{ flex: 1, overflowY: 'auto' }}>
       <div style={{ marginBottom: '20px' }}>
         <button
           onClick={() => {
@@ -867,6 +868,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                             placeholder="Sets"
                             className="input-field"
                             disabled={isLinkedWeek}
+                            style={{ width: '50px' }}
                           />
                         </div>
                         {ex.has_reps ? (
@@ -894,6 +896,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                                 placeholder="e.g. 10 or 10-12"
                                 className="input-field"
                                 disabled={isLinkedWeek}
+                                style={{ width: '140px' }}
                               />
                               <button
                                 onClick={() => handleUpdateExercise(ex.id, 'has_reps', false)}
@@ -943,6 +946,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                                 placeholder="Weight"
                                 className="input-field"
                                 disabled={isLinkedWeek}
+                                style={{ width: '75px' }}
                               />
                               <button
                                 onClick={() => handleUpdateExercise(ex.id, 'has_weight', false)}
@@ -968,7 +972,12 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                         )}
                         {ex.has_duration ? (
                           <div className="field-cell">
-                            <span className="cell-label">Duration</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <span className="cell-label">Duration</span>
+                              <span title="Target time to sustain this exercise (e.g. treadmill, plank) — not how long the set took." style={{ cursor: 'help', display: 'flex', alignItems: 'center' }}>
+                                <InfoIcon style={{ width: '14px', height: '14px' }} />
+                              </span>
+                            </div>
                             <DurationInput
                               value={ex.target_duration_seconds || null}
                               onChange={(value) => {
@@ -1219,184 +1228,9 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
               </div>
 
               {/* Add Exercise Form */}
-              {addingExercise ? (
-                <form onSubmit={handleAddExercise} style={{ marginBottom: '12px', padding: '14px 16px', backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '16px' }}>
-                  <div className="add-exercise-row">
-                    <div className="field-cell field-cell-name">
-                      <span className="cell-label">Exercise name</span>
-                      <input
-                        type="text"
-                        value={exerciseName}
-                        onChange={(e) => setExerciseName(e.target.value)}
-                        placeholder="e.g. Bench Press"
-                        className="input-field"
-                        autoFocus
-                      />
-                    </div>
-                    <div className="field-cell">
-                      <span className="cell-label">Sets</span>
-                      <input
-                        type="number"
-                        value={targetSets}
-                        onChange={(e) => setTargetSets(e.target.value)}
-                        placeholder="Sets"
-                        className="input-field"
-                      />
-                    </div>
-
-                    {/* Reps field with cross/restore */}
-                    {formHasReps ? (
-                      <div className="field-cell">
-                        <span className="cell-label">Reps</span>
-                        <div className="field-with-badge">
-                          <input
-                            type="text"
-                            value={targetReps}
-                            onChange={(e) => setTargetReps(e.target.value)}
-                            placeholder="e.g. 10 or 10-12"
-                            className="input-field"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setFormHasReps(false);
-                              setTargetReps('');
-                            }}
-                            className="field-remove-badge"
-                            title="Remove reps"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="field-cell">
-                        <span className="cell-label">Reps</span>
-                        <button
-                          type="button"
-                          onClick={() => setFormHasReps(true)}
-                          className="field-restore-chip"
-                        >
-                          + Add reps
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Weight field with cross/restore */}
-                    {formHasWeight ? (
-                      <div className="field-cell">
-                        <span className="cell-label">Weight</span>
-                        <div className="field-with-badge">
-                          <input
-                            type="number"
-                            step="0.5"
-                            value={targetWeight}
-                            onChange={(e) => setTargetWeight(e.target.value)}
-                            placeholder="Weight"
-                            className="input-field"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setFormHasWeight(false);
-                              setTargetWeight('');
-                            }}
-                            className="field-remove-badge"
-                            title="Remove weight"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="field-cell">
-                        <span className="cell-label">Weight</span>
-                        <button
-                          type="button"
-                          onClick={() => setFormHasWeight(true)}
-                          className="field-restore-chip"
-                        >
-                          + Add weight
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Duration field with + button and remove */}
-                    {formHasDuration ? (
-                      <div className="field-cell">
-                        <span className="cell-label">Duration</span>
-                        <DurationInput
-                          value={targetDurationSeconds}
-                          onChange={setTargetDurationSeconds}
-                          onRemove={() => {
-                            setFormHasDuration(false);
-                            setTargetDurationSeconds(null);
-                          }}
-                        />
-                      </div>
-                    ) : (
-                      <div className="field-cell">
-                        <span className="cell-label">Duration</span>
-                        <button
-                          type="button"
-                          onClick={() => setFormHasDuration(true)}
-                          className="field-restore-chip"
-                        >
-                          + Duration
-                        </button>
-                      </div>
-                    )}
-
-                    <div className="field-cell field-cell-notes">
-                      <span className="cell-label">Notes</span>
-                      <input
-                        type="text"
-                        value={notes}
-                        onChange={(e) => setNotes(e.target.value)}
-                        placeholder="Optional"
-                        className="input-field"
-                      />
-                    </div>
-
-                    <div className="add-exercise-actions">
-                      <button type="submit" className="btn btn-primary" style={{ fontSize: '13px' }}>
-                        Add
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAddingExercise(false);
-                          setExerciseName('');
-                          setTargetSets('');
-                          setTargetReps('');
-                          setTargetWeight('');
-                          setTargetDurationSeconds(null);
-                          setNotes('');
-                        }}
-                        className="btn btn-secondary"
-                        style={{ fontSize: '13px' }}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-
-                    {/* Hint about remembered config */}
-                    {hasAddedAtLeastOne && (
-                      <div className="add-exercise-hint">
-                        Starting with the same fields as your last exercise — cross or add to change it just for this one.
-                      </div>
-                    )}
-                  </div>
-                </form>
-              ) : (
-                <button
-                  onClick={() => setAddingExercise(true)}
-                  className="btn"
-                  style={{ width: '100%', marginBottom: '12px', borderStyle: 'dashed' }}
-                >
-                  + Add exercise
-                </button>
-              )}
+              <div style={{ marginBottom: '12px', padding: '12px 14px', fontSize: '13px', color: 'var(--text-h)' }}>
+                Add exercises using the panel on the right →
+              </div>
             </>
           )}
 
@@ -1483,6 +1317,12 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
       />
 
       {Toast}
+      </div>
+
+      {/* Exercise Library Sidebar */}
+      <div style={{ width: '320px', maxWidth: '30vw', display: 'flex', flexDirection: 'column' }}>
+        <ExerciseLibrarySidebar onSelectExercise={handleQuickAddExercise} />
+      </div>
     </div>
   );
 };

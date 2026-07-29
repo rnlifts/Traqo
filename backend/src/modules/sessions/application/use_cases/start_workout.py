@@ -1,7 +1,10 @@
 from datetime import datetime
 
 from ...domain.entities.workout_session import WorkoutSession
-from ...domain.exceptions import WorkoutSessionNotFoundError
+from ...domain.exceptions import (
+    UnresolvedSessionExistsError,
+    WorkoutSessionNotFoundError,
+)
 from ...domain.interfaces.workout_session_repository import WorkoutSessionRepository
 from src.modules.workouts.domain.exceptions import (
     WorkoutPlanNotFoundError,
@@ -63,6 +66,13 @@ class StartWorkout:
         if plan.user_id != user_id:
             raise UnauthorizedWorkoutPlanAccessError(
                 f"User {user_id} does not own plan {workout_plan_id}"
+            )
+
+        # Check if user has an unresolved session already
+        unresolved = self.session_repository.find_unresolved_by_user(user_id)
+        if unresolved:
+            raise UnresolvedSessionExistsError(
+                "You have an unfinished workout — resolve it before starting a new one."
             )
 
         # If week_number is provided, resolve and validate

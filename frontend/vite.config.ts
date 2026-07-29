@@ -7,4 +7,10 @@ export default defineConfig({
   build: {
     sourcemap: false,
   },
-})
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: ['./src/test/setup.ts'],
+    exclude: ['node_modules', 'dist', '.idea', '.git', '.cache', 'tests/**'],
+  },
+} as any)

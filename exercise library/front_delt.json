@@ -1,0 +1,72 @@
+[
+  {
+    "name": "Barbell Front Raise",
+    "muscle_group": "front delt (shoulder)",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=_ikCPws1mbE",
+    "image_url": null
+  },
+  {
+    "name": "Cable Underhand Front Raise",
+    "muscle_group": "front delt (shoulder)",
+    "equipment": "cable",
+    "video_url": "https://www.youtube.com/watch?v=yIoAcMD3jcE",
+    "image_url": null
+  },
+  {
+    "name": "Dumbbell Front Raise",
+    "muscle_group": "front delt (shoulder)",
+    "equipment": "dumbbell",
+    "video_url": "https://www.youtube.com/watch?v=hRJ6tR5-if0",
+    "image_url": null
+  },
+  {
+    "name": "EZ Bar Underhand Front Raise",
+    "muscle_group": "front delt (shoulder)",
+    "equipment": "ez bar",
+    "video_url": "https://www.youtube.com/watch?v=87pZAbYjXc4",
+    "image_url": null
+  },
+  {
+    "name": "Machine Shoulder Press",
+    "muscle_group": "front delt (shoulder)",
+    "equipment": "machine",
+    "video_url": "https://www.youtube.com/watch?v=WvLMauqrnK8",
+    "image_url": null
+  },
+  {
+    "name": "Seated Barbell Shoulder Press",
+    "muscle_group": "front delt (shoulder)",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=IuzRCN6eG6Y",
+    "image_url": null
+  },
+  {
+    "name": "Seated Dumbbell Shoulder Press",
+    "muscle_group": "front delt (shoulder)",
+    "equipment": "dumbbell",
+    "video_url": "https://www.youtube.com/watch?v=HzIiNhHhhtA",
+    "image_url": null
+  },
+  {
+    "name": "Smith Machine Seated Shoulder Press",
+    "muscle_group": "front delt (shoulder)",
+    "equipment": "smith machine",
+    "video_url": "https://www.youtube.com/watch?v=OLqZDUUD2b0",
+    "image_url": null
+  },
+  {
+    "name": "Standing Barbell Shoulder Press",
+    "muscle_group": "front delt (shoulder)",
+    "equipment": "barbell",
+    "video_url": "https://www.youtube.com/watch?v=G2qpTG1Eh40",
+    "image_url": null
+  },
+  {
+    "name": "Standing Dumbbell Shoulder Press",
+    "muscle_group": "front delt (shoulder)",
+    "equipment": "dumbbell",
+    "video_url": "https://www.youtube.com/watch?v=Raemd3qWgJc",
+    "image_url": null
+  }
+]

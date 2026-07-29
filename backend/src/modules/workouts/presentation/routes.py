@@ -548,8 +548,7 @@ async def delete_workout_plan(
     db: Session = Depends(get_db),
 ):
     plan_repo = WorkoutPlanRepositoryImpl(db)
-    session_repo = WorkoutSessionRepositoryImpl(db)
-    use_case = DeleteWorkoutPlan(plan_repo, session_repo)
+    use_case = DeleteWorkoutPlan(plan_repo)
     use_case.execute(plan_id, user_id)
 
 
