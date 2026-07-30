@@ -385,7 +385,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
     if (existingExercise) {
       exerciseId = existingExercise.id;
     } else {
-      const newExercise = await exercisesApi.create(name);
+      const newExercise = await exercisesApi.create({ name });
       exerciseId = newExercise.id;
       setAvailableExercises([...availableExercises, newExercise]);
     }
@@ -467,6 +467,14 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
     }
   }
 
+  function handleExerciseCreated(exercise: Exercise) {
+    // Add newly created exercise to availableExercises cache
+    // so that subsequent adds don't trigger a duplicate creation
+    setAvailableExercises((prev) => {
+      const exists = prev.some((ex) => ex.id === exercise.id);
+      return exists ? prev : [...prev, exercise];
+    });
+  }
 
   async function handleUpdateExercise(exerciseId: number, field: string, value: any) {
     const days = getActiveDays();
@@ -1321,7 +1329,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
 
       {/* Exercise Library Sidebar */}
       <div style={{ width: '320px', maxWidth: '30vw', display: 'flex', flexDirection: 'column' }}>
-        <ExerciseLibrarySidebar onSelectExercise={handleQuickAddExercise} />
+        <ExerciseLibrarySidebar onSelectExercise={handleQuickAddExercise} onExerciseCreated={handleExerciseCreated} />
       </div>
     </div>
   );
