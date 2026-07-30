@@ -486,10 +486,6 @@ class InMemoryExerciseLibraryItemRepository(ExerciseLibraryRepository):
         groups = set(i.muscle_group for i in self.items.values())
         return sorted(list(groups))
 
-    def get_distinct_equipment(self) -> list[str]:
-        equipment = set(i.equipment for i in self.items.values() if i.equipment is not None)
-        return sorted(list(equipment))
-
     def upsert(self, item: ExerciseLibraryItem) -> ExerciseLibraryItem:
         # Find by (name, muscle_group)
         for existing in self.items.values():

@@ -1,18 +1,13 @@
 import React, { useState, useEffect, useRef } from "react";
 import { exerciseLibraryApi } from "../../api/exerciseLibraryApi";
 import type { LibraryExercise } from "../../api/exerciseLibraryApi";
-import { exercisesApi } from "../../api/exercisesApi";
-import type { Exercise } from "../../api/exercisesApi";
-import { CustomExerciseForm } from "./CustomExerciseForm";
 
 interface ExerciseLibrarySidebarProps {
   onSelectExercise: (name: string) => void;
-  onExerciseCreated?: (exercise: Exercise) => void;
 }
 
 export const ExerciseLibrarySidebar: React.FC<ExerciseLibrarySidebarProps> = ({
   onSelectExercise,
-  onExerciseCreated,
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedMuscleGroup, setSelectedMuscleGroup] = useState<string | null>(null);
@@ -21,38 +16,7 @@ export const ExerciseLibrarySidebar: React.FC<ExerciseLibrarySidebarProps> = ({
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
 
-  // Custom exercises state
-  const [customExercises, setCustomExercises] = useState<Exercise[]>([]);
-  const [customExercisesLoading, setCustomExercisesLoading] = useState(true);
-  const [showCreateForm, setShowCreateForm] = useState(false);
-
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Fetch custom exercises on mount
-  useEffect(() => {
-    const loadCustomExercises = async () => {
-      try {
-        const exercises = await exercisesApi.list();
-        setCustomExercises(exercises);
-      } catch (error) {
-        console.error("Failed to load custom exercises:", error);
-      } finally {
-        setCustomExercisesLoading(false);
-      }
-    };
-
-    loadCustomExercises();
-  }, []);
-
-  // Refresh custom exercises (called after form submission)
-  const refreshCustomExercises = async () => {
-    try {
-      const exercises = await exercisesApi.list();
-      setCustomExercises(exercises);
-    } catch (error) {
-      console.error("Failed to refresh custom exercises:", error);
-    }
-  };
 
   // Load muscle groups on mount
   useEffect(() => {
@@ -320,133 +284,6 @@ export const ExerciseLibrarySidebar: React.FC<ExerciseLibrarySidebarProps> = ({
           Create New: "{searchQuery}"
         </button>
       )}
-
-      {/* Custom Exercise Section */}
-      <div style={{ borderTop: "2px solid var(--border)", paddingTop: "16px", marginTop: "16px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
-          <h3 style={{ margin: 0, fontSize: "14px", color: "var(--text)" }}>Custom Exercise</h3>
-        </div>
-
-        {/* Create Custom Exercise Button */}
-        <button
-          onClick={() => setShowCreateForm(!showCreateForm)}
-          style={{
-            width: "100%",
-            padding: "10px",
-            marginBottom: "12px",
-            backgroundColor: "var(--primary-soft, #e3f2fd)",
-            color: "var(--primary, #1976d2)",
-            border: "1px solid var(--primary, #1976d2)",
-            borderRadius: "6px",
-            fontSize: "13px",
-            fontWeight: "500",
-            cursor: "pointer",
-          }}
-        >
-          {showCreateForm ? "✕ Close" : "+ Create Custom Exercise"}
-        </button>
-
-        {/* Custom Exercise Form (Inline) */}
-        {showCreateForm && (
-          <div style={{ marginBottom: "16px", padding: "12px", backgroundColor: "var(--surface-secondary)", borderRadius: "6px", border: "1px solid var(--border)" }}>
-            <CustomExerciseForm
-              onCreated={(exercise) => {
-                // Refresh list and close form, but don't auto-add to plan
-                refreshCustomExercises();
-                setShowCreateForm(false);
-                // Notify parent so it can update its own available exercises list
-                onExerciseCreated?.(exercise);
-              }}
-            />
-          </div>
-        )}
-
-        {/* Custom Exercises List */}
-        {customExercisesLoading && (
-          <div style={{ color: "var(--text-h)", fontSize: "13px" }}>Loading...</div>
-        )}
-
-        {!customExercisesLoading && customExercises.length === 0 && (
-          <div style={{ color: "var(--text-h)", fontSize: "13px" }}>
-            You haven't created any custom exercises yet.
-          </div>
-        )}
-
-        {!customExercisesLoading && customExercises.map((exercise) => (
-          <div
-            key={exercise.id}
-            style={{
-              marginBottom: "12px",
-              padding: "10px",
-              border: "1px solid var(--border)",
-              borderRadius: "6px",
-              backgroundColor: "var(--surface-secondary, white)",
-              display: "flex",
-              gap: "10px",
-              alignItems: "flex-start",
-            }}
-          >
-            {/* Icon (no thumbnail for custom exercises) */}
-            <div
-              style={{
-                width: "48px",
-                height: "48px",
-                borderRadius: "4px",
-                backgroundColor: "var(--border)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "var(--text-h)",
-                fontSize: "20px",
-                flexShrink: 0,
-              }}
-            >
-              ⚙️
-            </div>
-
-            {/* Info + Button */}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div
-                style={{
-                  fontWeight: "500",
-                  fontSize: "13px",
-                  color: "var(--text)",
-                  marginBottom: "4px",
-                  wordBreak: "break-word",
-                }}
-              >
-                {exercise.name}
-              </div>
-              {exercise.muscle_group && (
-                <div style={{ fontSize: "12px", color: "var(--text-h)", marginBottom: "4px" }}>
-                  {exercise.muscle_group}
-                </div>
-              )}
-              {exercise.equipment && (
-                <div style={{ fontSize: "11px", color: "var(--text-h)", fontStyle: "italic" }}>
-                  {exercise.equipment}
-                </div>
-              )}
-              <button
-                onClick={() => handleSelectExercise(exercise.name)}
-                style={{
-                  marginTop: "6px",
-                  padding: "4px 10px",
-                  backgroundColor: "var(--success)",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  fontSize: "12px",
-                  cursor: "pointer",
-                  fontWeight: "500",
-                }}
-              >
-                + Add
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
     </div>
   );
 };

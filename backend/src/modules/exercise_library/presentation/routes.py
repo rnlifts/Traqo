@@ -9,13 +9,10 @@ from src.modules.exercise_library.application.use_cases.search_exercises import 
 from src.modules.exercise_library.application.use_cases.get_muscle_groups import (
     GetMuscleGroups,
 )
-from src.modules.exercise_library.application.use_cases.get_equipment_options import (
-    GetEquipmentOptions,
-)
 from src.modules.exercise_library.infrastructure.repositories.exercise_library_repository_impl import (
     ExerciseLibraryRepositoryImpl,
 )
-from .schemas import LibraryExerciseResponse, MuscleGroupsResponse, EquipmentOptionsResponse
+from .schemas import LibraryExerciseResponse, MuscleGroupsResponse
 
 exercise_library_router = APIRouter(
     prefix="/api/exercise-library", tags=["exercise-library"]
@@ -84,15 +81,3 @@ async def get_muscle_groups(
     use_case = GetMuscleGroups(repository)
     groups = use_case.execute()
     return MuscleGroupsResponse(muscle_groups=groups)
-
-
-@exercise_library_router.get("/equipment", response_model=EquipmentOptionsResponse)
-async def get_equipment_options(
-    user_id: int = Depends(get_current_user_id),
-    db: Session = Depends(get_db),
-):
-    """Get distinct equipment options in the library. Requires auth."""
-    repository = ExerciseLibraryRepositoryImpl(db)
-    use_case = GetEquipmentOptions(repository)
-    equipment = use_case.execute()
-    return EquipmentOptionsResponse(equipment_options=equipment)

@@ -385,7 +385,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
     if (existingExercise) {
       exerciseId = existingExercise.id;
     } else {
-      const newExercise = await exercisesApi.create({ name });
+      const newExercise = await exercisesApi.create(name);
       exerciseId = newExercise.id;
       setAvailableExercises([...availableExercises, newExercise]);
     }
@@ -1321,13 +1321,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
 
       {/* Exercise Library Sidebar */}
       <div style={{ width: '320px', maxWidth: '30vw', display: 'flex', flexDirection: 'column' }}>
-        <ExerciseLibrarySidebar
-          onSelectExercise={handleQuickAddExercise}
-          onExerciseCreated={(exercise) => {
-            // Add newly created custom exercise to available exercises so it can be found by name
-            setAvailableExercises([...availableExercises, exercise]);
-          }}
-        />
+        <ExerciseLibrarySidebar onSelectExercise={handleQuickAddExercise} />
       </div>
     </div>
   );
