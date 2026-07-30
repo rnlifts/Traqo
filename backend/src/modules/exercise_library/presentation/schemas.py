@@ -15,3 +15,9 @@ class MuscleGroupsResponse(BaseModel):
     """List of muscle groups."""
 
     muscle_groups: list[str]
+
+
+class EquipmentOptionsResponse(BaseModel):
+    """List of equipment options."""
+
+    equipment_options: list[str]

@@ -158,7 +158,7 @@ class TestStartWorkoutRoute:
         assert data["message"] == "Workout started"
 
     def test_start_workout_without_auth_fails(self, client, test_plan_and_day):
-        """POST /workout-sessions without auth returns 403."""
+        """POST /workout-sessions without auth returns 401."""
         response = client.post(
             "/api/workout-sessions",
             json={
@@ -166,7 +166,7 @@ class TestStartWorkoutRoute:
                 "plan_day_id": test_plan_and_day["day_id"],
             },
         )
-        assert response.status_code == 403
+        assert response.status_code == 401
 
 
 # ============================================================================
@@ -189,9 +189,9 @@ class TestQuickStartWorkoutRoute:
         assert data["message"] == "Quick workout started"
 
     def test_quick_start_without_auth_fails(self, client):
-        """POST /workout-sessions/quick-start without auth returns 403."""
+        """POST /workout-sessions/quick-start without auth returns 401."""
         response = client.post("/api/workout-sessions/quick-start")
-        assert response.status_code == 403
+        assert response.status_code == 401
 
 
 # ============================================================================

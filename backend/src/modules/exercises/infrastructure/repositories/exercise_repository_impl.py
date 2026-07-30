@@ -21,7 +21,9 @@ class ExerciseRepositoryImpl(ExerciseRepository):
             user_id=exercise.user_id,
             name=exercise.name,
             created_at=exercise.created_at,
-            category=exercise.category,
+            muscle_group=exercise.muscle_group,
+            equipment=exercise.equipment,
+            video_url=exercise.video_url,
             logging_type=exercise.logging_type,
         )
         self.session.add(model)
@@ -72,6 +74,8 @@ class ExerciseRepositoryImpl(ExerciseRepository):
             user_id=model.user_id,
             name=model.name,
             created_at=model.created_at,
-            category=model.category,
+            muscle_group=model.muscle_group,
+            equipment=model.equipment,
+            video_url=model.video_url,
             logging_type=model.logging_type,
         )

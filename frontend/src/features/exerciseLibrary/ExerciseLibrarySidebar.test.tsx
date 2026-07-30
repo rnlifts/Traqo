@@ -10,12 +10,28 @@ vi.mock('../../api/exerciseLibraryApi', () => ({
   },
 }));
 
+vi.mock('../../api/exercisesApi', () => ({
+  exercisesApi: {
+    list: vi.fn(),
+    create: vi.fn(),
+    getEquipmentOptions: vi.fn(),
+  },
+}));
+
 describe('ExerciseLibrarySidebar', () => {
   let mockOnSelectExercise: any;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
     mockOnSelectExercise = vi.fn();
+
+    // Set up default mocks for both APIs
+    const { exerciseLibraryApi } = await import('../../api/exerciseLibraryApi');
+    const { exercisesApi } = await import('../../api/exercisesApi');
+
+    (exerciseLibraryApi.getMuscleGroups as any).mockResolvedValue([]);
+    (exerciseLibraryApi.search as any).mockResolvedValue([]);
+    (exercisesApi.list as any).mockResolvedValue([]);
   });
 
   const renderComponent = () => {

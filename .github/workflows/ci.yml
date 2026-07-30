@@ -1,0 +1,107 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend:
+    name: Backend (migrations + pytest)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: traqo_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # Both point at the same CI-only, disposable Postgres service container above —
+      # not any real dev/production database. DATABASE_URL is what the app itself and
+      # Alembic's migrations/env.py read; TEST_DATABASE_URL is what the Postgres-backed
+      # cascade-delete integration tests read (see backend/tests/integration/test_cascade_deletes.py).
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/traqo_ci
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/traqo_ci
+      # ENVIRONMENT=development (not production) so the app doesn't refuse to boot
+      # over using placeholder secrets here — these are throwaway CI-only values.
+      ENVIRONMENT: development
+      SECRET_KEY: ci-only-secret-key-not-for-real-use
+      JWT_SECRET_KEY: ci-only-jwt-secret-key-not-for-real-use
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: pip install -r requirements.txt
+
+      - name: Run database migrations
+        working-directory: backend/migrations
+        # Must run with cwd = backend/migrations. alembic.ini's script_location is
+        # the relative path "." — it resolves against the invoking process's cwd,
+        # not the ini file's own directory, so running from anywhere else makes
+        # Alembic unable to find env.py. This is the same gotcha documented in
+        # CLAUDE.md and hit repeatedly during this project's own manual migration
+        # runs — kept as an explicit, separate, visibly-failing step on purpose.
+        run: python -m alembic upgrade head
+
+      - name: Run backend tests
+        working-directory: backend
+        run: python -m pytest -q
+
+  frontend:
+    name: Frontend (typecheck, lint, tests)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Type check
+        working-directory: frontend
+        # Must be `tsc -b` (build-mode, matching this project's own `npm run
+        # build` script), not a bare `tsc --noEmit` — tsconfig.json here is just
+        # a project-references shell (`"files": []`) pointing at
+        # tsconfig.app.json/tsconfig.node.json, so a bare `tsc --noEmit` checks
+        # nothing at all and silently "passes" regardless of real errors.
+        # tsconfig.app.json already sets noEmit:true, so -b still just
+        # type-checks without writing output.
+        run: npx tsc -b
+
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Run tests
+        working-directory: frontend
+        run: npm test
+
+  # Playwright E2E (Task 43) is intentionally not wired up here yet — there are no
+  # spec files for it to run. Once Task 43 lands, add a third job here gated to
+  # `if: github.ref == 'refs/heads/main'` (or a schedule), not on every push/PR —
+  # E2E is slower and heavier than the two fast jobs above and shouldn't block
+  # normal PR feedback.

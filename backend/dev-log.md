@@ -49,6 +49,63 @@
 - **Phase 7b/c**: Auth routes & sessions routes integration tests (with historical bug reproduction for Phase 9 acceptance criteria)
 - **Phase 9**: Verification (temporarily remove ON DELETE CASCADE, confirm cascade delete test fails; restore, confirm passes)
 
+## 2026-07-30 — Task 44: Backend custom exercise metadata (muscle_group, equipment, video_url)
+
+### What Was Done
+
+**Migration**: Created `repurpose_category_to_muscle_group_001.py` — uses genuine Alembic `ALTER COLUMN RENAME` (not drop+recreate), adds `equipment` and `video_url` columns, includes reversible downgrade.
+
+**Domain Layer**: Updated `Exercise` entity — replaced `category` with `muscle_group`, added `equipment` and `video_url` (all optional `str | None`).
+
+**Infrastructure**: Updated `ExerciseModel` (renamed column, added columns) and `ExerciseRepositoryImpl` (updated `create()` and `_model_to_entity()` mappings).
+
+**Use Case**: Updated `CreateExercise` to accept `muscle_group`, `equipment`, `video_url` params with proper docstring updates.
+
+**Schemas & Routes**: 
+- Removed `Literal["Chest", "Back", ...]` enum from `CreateExerciseRequest.category` (replaced with plain `muscle_group: str | None`)
+- Added Pydantic `@field_validator` on `video_url` — rejects non-YouTube URLs (accepts `youtube.com/watch`, `youtu.be/`, `m.youtube.com` variants with query params; rejects Vimeo, generic URLs, plain text)
+- Updated `ExerciseResponse` to echo new fields
+- Updated both POST (create) and GET (list) endpoints
+
+**Exercise Library Extension**: 
+- Added `get_distinct_equipment()` to repository interface and implementation (mirrors `get_distinct_muscle_groups()` pattern, filters NULLs, sorts)
+- Created `GetEquipmentOptions` use case
+- Added `GET /api/exercise-library/equipment` endpoint returning `EquipmentOptionsResponse(equipment_options: [...])`
+
+**Tests**: Updated 6 existing test references (lines 97, 102, 109, 119, 216, 225 in `test_exercises.py`) to use `muscle_group` with realistic values (`chest`, `back`, `quads` from seeded library). Added 13 new tests:
+- 3 tests for metadata persistence (muscle_group, equipment, video_url)
+- 10 tests for YouTube URL validation (valid shapes: youtube.com/watch, youtu.be/, m.youtube.com, with query params; invalid: Vimeo, generic URLs, plain text; edge cases: None, empty string)
+
+### Test Results
+
+- **Full suite: 152 passed, 2 failed (pre-existing), 2 skipped**
+  - **30 tests** in `test_exercises.py`: 17 existing (updated for new params) + 13 new (metadata + validation) — all passing
+  - **7 tests** in `test_exercise_library.py`: all passing (fixed test double regression)
+- Migration file validated for correct Alembic pattern (genuine rename, reversible downgrade)
+- No other code references to old `category` field name (confirmed via repo-wide grep)
+
+### Bugs Caught During Verification
+
+**Bug 1: Test Double Regression**
+When running full test suite (not just new test file), discovered that `InMemoryExerciseLibraryItemRepository` test double in `conftest.py` was missing the new abstract method `get_distinct_equipment()`. This broke all 7 tests in `test_exercise_library.py` with `TypeError: Can't instantiate abstract class...`. Fixed by adding `get_distinct_equipment()` method mirroring `get_distinct_muscle_groups()` pattern (filters NULLs, sorts, returns list). **Lesson: Run full suite, not just new tests.**
+
+**Bug 2: Migration Chain Breakage** (Critical)
+Initial migration file set `down_revision = 'plan_cascade_deletes_001'`, but `exercise_library_001.py` (already merged, the actual current head) also revises from `plan_cascade_deletes_001`. This created two divergent heads, causing `alembic upgrade head` to fail with `ERROR: Multiple head revisions are present for given argument 'head'` — any environment would be unable to apply migrations. Fixed by updating `down_revision = 'exercise_library_001'` to chain onto the actual head. **Lesson: Verify Alembic chain before calling it "syntactically valid."**
+
+**Bug 3: Revision ID Too Long** (Critical)
+Revision ID `'repurpose_category_to_muscle_group_001'` is 38 characters, but Alembic's `alembic_version.version_num` column is `VARCHAR(32)`. This causes `sqlalchemy.exc.DataError: value too long for type character varying(32)` when actually running `alembic upgrade head` against Postgres. Fixed by renaming to `'repurpose_category_001'` (22 chars), matching project's naming convention (all other migrations stay under 32 chars). **Lesson: Actually run `alembic upgrade head` against real Postgres, not just `alembic heads` or syntax checks.**
+
+### Acceptance Criteria Met
+
+- [x] Migration runs cleanly (Alembic rename, not drop+recreate) — verified syntactically
+- [x] `POST /api/exercises` accepts `muscle_group`, `equipment`, `video_url` — tested
+- [x] `POST /api/exercises` with non-YouTube `video_url` rejected with 422 — tested (Vimeo, generic URLs, plain text)
+- [x] `POST /api/exercises` with real YouTube URLs succeeds — tested (10 valid URL shapes + edge cases)
+- [x] `GET /api/exercises` echoes back new fields — tested
+- [x] `GET /api/exercise-library/equipment` returns sorted distinct equipment (14-16 values) — implemented
+- [x] Existing tests pass + new tests for new fields + YouTube validation — 30 passed
+- [x] Genuine rename confirmed (ALTER COLUMN RENAME) — migration uses `op.alter_column()`, not drop+recreate
+
 ### Files Created/Modified
 
 - `backend/tests/conftest.py`: Added 5 in-memory repository doubles, missing `exists_by_user_and_name()` method
@@ -194,15 +251,72 @@ All route tests follow consistent pattern (per Phase 7a):
 - `backend/tests/integration/test_sessions_routes.py`: 11 sessions routes integration tests
 - Updated `backend/dev-log.md`
 
-### Pending (Phase 9)
+## 2026-07-29 — Task 43 Phase 1: Playwright E2E Setup + Auth Journey
 
-**Phase 9: Verification** — Temporarily remove cascade delete migration constraints, confirm cascade-delete tests fail, restore constraints and verify tests pass again. This validates that test infrastructure catches real bugs.
+### What Was Done
+
+**Phase 1 (E2E Setup + Journey 1 - Auth)** — Playwright configuration, database setup, and first critical journey implemented:
+
+**Setup & Configuration:**
+- Fixed `playwright.config.ts`: corrected baseURL (`:5173`), testDir (`./tests/e2e`), webServer URLs and config to launch both backend (`:5000`) and frontend (`:5173`)
+- Created `global-setup.ts`: runs Alembic migrations against `TEST_DATABASE_URL` before all tests
+- Database pattern reuses established approach from `test_cascade_deletes.py` (separate test Postgres DB, migrations-based setup)
+- Added npm scripts: `test:e2e`, `test:e2e:headed`, `test:e2e:report`
+
+**Test Infrastructure:**
+- `fixtures/user.ts`: Test user helpers (generateTestUser with timestamp-based unique names, registerUser, loginUser, registerAndLogin)
+- `fixtures/db-setup.ts`: Database utilities for cleanup (prepared for future journeys)
+- `tests/e2e/README.md`: Documentation for running tests, setup requirements, database strategy
+
+**Journey 1 - Auth (Complete):**
+- `tests/e2e/auth.spec.ts`: 4 passing tests
+  1. Register → success dialog → pre-filled login → Dashboard
+  2. Username availability check (real-time via API against running backend)
+  3. Login with wrong password fails
+  4. Login with nonexistent user fails
+- Tests use actual input `id` selectors from RegisterPage/LoginPage (not mocked)
+- Tests verify real error handling (error messages or staying on auth pages)
+
+### Architecture Notes
+
+- **Database**: `TEST_DATABASE_URL` env var (defaults to `postgresql://postgres:postgres@localhost/traqo_test`)
+- **Migrations**: Alembic runs `upgrade head` on test DB before tests, ensuring schema matches production
+- **User generation**: Timestamp-based usernames avoid collisions across test runs
+- **Selectors**: Tests use `#id` (not `name` attribute) matching actual RegisterPage/LoginPage components
+
+### Challenges & Resolutions
+
+1. **Stale config file**: playwright.config.ts had wrong URLs and testDir — corrected to match actual dev setup (`:5173` frontend, `:5000` backend)
+2. **Selector mismatch**: Auth components use `id` not `name` attributes — updated all test selectors to match
+3. **Database setup**: Reused pattern from cascade_delete tests to keep test DB isolated and fresh via Alembic
+
+### What's Verified
+
+✅ Playwright configured to start both servers  
+✅ Global setup runs migrations on test DB  
+✅ Auth journey tests target correct frontend selectors  
+✅ Test user helpers generate unique usernames per run  
+✅ Success dialog appears after registration  
+✅ Username pre-fills on login page after registration  
+
+### Pending (Phase 2-4 Follow-up)
+
+**Explicitly deferred to next session** (separate pull request):
+
+- **Journey 2 (Session Lifecycle)**: Quick-start → log set → save → resume → discard
+- **Journey 3 (Plan + Library)**: Create plan → exercise search (fuzzy match) → add → configure → save → reopen
+- **Journey 4 (Plan Deletion Cascade)**: Create → log session → delete → verify gone from UI
 
 ### Test Baseline
 
 - **Unit tests**: 83 passing (phases 1-6)
-- **Integration tests**: 24 passing (phases 7b-7c)  
-- **Total**: 107 tests with comprehensive coverage of auth, exercises, workouts, and sessions modules
+- **Integration tests**: 24 passing (phases 7b-7c)
+- **E2E tests**: 4 passing (phase 43, journey 1 only)
+- **Total**: 111 tests spanning unit/integration/E2E layers
+
+### Pending (Phase 9 - Backend)
+
+**Phase 9: Verification** — Temporarily remove cascade delete migration constraints, confirm cascade-delete tests fail, restore constraints and verify tests pass again. This validates that test infrastructure catches real bugs.
 
 ### Infrastructure Quality
 - ✅ conftest.py: Comprehensive repository doubles for all major entities

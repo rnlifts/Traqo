@@ -13,7 +13,8 @@ Depends on Tasks 40-42 ideally being in place first (so this slots into the same
 ## Requirements
 
 ### 1. Playwright setup
-- Add a Playwright config (`playwright.config.ts`) pointing at the app's local dev URLs (backend `:5000`, frontend `:5173` per this project's existing local setup).
+- **A stale `playwright.config.ts` already exists at the repo root** — it predates this task (unrelated leftover), points at `baseURL: 'http://localhost:5181'` and `testDir: './tests'`, neither of which match this project's actual setup (frontend dev server is `:5173`, backend is `:5000`, and there's no `tests/` directory at the frontend root). Replace/rewrite it rather than assuming it's already correctly wired up.
+- Config should point at the app's real local dev URLs (backend `:5000`, frontend `:5173` per this project's existing local setup).
 - Decide and document a test-database strategy: a dedicated test Postgres DB (separate from local dev), reset/seeded to a known state before each test run (e.g. via the existing Alembic migrations + a minimal seed, or truncate-and-reseed between runs).
 - A way to create a fresh test user per test run (registration flow itself is one of the things being tested, so this can double as setup).
 

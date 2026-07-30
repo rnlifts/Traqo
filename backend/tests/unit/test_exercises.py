@@ -1,6 +1,7 @@
 """Unit tests for exercises module."""
 
 import pytest
+from pydantic import ValidationError
 from src.modules.exercises.domain.entities.exercise import Exercise
 from src.modules.exercises.domain.exceptions import (
     DuplicateExerciseNameError,
@@ -12,6 +13,7 @@ from src.modules.exercises.domain.interfaces.exercise_repository import Exercise
 from src.modules.exercises.application.use_cases.create_exercise import CreateExercise
 from src.modules.exercises.application.use_cases.list_exercises import ListExercises
 from src.modules.exercises.application.use_cases.delete_exercise import DeleteExercise
+from src.modules.exercises.presentation.schemas import CreateExerciseRequest
 
 
 # ============================================================================
@@ -94,29 +96,29 @@ class TestCreateExercise:
         """CreateExercise creates a new exercise with valid data."""
         use_case = CreateExercise(exercise_repo)
 
-        exercise = use_case.execute(user_id, "Bench Press", category="Chest")
+        exercise = use_case.execute(user_id, "Bench Press", muscle_group="chest")
 
         assert exercise.id == 1
         assert exercise.user_id == user_id
         assert exercise.name == "Bench Press"
-        assert exercise.category == "Chest"
+        assert exercise.muscle_group == "chest"
         assert exercise.logging_type == "weight_reps"  # default
 
     def test_create_exercise_with_custom_logging_type(self, exercise_repo, user_id):
         """CreateExercise respects custom logging_type parameter."""
         use_case = CreateExercise(exercise_repo)
 
-        exercise = use_case.execute(user_id, "Running", category="Cardio", logging_type="cardio")
+        exercise = use_case.execute(user_id, "Running", muscle_group="back", logging_type="cardio")
 
         assert exercise.logging_type == "cardio"
 
     def test_create_exercise_without_category(self, exercise_repo, user_id):
-        """CreateExercise allows creating exercise without category."""
+        """CreateExercise allows creating exercise without muscle_group."""
         use_case = CreateExercise(exercise_repo)
 
         exercise = use_case.execute(user_id, "Mystery Exercise")
 
-        assert exercise.category is None
+        assert exercise.muscle_group is None
         assert exercise.name == "Mystery Exercise"
 
     def test_create_duplicate_exercise_raises_error(self, exercise_repo, user_id):
@@ -213,7 +215,7 @@ class TestListExercises:
     def test_list_exercises_returns_all_fields(self, exercise_repo, user_id):
         """ListExercises returns complete Exercise entities."""
         create_use_case = CreateExercise(exercise_repo)
-        create_use_case.execute(user_id, "Squats", category="Legs", logging_type="weight_reps")
+        create_use_case.execute(user_id, "Squats", muscle_group="quads", logging_type="weight_reps")
 
         list_use_case = ListExercises(exercise_repo)
         exercises = list_use_case.execute(user_id)
@@ -222,7 +224,7 @@ class TestListExercises:
         assert exercise.id is not None
         assert exercise.user_id == user_id
         assert exercise.name == "Squats"
-        assert exercise.category == "Legs"
+        assert exercise.muscle_group == "quads"
         assert exercise.logging_type == "weight_reps"
 
 
@@ -311,3 +313,146 @@ class TestDeleteExercise:
         assert exercise_repo.get_by_id(ex1.id) is None
         assert exercise_repo.get_by_id(ex2.id) is not None
         assert exercise_repo.get_by_id(ex2.id).name == "Deadlift"
+
+
+# ============================================================================
+# CreateExercise Metadata Tests (Task 44)
+# ============================================================================
+
+
+class TestCreateExerciseMetadata:
+    """Tests for exercise metadata (muscle_group, equipment, video_url)."""
+
+    def test_create_exercise_with_muscle_group_and_equipment(self, exercise_repo, user_id):
+        """CreateExercise persists muscle_group and equipment."""
+        use_case = CreateExercise(exercise_repo)
+
+        exercise = use_case.execute(
+            user_id,
+            "Barbell Bench Press",
+            muscle_group="chest",
+            equipment="barbell",
+        )
+
+        assert exercise.muscle_group == "chest"
+        assert exercise.equipment == "barbell"
+        assert exercise.video_url is None
+
+    def test_create_exercise_with_all_metadata(self, exercise_repo, user_id):
+        """CreateExercise persists all metadata fields."""
+        use_case = CreateExercise(exercise_repo)
+
+        exercise = use_case.execute(
+            user_id,
+            "Dumbbell Curl",
+            muscle_group="biceps",
+            equipment="dumbbell",
+            video_url="https://www.youtube.com/watch?v=G-f81Mg6bAc",
+        )
+
+        assert exercise.muscle_group == "biceps"
+        assert exercise.equipment == "dumbbell"
+        assert exercise.video_url == "https://www.youtube.com/watch?v=G-f81Mg6bAc"
+
+    def test_list_exercises_includes_metadata(self, exercise_repo, user_id):
+        """ListExercises returns metadata fields for all exercises."""
+        create_use_case = CreateExercise(exercise_repo)
+        create_use_case.execute(user_id, "Exercise 1", muscle_group="chest")
+        create_use_case.execute(user_id, "Exercise 2", equipment="barbell")
+        create_use_case.execute(user_id, "Exercise 3")
+
+        list_use_case = ListExercises(exercise_repo)
+        exercises = list_use_case.execute(user_id)
+
+        assert exercises[0].muscle_group == "chest"
+        assert exercises[0].equipment is None
+        assert exercises[1].muscle_group is None
+        assert exercises[1].equipment == "barbell"
+        assert exercises[2].muscle_group is None
+        assert exercises[2].equipment is None
+
+
+# ============================================================================
+# YouTube URL Validation Tests (Task 44)
+# ============================================================================
+
+
+class TestYoutubeUrlValidation:
+    """Tests for video_url YouTube URL validation in CreateExerciseRequest."""
+
+    def test_valid_youtube_watch_url(self):
+        """CreateExerciseRequest accepts standard youtube.com/watch URLs."""
+        req = CreateExerciseRequest(
+            name="Exercise",
+            video_url="https://www.youtube.com/watch?v=G-f81Mg6bAc",
+        )
+        assert req.video_url == "https://www.youtube.com/watch?v=G-f81Mg6bAc"
+
+    def test_valid_youtube_watch_url_without_www(self):
+        """CreateExerciseRequest accepts youtube.com/watch URLs without www."""
+        req = CreateExerciseRequest(
+            name="Exercise",
+            video_url="https://youtube.com/watch?v=G-f81Mg6bAc",
+        )
+        assert req.video_url == "https://youtube.com/watch?v=G-f81Mg6bAc"
+
+    def test_valid_youtube_shorturl(self):
+        """CreateExerciseRequest accepts youtu.be/ shortened URLs."""
+        req = CreateExerciseRequest(
+            name="Exercise",
+            video_url="https://youtu.be/G-f81Mg6bAc",
+        )
+        assert req.video_url == "https://youtu.be/G-f81Mg6bAc"
+
+    def test_valid_youtube_mobile_url(self):
+        """CreateExerciseRequest accepts m.youtube.com URLs."""
+        req = CreateExerciseRequest(
+            name="Exercise",
+            video_url="https://m.youtube.com/watch?v=G-f81Mg6bAc",
+        )
+        assert req.video_url == "https://m.youtube.com/watch?v=G-f81Mg6bAc"
+
+    def test_valid_youtube_url_with_timestamp(self):
+        """CreateExerciseRequest accepts YouTube URLs with query params like &t=30s."""
+        req = CreateExerciseRequest(
+            name="Exercise",
+            video_url="https://www.youtube.com/watch?v=G-f81Mg6bAc&t=30s",
+        )
+        assert req.video_url == "https://www.youtube.com/watch?v=G-f81Mg6bAc&t=30s"
+
+    def test_invalid_vimeo_url(self):
+        """CreateExerciseRequest rejects Vimeo URLs."""
+        with pytest.raises(ValidationError) as exc_info:
+            CreateExerciseRequest(
+                name="Exercise",
+                video_url="https://vimeo.com/123456789",
+            )
+        assert "valid YouTube link" in str(exc_info.value)
+
+    def test_invalid_generic_url(self):
+        """CreateExerciseRequest rejects generic URLs."""
+        with pytest.raises(ValidationError) as exc_info:
+            CreateExerciseRequest(
+                name="Exercise",
+                video_url="https://example.com/video",
+            )
+        assert "valid YouTube link" in str(exc_info.value)
+
+    def test_invalid_plain_text(self):
+        """CreateExerciseRequest rejects plain text that isn't a URL."""
+        with pytest.raises(ValidationError) as exc_info:
+            CreateExerciseRequest(
+                name="Exercise",
+                video_url="not-a-url",
+            )
+        assert "valid YouTube link" in str(exc_info.value)
+
+    def test_video_url_none_is_valid(self):
+        """CreateExerciseRequest accepts None for video_url."""
+        req = CreateExerciseRequest(name="Exercise", video_url=None)
+        assert req.video_url is None
+
+    def test_video_url_empty_string_is_valid(self):
+        """CreateExerciseRequest accepts empty string for video_url."""
+        req = CreateExerciseRequest(name="Exercise", video_url="")
+        assert req.video_url == ""

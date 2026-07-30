@@ -21,8 +21,22 @@ async def create_exercise(
     """Create a new exercise for the authenticated user."""
     exercise_repository = ExerciseRepositoryImpl(db)
     use_case = CreateExercise(exercise_repository)
-    exercise = use_case.execute(user_id, req.name, category=req.category, logging_type=req.logging_type)
-    return ExerciseResponse(id=exercise.id, name=exercise.name, category=exercise.category, logging_type=exercise.logging_type)
+    exercise = use_case.execute(
+        user_id,
+        req.name,
+        muscle_group=req.muscle_group,
+        equipment=req.equipment,
+        video_url=req.video_url,
+        logging_type=req.logging_type,
+    )
+    return ExerciseResponse(
+        id=exercise.id,
+        name=exercise.name,
+        muscle_group=exercise.muscle_group,
+        equipment=exercise.equipment,
+        video_url=exercise.video_url,
+        logging_type=exercise.logging_type,
+    )
 
 
 @exercises_router.get("", response_model=list[ExerciseResponse])
@@ -34,7 +48,17 @@ async def list_exercises(
     exercise_repository = ExerciseRepositoryImpl(db)
     use_case = ListExercises(exercise_repository)
     exercises = use_case.execute(user_id)
-    return [ExerciseResponse(id=e.id, name=e.name, category=e.category, logging_type=e.logging_type) for e in exercises]
+    return [
+        ExerciseResponse(
+            id=e.id,
+            name=e.name,
+            muscle_group=e.muscle_group,
+            equipment=e.equipment,
+            video_url=e.video_url,
+            logging_type=e.logging_type,
+        )
+        for e in exercises
+    ]
 
 
 @exercises_router.delete("/{exercise_id}", status_code=status.HTTP_200_OK)

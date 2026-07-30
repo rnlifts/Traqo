@@ -498,7 +498,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
       if (existingExercise) {
         exerciseId = existingExercise.id;
       } else {
-        const newExercise = await exercisesApi.create(addExerciseName);
+        const newExercise = await exercisesApi.create({ name: addExerciseName });
         exerciseId = newExercise.id;
       }
 
