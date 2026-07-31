@@ -38,6 +38,24 @@ class InMemoryUserRepository(UserRepository):
     def exists_by_username(self, username: str) -> bool:
         return self.get_by_username(username) is not None
 
+    def record_failed_login(self, user: User) -> None:
+        """Increment failed login attempts and set lockout if threshold reached."""
+        from src.config.settings import settings
+        from datetime import datetime, timedelta
+
+        if user.id in self.users:
+            self.users[user.id].failed_login_attempts += 1
+            if self.users[user.id].failed_login_attempts >= settings.LOGIN_LOCKOUT_MAX_ATTEMPTS:
+                self.users[user.id].locked_until = datetime.utcnow() + timedelta(
+                    minutes=settings.LOGIN_LOCKOUT_DURATION_MINUTES
+                )
+
+    def reset_login_attempts(self, user: User) -> None:
+        """Clear failed login attempts and lockout state on successful login."""
+        if user.id in self.users:
+            self.users[user.id].failed_login_attempts = 0
+            self.users[user.id].locked_until = None
+
 
 class MockPasswordHasher(PasswordHasher):
     """Mock password hasher for testing (no real hashing)."""

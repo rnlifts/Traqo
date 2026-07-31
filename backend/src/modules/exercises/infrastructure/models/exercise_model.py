@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, UniqueConstraint, Boolean
 
 from src.infrastructure.database import Base
 
@@ -14,8 +14,11 @@ class ExerciseModel(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     name = Column(String(255), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    category = Column(String(50), nullable=True)
+    muscle_group = Column(String(50), nullable=True)
     # One of: "weight_reps", "reps_only", "weight_only", "cardio"
     logging_type = Column(String(20), nullable=False, default="weight_reps")
+    equipment = Column(String(100), nullable=True)
+    video_url = Column(String(500), nullable=True)
+    is_custom = Column(Boolean, nullable=False, default=True)
 
     __table_args__ = (UniqueConstraint("user_id", "name", name="uq_exercises_user_id_name"),)

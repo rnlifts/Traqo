@@ -6,7 +6,7 @@ from src.infrastructure.rate_limiter import limiter
 from src.infrastructure.security.jwt_service import create_access_token
 from ..application.use_cases.login_user import LoginUser
 from ..application.use_cases.register_user import RegisterUser
-from ..domain.exceptions import InvalidCredentialsError
+from ..domain.exceptions import InvalidCredentialsError, AccountLockedError
 from ..domain.services.username_validator import UsernameValidator
 from ..infrastructure.repositories.user_repository_impl import UserRepositoryImpl
 from ..infrastructure.security.bcrypt_password_hasher import BcryptPasswordHasher
@@ -48,12 +48,24 @@ async def check_username(username: str, request: Request, response: Response, db
 
 
 @auth_router.post("/login", response_model=LoginResponse)
-@limiter.limit("3/15minutes")
+@limiter.limit("15/15minutes")
 async def login(request: Request, req: LoginRequest, response: Response, db: Session = Depends(get_db)):
     """Authenticate a user and return a JWT token."""
     user_repository = UserRepositoryImpl(db)
     use_case = LoginUser(user_repository, password_hasher)
-    user = use_case.execute(req.username, req.password)
+    try:
+        user = use_case.execute(req.username, req.password)
+    except AccountLockedError:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Account is locked due to too many failed login attempts. Try again later.",
+        )
+    except InvalidCredentialsError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid username or password",
+        )
+
     token = create_access_token(user.id)
     return LoginResponse(
         token=token,

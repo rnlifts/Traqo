@@ -6,6 +6,7 @@ export interface LibraryExercise {
   muscle_group: string;
   equipment: string | null;
   thumbnail_url: string | null;
+  video_url: string | null;
 }
 
 export const exerciseLibraryApi = {
@@ -24,5 +25,10 @@ export const exerciseLibraryApi = {
   async getMuscleGroups(): Promise<string[]> {
     const response = await apiClient.get<{ muscle_groups: string[] }>("/exercise-library/muscle-groups");
     return response.data.muscle_groups;
+  },
+
+  async getEquipmentOptions(): Promise<string[]> {
+    const response = await apiClient.get<{ equipment_options: string[] }>("/exercise-library/equipment");
+    return response.data.equipment_options;
   },
 };

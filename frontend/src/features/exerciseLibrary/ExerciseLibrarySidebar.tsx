@@ -5,17 +5,35 @@ import { exerciseLibraryApi } from "../../api/exerciseLibraryApi";
 import type { LibraryExercise } from "../../api/exerciseLibraryApi";
 import { CustomExerciseForm } from "./CustomExerciseForm";
 import { useToast } from "../../components/Toast";
+import { getYoutubeThumbnailUrl } from "../../utils/youtube";
+
+export interface SelectedExerciseInfo {
+  name: string;
+  video_url?: string | null;
+  muscle_group?: string | null;
+  equipment?: string | null;
+}
 
 interface ExerciseLibrarySidebarProps {
-  onSelectExercise: (name: string) => void;
+  onSelectExercise: (exerciseInfo: SelectedExerciseInfo) => void;
   onExerciseCreated?: (exercise: Exercise) => void;
+  onPreviewExercise?: (exerciseInfo: SelectedExerciseInfo) => void;
 }
 
 type TabType = "library" | "custom";
 
+// Utility function to title-case a string (e.g., "inch worm" -> "Inch Worm")
+function titleCase(str: string): string {
+  return str
+    .split(/\s+/)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+}
+
 export const ExerciseLibrarySidebar: React.FC<ExerciseLibrarySidebarProps> = ({
   onSelectExercise,
   onExerciseCreated,
+  onPreviewExercise,
 }) => {
   const { showToast } = useToast();
 
@@ -59,7 +77,8 @@ export const ExerciseLibrarySidebar: React.FC<ExerciseLibrarySidebarProps> = ({
   const loadCustomExercises = async () => {
     setCustomLoading(true);
     try {
-      const exercises = await exercisesApi.list();
+      // Only load exercises marked as custom (is_custom: true)
+      const exercises = await exercisesApi.listCustomOnly();
       setCustomExercises(exercises);
     } catch (error) {
       console.error("Failed to load custom exercises:", error);
@@ -109,15 +128,43 @@ export const ExerciseLibrarySidebar: React.FC<ExerciseLibrarySidebarProps> = ({
     };
   }, [searchQuery, selectedMuscleGroup, activeTab]);
 
-  const handleSelectExercise = (name: string) => {
-    onSelectExercise(name);
+  const handleSelectExercise = (exerciseInfo: SelectedExerciseInfo) => {
+    onSelectExercise(exerciseInfo);
     setSearchQuery(""); // Clear search after selection
   };
 
-  const handleCreateNew = () => {
-    if (searchQuery.trim()) {
-      onSelectExercise(searchQuery);
+  const handleCreateCustomExerciseFromSearch = async () => {
+    if (!searchQuery.trim()) return;
+
+    try {
+      // Create the exercise with title-cased name via API
+      const titleCasedName = titleCase(searchQuery);
+      const newExercise = await exercisesApi.create({ name: titleCasedName });
+
+      // Switch to Custom Exercises tab
+      setActiveTab("custom");
+
+      // Set the newly created exercise as the one being edited
+      setEditingExercise(newExercise);
+
+      // Open the form in edit mode
+      setShowCustomForm(true);
+
+      // Refresh the custom exercises list
+      await loadCustomExercises();
+
+      // Notify parent of the newly created exercise
+      if (onExerciseCreated) {
+        onExerciseCreated(newExercise);
+      }
+
+      // Clear the search query
       setSearchQuery("");
+
+      showToast(`Created "${titleCasedName}" - edit to add details`, "success");
+    } catch (error) {
+      console.error("Failed to create custom exercise from search:", error);
+      showToast("Failed to create exercise", "error");
     }
   };
 
@@ -214,6 +261,50 @@ export const ExerciseLibrarySidebar: React.FC<ExerciseLibrarySidebarProps> = ({
             style={{ marginBottom: "12px" }}
           />
 
+          {/* Not Found Callout - Prominent "Create New" option */}
+          {!loading && searchQuery.trim() && !hasExactMatch && (
+            <div
+              style={{
+                marginBottom: "16px",
+                padding: "12px",
+                backgroundColor: "var(--accent-soft)",
+                border: `1px solid var(--accent)`,
+                borderRadius: "8px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "8px",
+              }}
+            >
+              <div style={{ display: "flex", gap: "8px", alignItems: "flex-start" }}>
+                <span style={{ fontSize: "16px", flexShrink: 0 }}>💡</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: "13px", fontWeight: "500", color: "var(--text)" }}>
+                    "{searchQuery}" not found
+                  </div>
+                  <div style={{ fontSize: "12px", color: "var(--text-h)", marginTop: "2px" }}>
+                    Create a custom exercise to add it to your library
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={handleCreateCustomExerciseFromSearch}
+                style={{
+                  padding: "8px 12px",
+                  backgroundColor: "var(--accent)",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "6px",
+                  fontSize: "13px",
+                  fontWeight: "600",
+                  cursor: "pointer",
+                  width: "100%",
+                }}
+              >
+                + Create New: "{searchQuery}"
+              </button>
+            </div>
+          )}
+
           {/* Muscle Group Filter Chips */}
           {!initialLoading && muscleGroups.length > 0 && (
             <div style={{ marginBottom: "12px" }}>
@@ -289,6 +380,12 @@ export const ExerciseLibrarySidebar: React.FC<ExerciseLibrarySidebarProps> = ({
               results.map((exercise) => (
                 <div
                   key={exercise.id}
+                  onClick={() => onPreviewExercise?.({
+                    name: exercise.name,
+                    video_url: exercise.video_url,
+                    muscle_group: exercise.muscle_group,
+                    equipment: exercise.equipment,
+                  })}
                   style={{
                     marginBottom: "12px",
                     padding: "10px",
@@ -298,6 +395,7 @@ export const ExerciseLibrarySidebar: React.FC<ExerciseLibrarySidebarProps> = ({
                     display: "flex",
                     gap: "10px",
                     alignItems: "flex-start",
+                    cursor: "pointer",
                   }}
                 >
                   {/* Thumbnail */}
@@ -354,7 +452,15 @@ export const ExerciseLibrarySidebar: React.FC<ExerciseLibrarySidebarProps> = ({
                       </div>
                     )}
                     <button
-                      onClick={() => handleSelectExercise(exercise.name)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSelectExercise({
+                          name: exercise.name,
+                          video_url: exercise.video_url,
+                          muscle_group: exercise.muscle_group,
+                          equipment: exercise.equipment,
+                        });
+                      }}
                       style={{
                         marginTop: "6px",
                         padding: "4px 10px",
@@ -374,25 +480,6 @@ export const ExerciseLibrarySidebar: React.FC<ExerciseLibrarySidebarProps> = ({
               ))}
           </div>
 
-          {/* Create New Exercise Affordance */}
-          {!loading && searchQuery.trim() && !hasExactMatch && (
-            <button
-              onClick={handleCreateNew}
-              style={{
-                padding: "10px",
-                backgroundColor: "var(--accent-soft)",
-                color: "var(--accent)",
-                border: `2px dashed var(--accent)`,
-                borderRadius: "6px",
-                fontSize: "13px",
-                fontWeight: "500",
-                cursor: "pointer",
-                width: "100%",
-              }}
-            >
-              Create New: "{searchQuery}"
-            </button>
-          )}
         </>
       )}
 
@@ -447,6 +534,12 @@ export const ExerciseLibrarySidebar: React.FC<ExerciseLibrarySidebarProps> = ({
                   customExercises.map((exercise) => (
                     <div
                       key={exercise.id}
+                      onClick={() => onPreviewExercise?.({
+                        name: exercise.name,
+                        video_url: exercise.video_url,
+                        muscle_group: exercise.muscle_group,
+                        equipment: exercise.equipment,
+                      })}
                       style={{
                         marginBottom: "12px",
                         padding: "10px",
@@ -456,25 +549,40 @@ export const ExerciseLibrarySidebar: React.FC<ExerciseLibrarySidebarProps> = ({
                         display: "flex",
                         gap: "10px",
                         alignItems: "flex-start",
+                        cursor: "pointer",
                       }}
                     >
-                      {/* Placeholder Icon */}
-                      <div
-                        style={{
-                          width: "48px",
-                          height: "48px",
-                          borderRadius: "4px",
-                          backgroundColor: "var(--border)",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          color: "var(--text-h)",
-                          fontSize: "20px",
-                          flexShrink: 0,
-                        }}
-                      >
-                        💪
-                      </div>
+                      {/* Thumbnail (derived from video_url) or fallback icon */}
+                      {getYoutubeThumbnailUrl(exercise.video_url) ? (
+                        <img
+                          src={getYoutubeThumbnailUrl(exercise.video_url)!}
+                          alt={exercise.name}
+                          style={{
+                            width: "48px",
+                            height: "48px",
+                            borderRadius: "4px",
+                            objectFit: "cover",
+                            flexShrink: 0,
+                          }}
+                        />
+                      ) : (
+                        <div
+                          style={{
+                            width: "48px",
+                            height: "48px",
+                            borderRadius: "4px",
+                            backgroundColor: "var(--border)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            color: "var(--text-h)",
+                            fontSize: "20px",
+                            flexShrink: 0,
+                          }}
+                        >
+                          🏋️
+                        </div>
+                      )}
 
                       {/* Info + Buttons */}
                       <div style={{ flex: 1, minWidth: 0 }}>
@@ -499,7 +607,15 @@ export const ExerciseLibrarySidebar: React.FC<ExerciseLibrarySidebarProps> = ({
                         )}
                         <div style={{ display: "flex", gap: "6px", marginTop: "6px", flexWrap: "wrap" }}>
                           <button
-                            onClick={() => handleSelectExercise(exercise.name)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSelectExercise({
+                                name: exercise.name,
+                                video_url: exercise.video_url,
+                                muscle_group: exercise.muscle_group,
+                                equipment: exercise.equipment,
+                              });
+                            }}
                             style={{
                               padding: "4px 10px",
                               backgroundColor: "var(--success)",

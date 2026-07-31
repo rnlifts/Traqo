@@ -100,6 +100,15 @@ Claude acts as PM for Traqo: plans, delegates task specs to an implementing agen
 
 Stop and surface to the person (don't proceed automatically) when: the requirement is ambiguous at a product level, the change touches auth/payments/user-data-destructively, or it's a genuinely irreversible action (bulk data deletion, force-push, etc.) — for those, hand over the exact command/SQL rather than running it directly if execution is blocked or inappropriate.
 
+**Implementing-agent rules (added 2026-07-31, after a real incident — see below):**
+1. **Scope discipline.** Only touch what the task spec's Requirements section names. If something outside that scope looks like it needs changing, stop and flag it back to the PM rather than just doing it.
+2. **"Done" means actually run it, not just write it.** Run the *full* test suite, not just new tests. For anything with a migration, actually run `alembic upgrade head` (and `downgrade`) against a real database — "syntactically valid" is not verification.
+3. **Touching a shared/existing component requires checking the existing behavior still works**, not just that the new piece works.
+4. **UI changes get checked at more than one viewport size** — include a shorter height, not just the default — before calling it done.
+5. **Before displaying existing data in a new UI for the first time, sanity-check what's actually in that data** with a real query — don't assume it's clean.
+
+**The incident:** Tasks 44-46 (custom exercise metadata + a stacked "Custom Exercise" section in the plan-builder sidebar) were built, verified by running tests, and reported done — but the new section had no height/scroll containment and squeezed the existing Exercise Library results down to a near-invisible sliver at realistic window heights, which also made muscle-group filtering and thumbnails look broken (they weren't — just hidden below the fold). Caught only when the owner tested it manually and sent screenshots; the whole feature was reverted the same session. See memory `traqo-custom-exercises-tab-spec` for the refined spec that replaces it (tabs instead of stacking, specifically to avoid this failure mode structurally).
+
 ---
 
 *Last updated: 2026-07-27.*

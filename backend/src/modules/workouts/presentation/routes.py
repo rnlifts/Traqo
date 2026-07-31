@@ -136,6 +136,9 @@ def _build_workout_exercise_response(
         exercise_domain_repo = ExerciseRepositoryImpl(db)
         exercise_entity = exercise_domain_repo.get_by_id(exercise.exercise_id)
         exercise_name = exercise_entity.name if exercise_entity else "Unknown Exercise"
+        video_url = exercise_entity.video_url if exercise_entity else None
+        muscle_group = exercise_entity.muscle_group if exercise_entity else None
+        equipment = exercise_entity.equipment if exercise_entity else None
         return WorkoutExerciseDetailedResponse(
             id=exercise.id,
             plan_day_id=exercise.plan_day_id,
@@ -150,6 +153,9 @@ def _build_workout_exercise_response(
             has_reps=exercise.has_reps,
             has_weight=exercise.has_weight,
             has_duration=exercise.has_duration,
+            video_url=video_url,
+            muscle_group=muscle_group,
+            equipment=equipment,
             set_targets=set_targets_responses,
         )
     else:

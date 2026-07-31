@@ -35,6 +35,13 @@ class ExerciseLibraryRepositoryImpl(ExerciseLibraryRepository):
         groups = self.db.query(ExerciseLibraryItemModel.muscle_group).distinct().all()
         return sorted([g[0] for g in groups])
 
+    def get_distinct_equipment(self) -> list[str]:
+        """Get sorted list of distinct equipment values in the library."""
+        equipment_list = self.db.query(ExerciseLibraryItemModel.equipment).filter(
+            ExerciseLibraryItemModel.equipment.isnot(None)
+        ).distinct().all()
+        return sorted([e[0] for e in equipment_list])
+
     def upsert(self, item: ExerciseLibraryItem) -> ExerciseLibraryItem:
         """Insert or update by (name, muscle_group). Returns the item with id set."""
         existing = self.db.query(ExerciseLibraryItemModel).filter(

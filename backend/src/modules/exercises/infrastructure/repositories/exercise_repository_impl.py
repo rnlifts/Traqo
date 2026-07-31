@@ -21,8 +21,11 @@ class ExerciseRepositoryImpl(ExerciseRepository):
             user_id=exercise.user_id,
             name=exercise.name,
             created_at=exercise.created_at,
-            category=exercise.category,
+            muscle_group=exercise.muscle_group,
             logging_type=exercise.logging_type,
+            equipment=exercise.equipment,
+            video_url=exercise.video_url,
+            is_custom=exercise.is_custom,
         )
         self.session.add(model)
         self.session.commit()
@@ -65,6 +68,39 @@ class ExerciseRepositoryImpl(ExerciseRepository):
             is not None
         )
 
+    def exists_by_user_and_name_excluding_id(self, user_id: int, name: str, exclude_id: int) -> bool:
+        """Check if an exercise with the given name exists for the user, excluding a specific exercise id."""
+        return (
+            self.session.query(ExerciseModel)
+            .filter(
+                ExerciseModel.user_id == user_id,
+                ExerciseModel.name == name,
+                ExerciseModel.id != exclude_id,
+            )
+            .first()
+            is not None
+        )
+
+    def update(self, exercise: Exercise) -> Exercise:
+        """Update an existing exercise."""
+        model = self.session.query(ExerciseModel).get(exercise.id)
+        if model:
+            model.name = exercise.name
+            model.muscle_group = exercise.muscle_group
+            model.equipment = exercise.equipment
+            model.video_url = exercise.video_url
+            model.is_custom = exercise.is_custom
+            self.session.commit()
+            return self._model_to_entity(model)
+        return None
+
+    def list_by_user_custom_only(self, user_id: int) -> list[Exercise]:
+        """Get only custom exercises for a user."""
+        models = self.session.query(ExerciseModel).filter_by(
+            user_id=user_id, is_custom=True
+        ).all()
+        return [self._model_to_entity(model) for model in models]
+
     def _model_to_entity(self, model: ExerciseModel) -> Exercise:
         """Convert a SQLAlchemy model to a domain entity."""
         return Exercise(
@@ -72,6 +108,9 @@ class ExerciseRepositoryImpl(ExerciseRepository):
             user_id=model.user_id,
             name=model.name,
             created_at=model.created_at,
-            category=model.category,
+            muscle_group=model.muscle_group,
             logging_type=model.logging_type,
+            equipment=model.equipment,
+            video_url=model.video_url,
+            is_custom=model.is_custom,
         )

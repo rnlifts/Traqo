@@ -12,6 +12,7 @@ from src.modules.exercises.domain.interfaces.exercise_repository import Exercise
 from src.modules.exercises.application.use_cases.create_exercise import CreateExercise
 from src.modules.exercises.application.use_cases.list_exercises import ListExercises
 from src.modules.exercises.application.use_cases.delete_exercise import DeleteExercise
+from src.modules.exercises.application.use_cases.update_exercise import UpdateExercise
 
 
 # ============================================================================
@@ -37,6 +38,9 @@ class ExerciseRepositoryDouble(ExerciseRepository):
     def list_by_user(self, user_id: int) -> list[Exercise]:
         return [e for e in self.exercises.values() if e.user_id == user_id]
 
+    def list_by_user_custom_only(self, user_id: int) -> list[Exercise]:
+        return [e for e in self.exercises.values() if e.user_id == user_id and e.is_custom]
+
     def get_by_id(self, exercise_id: int) -> Exercise | None:
         return self.exercises.get(exercise_id)
 
@@ -53,6 +57,18 @@ class ExerciseRepositoryDouble(ExerciseRepository):
             e.user_id == user_id and e.name.lower() == name.lower()
             for e in self.exercises.values()
         )
+
+    def exists_by_user_and_name_excluding_id(self, user_id: int, name: str, exclude_id: int) -> bool:
+        return any(
+            e.user_id == user_id and e.name.lower() == name.lower() and e.id != exclude_id
+            for e in self.exercises.values()
+        )
+
+    def update(self, exercise: Exercise) -> Exercise:
+        if exercise.id in self.exercises:
+            self.exercises[exercise.id] = exercise
+            return exercise
+        return None
 
     def mark_as_used(self, exercise_id: int) -> None:
         """Test helper: mark exercise as used in a plan."""
@@ -94,29 +110,29 @@ class TestCreateExercise:
         """CreateExercise creates a new exercise with valid data."""
         use_case = CreateExercise(exercise_repo)
 
-        exercise = use_case.execute(user_id, "Bench Press", category="Chest")
+        exercise = use_case.execute(user_id, "Bench Press", muscle_group="chest")
 
         assert exercise.id == 1
         assert exercise.user_id == user_id
         assert exercise.name == "Bench Press"
-        assert exercise.category == "Chest"
+        assert exercise.muscle_group == "chest"
         assert exercise.logging_type == "weight_reps"  # default
 
     def test_create_exercise_with_custom_logging_type(self, exercise_repo, user_id):
         """CreateExercise respects custom logging_type parameter."""
         use_case = CreateExercise(exercise_repo)
 
-        exercise = use_case.execute(user_id, "Running", category="Cardio", logging_type="cardio")
+        exercise = use_case.execute(user_id, "Running", muscle_group="cardio", logging_type="cardio")
 
         assert exercise.logging_type == "cardio"
 
-    def test_create_exercise_without_category(self, exercise_repo, user_id):
-        """CreateExercise allows creating exercise without category."""
+    def test_create_exercise_without_muscle_group(self, exercise_repo, user_id):
+        """CreateExercise allows creating exercise without muscle_group."""
         use_case = CreateExercise(exercise_repo)
 
         exercise = use_case.execute(user_id, "Mystery Exercise")
 
-        assert exercise.category is None
+        assert exercise.muscle_group is None
         assert exercise.name == "Mystery Exercise"
 
     def test_create_duplicate_exercise_raises_error(self, exercise_repo, user_id):
@@ -213,7 +229,7 @@ class TestListExercises:
     def test_list_exercises_returns_all_fields(self, exercise_repo, user_id):
         """ListExercises returns complete Exercise entities."""
         create_use_case = CreateExercise(exercise_repo)
-        create_use_case.execute(user_id, "Squats", category="Legs", logging_type="weight_reps")
+        create_use_case.execute(user_id, "Squats", muscle_group="legs", logging_type="weight_reps")
 
         list_use_case = ListExercises(exercise_repo)
         exercises = list_use_case.execute(user_id)
@@ -222,7 +238,7 @@ class TestListExercises:
         assert exercise.id is not None
         assert exercise.user_id == user_id
         assert exercise.name == "Squats"
-        assert exercise.category == "Legs"
+        assert exercise.muscle_group == "legs"
         assert exercise.logging_type == "weight_reps"
 
 
@@ -311,3 +327,253 @@ class TestDeleteExercise:
         assert exercise_repo.get_by_id(ex1.id) is None
         assert exercise_repo.get_by_id(ex2.id) is not None
         assert exercise_repo.get_by_id(ex2.id).name == "Deadlift"
+
+
+# ============================================================================
+# UpdateExercise Tests
+# ============================================================================
+
+
+class TestUpdateExercise:
+    """Tests for UpdateExercise use case."""
+
+    def test_update_exercise_with_new_name(self, exercise_repo, user_id):
+        """UpdateExercise updates the exercise name."""
+        create_use_case = CreateExercise(exercise_repo)
+        exercise = create_use_case.execute(user_id, "Bench Press", muscle_group="chest")
+
+        update_use_case = UpdateExercise(exercise_repo)
+        updated = update_use_case.execute(exercise.id, user_id, name="Incline Bench Press")
+
+        assert updated.id == exercise.id
+        assert updated.name == "Incline Bench Press"
+        assert updated.muscle_group == "chest"  # Unchanged
+
+    def test_update_exercise_with_new_metadata(self, exercise_repo, user_id):
+        """UpdateExercise updates muscle_group, equipment, and video_url."""
+        create_use_case = CreateExercise(exercise_repo)
+        exercise = create_use_case.execute(user_id, "Bench Press")
+
+        update_use_case = UpdateExercise(exercise_repo)
+        updated = update_use_case.execute(
+            exercise.id,
+            user_id,
+            name="Bench Press",
+            muscle_group="chest",
+            equipment="barbell",
+            video_url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        )
+
+        assert updated.muscle_group == "chest"
+        assert updated.equipment == "barbell"
+        assert updated.video_url == "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+
+    def test_update_exercise_partial_fields(self, exercise_repo, user_id):
+        """UpdateExercise updates only provided fields."""
+        create_use_case = CreateExercise(exercise_repo)
+        exercise = create_use_case.execute(
+            user_id,
+            "Bench Press",
+            muscle_group="chest",
+            equipment="barbell",
+        )
+
+        update_use_case = UpdateExercise(exercise_repo)
+        updated = update_use_case.execute(
+            exercise.id,
+            user_id,
+            name="Bench Press",
+            equipment="dumbbell",
+        )
+
+        assert updated.name == "Bench Press"
+        assert updated.muscle_group == "chest"  # Unchanged
+        assert updated.equipment == "dumbbell"
+
+    def test_update_nonexistent_exercise_raises_error(self, exercise_repo, user_id):
+        """UpdateExercise raises ExerciseNotFoundError for missing exercise."""
+        update_use_case = UpdateExercise(exercise_repo)
+
+        with pytest.raises(ExerciseNotFoundError):
+            update_use_case.execute(999, user_id, name="Nonexistent")
+
+    def test_update_exercise_wrong_owner_raises_error(self, exercise_repo, user_id, other_user_id):
+        """UpdateExercise raises UnauthorizedExerciseAccessError when user doesn't own it."""
+        create_use_case = CreateExercise(exercise_repo)
+        exercise = create_use_case.execute(user_id, "Bench Press")
+
+        update_use_case = UpdateExercise(exercise_repo)
+        with pytest.raises(UnauthorizedExerciseAccessError):
+            update_use_case.execute(exercise.id, other_user_id, name="Updated")
+
+    def test_update_exercise_duplicate_name_raises_error(self, exercise_repo, user_id):
+        """UpdateExercise raises DuplicateExerciseNameError on name collision."""
+        create_use_case = CreateExercise(exercise_repo)
+        ex1 = create_use_case.execute(user_id, "Bench Press")
+        ex2 = create_use_case.execute(user_id, "Deadlift")
+
+        update_use_case = UpdateExercise(exercise_repo)
+        with pytest.raises(DuplicateExerciseNameError):
+            update_use_case.execute(ex2.id, user_id, name="Bench Press")
+
+    def test_update_exercise_same_name_allowed(self, exercise_repo, user_id):
+        """UpdateExercise allows updating to the same name."""
+        create_use_case = CreateExercise(exercise_repo)
+        exercise = create_use_case.execute(user_id, "Bench Press", muscle_group="chest")
+
+        update_use_case = UpdateExercise(exercise_repo)
+        updated = update_use_case.execute(
+            exercise.id,
+            user_id,
+            name="Bench Press",
+            muscle_group="back",
+        )
+
+        assert updated.name == "Bench Press"
+        assert updated.muscle_group == "back"
+
+    def test_update_exercise_preserves_logging_type(self, exercise_repo, user_id):
+        """UpdateExercise doesn't modify logging_type."""
+        create_use_case = CreateExercise(exercise_repo)
+        exercise = create_use_case.execute(
+            user_id, "Bench Press", logging_type="weight_reps"
+        )
+
+        update_use_case = UpdateExercise(exercise_repo)
+        updated = update_use_case.execute(
+            exercise.id,
+            user_id,
+            name="Updated Press",
+            muscle_group="chest",
+        )
+
+        assert updated.logging_type == "weight_reps"
+
+    def test_update_exercise_in_plan_succeeds(self, exercise_repo, user_id):
+        """UpdateExercise succeeds even if exercise is used in a plan."""
+        create_use_case = CreateExercise(exercise_repo)
+        exercise = create_use_case.execute(user_id, "Bench Press")
+
+        # Mark as used in a plan
+        exercise_repo.mark_as_used(exercise.id)
+
+        update_use_case = UpdateExercise(exercise_repo)
+        updated = update_use_case.execute(
+            exercise.id,
+            user_id,
+            name="Incline Bench Press",
+        )
+
+        assert updated.name == "Incline Bench Press"
+
+    def test_update_exercise_does_not_change_is_custom(self, exercise_repo, user_id):
+        """UpdateExercise does not change is_custom field."""
+        create_use_case = CreateExercise(exercise_repo)
+        exercise = create_use_case.execute(user_id, "Bench Press", is_custom=True)
+
+        update_use_case = UpdateExercise(exercise_repo)
+        updated = update_use_case.execute(
+            exercise.id,
+            user_id,
+            name="Updated Press",
+            muscle_group="chest",
+        )
+
+        assert updated.is_custom is True
+
+
+# ============================================================================
+# TestCreateExercise - is_custom field tests
+# ============================================================================
+
+
+class TestCreateExerciseIsCustom:
+    """Tests for is_custom field in CreateExercise use case."""
+
+    def test_is_custom_defaults_to_true(self, exercise_repo, user_id):
+        """CreateExercise defaults is_custom to True when not passed."""
+        use_case = CreateExercise(exercise_repo)
+
+        exercise = use_case.execute(user_id, "Bench Press")
+
+        assert exercise.is_custom is True
+
+    def test_is_custom_false_is_respected(self, exercise_repo, user_id):
+        """CreateExercise respects is_custom=False when explicitly passed."""
+        use_case = CreateExercise(exercise_repo)
+
+        exercise = use_case.execute(user_id, "Bench Press", is_custom=False)
+
+        assert exercise.is_custom is False
+
+    def test_is_custom_true_is_respected(self, exercise_repo, user_id):
+        """CreateExercise respects is_custom=True when explicitly passed."""
+        use_case = CreateExercise(exercise_repo)
+
+        exercise = use_case.execute(user_id, "Bench Press", is_custom=True)
+
+        assert exercise.is_custom is True
+
+
+# ============================================================================
+# TestListByUserCustomOnly
+# ============================================================================
+
+
+class TestListByUserCustomOnly:
+    """Tests for list_by_user_custom_only repository method."""
+
+    def test_returns_only_custom_exercises(self, exercise_repo, user_id):
+        """list_by_user_custom_only returns only exercises with is_custom=True for the user."""
+        create_use_case = CreateExercise(exercise_repo)
+        custom_ex = create_use_case.execute(user_id, "Bench Press", is_custom=True)
+        non_custom_ex = create_use_case.execute(user_id, "Deadlift", is_custom=False)
+
+        custom_only = exercise_repo.list_by_user_custom_only(user_id)
+
+        assert len(custom_only) == 1
+        assert custom_only[0].id == custom_ex.id
+        assert custom_only[0].name == "Bench Press"
+        assert custom_only[0].is_custom is True
+
+    def test_excludes_non_custom_exercises(self, exercise_repo, user_id):
+        """list_by_user_custom_only excludes exercises with is_custom=False."""
+        create_use_case = CreateExercise(exercise_repo)
+        create_use_case.execute(user_id, "Bench Press", is_custom=True)
+        create_use_case.execute(user_id, "Deadlift", is_custom=False)
+        create_use_case.execute(user_id, "Squats", is_custom=True)
+
+        custom_only = exercise_repo.list_by_user_custom_only(user_id)
+
+        assert len(custom_only) == 2
+        names = {e.name for e in custom_only}
+        assert names == {"Bench Press", "Squats"}
+        assert all(e.is_custom for e in custom_only)
+
+    def test_excludes_other_users_exercises(self, exercise_repo, user_id, other_user_id):
+        """list_by_user_custom_only excludes other users' exercises even if they are custom."""
+        create_use_case = CreateExercise(exercise_repo)
+        user_custom = create_use_case.execute(user_id, "Bench Press", is_custom=True)
+        other_custom = create_use_case.execute(other_user_id, "Deadlift", is_custom=True)
+
+        custom_only = exercise_repo.list_by_user_custom_only(user_id)
+
+        assert len(custom_only) == 1
+        assert custom_only[0].id == user_custom.id
+        assert custom_only[0].user_id == user_id
+
+    def test_empty_when_no_custom_exercises(self, exercise_repo, user_id):
+        """list_by_user_custom_only returns empty list when user has no custom exercises."""
+        create_use_case = CreateExercise(exercise_repo)
+        create_use_case.execute(user_id, "Bench Press", is_custom=False)
+        create_use_case.execute(user_id, "Deadlift", is_custom=False)
+
+        custom_only = exercise_repo.list_by_user_custom_only(user_id)
+
+        assert custom_only == []
+
+    def test_empty_when_user_has_no_exercises(self, exercise_repo, user_id):
+        """list_by_user_custom_only returns empty list when user has no exercises at all."""
+        custom_only = exercise_repo.list_by_user_custom_only(user_id)
+
+        assert custom_only == []

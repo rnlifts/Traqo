@@ -181,3 +181,51 @@ class TestExerciseLibraryRoutes:
         assert response.status_code == 200
         data = response.json()
         assert data["muscle_groups"] == ["Back", "Chest"]  # Sorted
+
+    def test_search_includes_video_url_field(self, client, auth_headers, test_session_factory):
+        """Search results include video_url field for exercises with YouTube links."""
+        session = test_session_factory()
+        item = ExerciseLibraryItemModel(
+            name="Bench Press",
+            muscle_group="Chest",
+            equipment="Barbell",
+            video_url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            image_url=None,
+        )
+        session.add(item)
+        session.commit()
+        session.close()
+
+        response = client.get(
+            "/api/exercise-library",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert "video_url" in data[0]
+        assert data[0]["video_url"] == "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+
+    def test_search_video_url_null_when_not_set(self, client, auth_headers, test_session_factory):
+        """Search results have video_url=null when exercise has no video URL."""
+        session = test_session_factory()
+        item = ExerciseLibraryItemModel(
+            name="Bench Press",
+            muscle_group="Chest",
+            equipment="Barbell",
+            video_url=None,
+            image_url=None,
+        )
+        session.add(item)
+        session.commit()
+        session.close()
+
+        response = client.get(
+            "/api/exercise-library",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert "video_url" in data[0]
+        assert data[0]["video_url"] is None

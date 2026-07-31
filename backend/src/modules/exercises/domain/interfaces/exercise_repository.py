@@ -17,6 +17,11 @@ class ExerciseRepository(ABC):
         pass
 
     @abstractmethod
+    def list_by_user_custom_only(self, user_id: int) -> list[Exercise]:
+        """Get only custom exercises for a user. Returns empty list if none exist."""
+        pass
+
+    @abstractmethod
     def get_by_id(self, exercise_id: int) -> Exercise | None:
         """Retrieve an exercise by id. Returns None if not found."""
         pass
@@ -34,4 +39,14 @@ class ExerciseRepository(ABC):
     @abstractmethod
     def exists_by_user_and_name(self, user_id: int, name: str) -> bool:
         """Check if an exercise with the given name already exists for the user."""
+        pass
+
+    @abstractmethod
+    def exists_by_user_and_name_excluding_id(self, user_id: int, name: str, exclude_id: int) -> bool:
+        """Check if an exercise with the given name exists for the user, excluding a specific exercise id."""
+        pass
+
+    @abstractmethod
+    def update(self, exercise: Exercise) -> Exercise:
+        """Update an existing exercise. Returns the updated exercise."""
         pass

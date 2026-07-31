@@ -9,9 +9,16 @@ class LibraryExerciseResponse(BaseModel):
     muscle_group: str
     equipment: str | None = None
     thumbnail_url: str | None = None
+    video_url: str | None = None
 
 
 class MuscleGroupsResponse(BaseModel):
     """List of muscle groups."""
 
     muscle_groups: list[str]
+
+
+class EquipmentOptionsResponse(BaseModel):
+    """List of equipment options."""
+
+    equipment_options: list[str]

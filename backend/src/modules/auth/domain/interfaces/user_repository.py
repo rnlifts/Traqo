@@ -20,3 +20,13 @@ class UserRepository(ABC):
     def exists_by_username(self, username: str) -> bool:
         """Check if a username already exists."""
         pass
+
+    @abstractmethod
+    def record_failed_login(self, user: User) -> None:
+        """Increment failed login attempts and set lockout if threshold reached."""
+        pass
+
+    @abstractmethod
+    def reset_login_attempts(self, user: User) -> None:
+        """Clear failed login attempts and lockout state on successful login."""
+        pass

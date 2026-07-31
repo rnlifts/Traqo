@@ -10,6 +10,7 @@ from sqlalchemy.orm import sessionmaker, Session
 
 from src.app import app
 from src.infrastructure.database import Base, get_db
+from src.infrastructure.rate_limiter import limiter
 from src.modules.auth.infrastructure.models.user_model import UserModel
 
 
@@ -50,9 +51,15 @@ def client(test_engine, test_session_factory):
         finally:
             db.close()
 
+    # Disable rate limiter for tests
+    original_enabled = limiter.enabled
+    limiter.enabled = False
+
     app.dependency_overrides[get_db] = override_get_db
     yield TestClient(app)
     app.dependency_overrides.clear()
+
+    limiter.enabled = original_enabled
 
 
 # ============================================================================
@@ -309,3 +316,134 @@ class TestRateLimiting:
         )
         # Should either succeed or be rate-limited (429), not 500 or other errors
         assert response.status_code in (200, 401, 429)
+
+
+class TestLoginLockout:
+    """Tests for per-account login lockout after failed attempts."""
+
+    def test_lockout_after_max_failed_attempts(self, client):
+        """Account locks after LOGIN_LOCKOUT_MAX_ATTEMPTS (5) wrong-password attempts."""
+        # Register a user
+        client.post(
+            "/api/auth/register",
+            json={
+                "display_name": "LockoutTest",
+                "username": "lockout_test_user",
+                "password": "correct_pass",
+            },
+        )
+
+        # Make 5 failed login attempts (wrong password)
+        for i in range(5):
+            response = client.post(
+                "/api/auth/login",
+                json={
+                    "username": "lockout_test_user",
+                    "password": f"wrong_pass_{i}",
+                },
+            )
+            assert response.status_code == 401, f"Attempt {i+1} should fail with 401"
+
+        # 6th attempt should be locked (429), even with correct password
+        response = client.post(
+            "/api/auth/login",
+            json={
+                "username": "lockout_test_user",
+                "password": "correct_pass",
+            },
+        )
+        assert response.status_code == 429, "Account should be locked after max attempts"
+
+    def test_successful_login_resets_failed_attempts(self, client):
+        """Successful login clears failed-attempt counter and lockout."""
+        # Register a user
+        client.post(
+            "/api/auth/register",
+            json={
+                "display_name": "ResetTest",
+                "username": "reset_test_user",
+                "password": "correct_pass",
+            },
+        )
+
+        # Make 3 failed attempts
+        for _ in range(3):
+            client.post(
+                "/api/auth/login",
+                json={
+                    "username": "reset_test_user",
+                    "password": "wrong_pass",
+                },
+            )
+
+        # Successful login should succeed (counter not yet at max)
+        response = client.post(
+            "/api/auth/login",
+            json={
+                "username": "reset_test_user",
+                "password": "correct_pass",
+            },
+        )
+        assert response.status_code == 200, "Successful login should work"
+        assert "token" in response.json()
+
+        # After successful login, counter should be reset
+        # Make 5 new failed attempts (should not lock since counter was reset)
+        for i in range(5):
+            response = client.post(
+                "/api/auth/login",
+                json={
+                    "username": "reset_test_user",
+                    "password": "wrong_pass",
+                },
+            )
+            if i < 4:
+                assert response.status_code == 401, f"Attempt {i+1} should fail with 401"
+            else:
+                # 5th attempt hits the limit
+                assert response.status_code == 401
+
+        # 6th attempt should lock
+        response = client.post(
+            "/api/auth/login",
+            json={
+                "username": "reset_test_user",
+                "password": "correct_pass",
+            },
+        )
+        assert response.status_code == 429, "Account should be locked after new 5 attempts"
+
+    def test_nonexistent_username_does_not_create_lockout_state(self, client):
+        """Attempting to log in with nonexistent username does not create lockout state."""
+        # Register a real user
+        client.post(
+            "/api/auth/register",
+            json={
+                "display_name": "RealUser",
+                "username": "real_user",
+                "password": "real_pass",
+            },
+        )
+
+        # Make 10 failed attempts with a nonexistent username
+        for _ in range(10):
+            response = client.post(
+                "/api/auth/login",
+                json={
+                    "username": "nonexistent_user",
+                    "password": "any_password",
+                },
+            )
+            assert response.status_code == 401, "Nonexistent user should return 401"
+
+        # Real user should still be able to log in (no lockout state created)
+        response = client.post(
+            "/api/auth/login",
+            json={
+                "username": "real_user",
+                "password": "real_pass",
+            },
+        )
+        assert response.status_code == 200, "Real user should still be able to log in"
+        assert "token" in response.json()
+

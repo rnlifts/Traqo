@@ -10,6 +10,9 @@ import { useToast } from "../../components/Toast";
 import { useUnsavedChanges } from "../../contexts/UnsavedChangesContext";
 import { DurationInput } from "../../components/DurationInput";
 import { secondsToHMS } from "../../utils/duration";
+import { getYoutubeThumbnailUrl } from "../../utils/youtube";
+import { ExerciseWorkoutPreview } from "../../components/ExerciseWorkoutPreview";
+import { Modal } from "../../components/Modal";
 
 interface Exercise {
   id: number;
@@ -32,6 +35,9 @@ interface WorkoutExercise {
   set_targets: { set_number: number; target_reps: string | null; target_weight: number | null; target_duration_seconds: number | null }[];
   notes?: string;
   exercise_name?: string;
+  video_url?: string | null;
+  muscle_group?: string | null;
+  equipment?: string | null;
 }
 
 interface ActiveWorkoutProps {
@@ -98,7 +104,16 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
   const [panelReps, setPanelReps] = useState("");
   const [panelDuration, setPanelDuration] = useState<number | null>(null);
   const [panelNotes, setPanelNotes] = useState("");
+
+  // Preview panel state (independent from set-logging panel)
+  const [previewingExerciseId, setPreviewingExerciseId] = useState<number | null>(null);
   const [showNoteInput, setShowNoteInput] = useState(false);
+
+  // Mobile viewport detection (768px breakpoint)
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Pip hover state tracking
+  const [hoveredPip, setHoveredPip] = useState<string | null>(null);
 
   const { Toast, showToast } = useToast();
 
@@ -114,6 +129,22 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
       setHasUnsavedChanges(false);
     }
   }, [workoutFinished, setHasUnsavedChanges]);
+
+  // Mobile viewport detection (768px breakpoint)
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 768px)");
+
+    const handleChange = (e: MediaQueryListEvent) => {
+      setIsMobile(e.matches);
+    };
+
+    // Set initial state
+    setIsMobile(mediaQuery.matches);
+
+    // Listen for changes
+    mediaQuery.addEventListener("change", handleChange);
+    return () => mediaQuery.removeEventListener("change", handleChange);
+  }, []);
 
   // Build exercise name lookup
   const exerciseNames: Record<number, string> = {};
@@ -498,7 +529,9 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
       if (existingExercise) {
         exerciseId = existingExercise.id;
       } else {
-        const newExercise = await exercisesApi.create(addExerciseName);
+        // This is a library exercise being added to a plan for the first time
+        // Mark it as not custom (is_custom: false) so it doesn't pollute the Custom Exercises tab
+        const newExercise = await exercisesApi.create({ name: addExerciseName, is_custom: false });
         exerciseId = newExercise.id;
       }
 
@@ -805,14 +838,16 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
         </div>
       )}
 
-      {/* Exercise cards */}
-      <div style={{ display: "grid", gap: "20px", marginBottom: "20px" }}>
-        {planExercises.length === 0 ? (
-          <div className="empty-state">
-            <p>No exercises in this plan</p>
-          </div>
-        ) : (
-          planExercises.map((we) => {
+      {/* Main content: two-column layout with cards and side panel */}
+      <div style={{ display: "flex", gap: "20px", marginBottom: "20px" }}>
+        {/* Exercise cards column */}
+        <div style={{ display: "grid", gap: "20px", flex: 1 }}>
+          {planExercises.length === 0 ? (
+            <div className="empty-state">
+              <p>No exercises in this plan</p>
+            </div>
+          ) : (
+            planExercises.map((we) => {
             const exerciseName = we.exercise_name || exerciseNames[we.exercise_id] || `Exercise ${we.exercise_id}`;
             const exerciseSets = getExerciseSets(we.id);
             const currentSetNumber = activePanelExerciseId === we.id && activePanelSetNumber !== null ? activePanelSetNumber : 1;
@@ -822,8 +857,57 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
 
             return (
               <div key={we.id} className="card" style={{ padding: "12px" }}>
-                {/* Exercise name */}
-                <h3 style={{ margin: "0 0 8px 0", fontSize: "18px" }}>{exerciseName}</h3>
+                {/* Exercise header with thumbnail and name */}
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "12px",
+                    alignItems: "flex-start",
+                    marginBottom: "8px",
+                    cursor: "pointer",
+                  }}
+                  onClick={() => setPreviewingExerciseId(we.id)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      setPreviewingExerciseId(we.id);
+                    }
+                  }}
+                  aria-label={`Preview ${exerciseName}`}
+                >
+                  {/* Thumbnail */}
+                  <div
+                    style={{
+                      width: "40px",
+                      height: "40px",
+                      flexShrink: 0,
+                      borderRadius: "4px",
+                      overflow: "hidden",
+                      backgroundColor: "var(--bg)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {getYoutubeThumbnailUrl(we.video_url) ? (
+                      <img
+                        src={getYoutubeThumbnailUrl(we.video_url)!}
+                        alt={exerciseName}
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                        }}
+                      />
+                    ) : (
+                      <span style={{ fontSize: "20px" }}>🏋️</span>
+                    )}
+                  </div>
+
+                  {/* Exercise name */}
+                  <h3 style={{ margin: 0, fontSize: "18px", flex: 1 }}>{exerciseName}</h3>
+                </div>
 
                 {/* Target line */}
                 {targetLine && (
@@ -898,10 +982,13 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                               })()
                             : `Set ${setNumber}, not logged`
                         }
+                        onMouseEnter={() => setHoveredPip(`pip-${setNumber}`)}
+                        onMouseLeave={() => setHoveredPip(null)}
                         style={{
-                          width: "44px",
+                          minWidth: "70px",
                           height: "44px",
-                          borderRadius: "50%",
+                          padding: "0 12px",
+                          borderRadius: "22px",
                           border: isLogged ? `2px solid var(--success)` : "2px solid var(--border)",
                           backgroundColor: isLogged ? "var(--success)" : "var(--surface)",
                           color: isLogged ? "var(--surface)" : "var(--ink-primary)",
@@ -911,10 +998,14 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
+                          gap: "6px",
                           transition: "all 0.2s",
+                          boxShadow: hoveredPip === `pip-${setNumber}` ? "0 4px 12px rgba(0, 0, 0, 0.15)" : "0 2px 4px rgba(0, 0, 0, 0.08)",
+                          transform: hoveredPip === `pip-${setNumber}` ? "translateY(-2px)" : "translateY(0)",
                         }}
                       >
-                        {isLogged ? "✓" : setNumber}
+                        <span>Set {setNumber}</span>
+                        {isLogged && <span>✓</span>}
                       </button>
                     );
                   })}
@@ -924,10 +1015,13 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                     <button
                       onClick={() => openSetPanel(we.id, Math.max(pipCount, exerciseSets.length) + 1)}
                       aria-label={`Add extra set`}
+                      onMouseEnter={() => setHoveredPip("add-set")}
+                      onMouseLeave={() => setHoveredPip(null)}
                       style={{
-                        width: "44px",
+                        minWidth: "70px",
                         height: "44px",
-                        borderRadius: "50%",
+                        padding: "0 12px",
+                        borderRadius: "22px",
                         border: "2px dashed var(--border)",
                         backgroundColor: "var(--surface)",
                         color: "var(--ink-primary)",
@@ -937,6 +1031,8 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                         alignItems: "center",
                         justifyContent: "center",
                         transition: "all 0.2s",
+                        boxShadow: hoveredPip === "add-set" ? "0 4px 12px rgba(0, 0, 0, 0.15)" : "0 2px 4px rgba(0, 0, 0, 0.08)",
+                        transform: hoveredPip === "add-set" ? "translateY(-2px)" : "translateY(0)",
                       }}
                     >
                       +
@@ -1261,7 +1357,76 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
             );
           })
         )}
+        </div>
+
+        {/* Preview side panel (desktop only) */}
+        {!isMobile && (
+          <div
+            style={{
+              width: "320px",
+              flexShrink: 0,
+              borderLeft: "1px solid var(--border)",
+              paddingLeft: "20px",
+            }}
+          >
+            {previewingExerciseId !== null ? (
+              (() => {
+                const selectedExercise = planExercises.find((we) => we.id === previewingExerciseId);
+                if (!selectedExercise) return null;
+                const exerciseName = selectedExercise.exercise_name || exerciseNames[selectedExercise.exercise_id] || `Exercise ${selectedExercise.exercise_id}`;
+                return (
+                  <ExerciseWorkoutPreview
+                    name={exerciseName}
+                    video_url={selectedExercise.video_url || null}
+                    muscle_group={selectedExercise.muscle_group || null}
+                    equipment={selectedExercise.equipment || null}
+                  />
+                );
+              })()
+            ) : (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "8px",
+                  color: "var(--text-h)",
+                  fontSize: "14px",
+                  textAlign: "center",
+                  minHeight: "200px",
+                }}
+              >
+                <div style={{ fontSize: "32px" }}>👁️</div>
+                <div>Click exercise to preview</div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* Preview modal (mobile only) */}
+      {isMobile && previewingExerciseId !== null && (
+        (() => {
+          const selectedExercise = planExercises.find((we) => we.id === previewingExerciseId);
+          if (!selectedExercise) return null;
+          const exerciseName = selectedExercise.exercise_name || exerciseNames[selectedExercise.exercise_id] || `Exercise ${selectedExercise.exercise_id}`;
+          return (
+            <Modal
+              isOpen={true}
+              onClose={() => setPreviewingExerciseId(null)}
+              title={exerciseName}
+            >
+              <ExerciseWorkoutPreview
+                name={exerciseName}
+                video_url={selectedExercise.video_url || null}
+                muscle_group={selectedExercise.muscle_group || null}
+                equipment={selectedExercise.equipment || null}
+              />
+            </Modal>
+          );
+        })()
+      )}
 
       {/* Plan name editor */}
       <div style={{ marginBottom: "20px", display: "flex", alignItems: "center", gap: "8px" }}>

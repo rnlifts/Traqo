@@ -1,5 +1,7 @@
+from datetime import datetime
+
 from ...domain.entities.user import User
-from ...domain.exceptions import InvalidCredentialsError
+from ...domain.exceptions import InvalidCredentialsError, AccountLockedError
 from ...domain.interfaces.password_hasher import PasswordHasher
 from ...domain.interfaces.user_repository import UserRepository
 
@@ -24,12 +26,21 @@ class LoginUser:
 
         Raises:
             InvalidCredentialsError: if username not found or password is wrong
+            AccountLockedError: if account is locked due to too many failed attempts
         """
         user = self.user_repository.get_by_username(username)
         if not user:
             raise InvalidCredentialsError("Invalid username or password")
 
+        # Check if account is locked
+        if user.locked_until and user.locked_until > datetime.utcnow():
+            raise AccountLockedError("Account is locked due to too many failed login attempts")
+
+        # Verify password
         if not self.password_hasher.verify(password, user.password_hash):
+            self.user_repository.record_failed_login(user)
             raise InvalidCredentialsError("Invalid username or password")
 
+        # Successful login: reset failed attempts
+        self.user_repository.reset_login_attempts(user)
         return user

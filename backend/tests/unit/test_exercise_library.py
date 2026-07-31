@@ -4,6 +4,7 @@ import pytest
 from src.modules.exercise_library.domain.entities.exercise_library_item import ExerciseLibraryItem
 from src.modules.exercise_library.application.use_cases.search_exercises import SearchExercises
 from src.modules.exercise_library.application.use_cases.get_muscle_groups import GetMuscleGroups
+from src.modules.exercise_library.application.use_cases.get_equipment_options import GetEquipmentOptions
 
 
 class TestSearchExercises:
@@ -163,3 +164,57 @@ class TestGetMuscleGroups:
 
         # Verify
         assert groups == []
+
+
+class TestGetEquipmentOptions:
+    """Tests for GetEquipmentOptions use case."""
+
+    def test_returns_sorted_distinct_equipment(self, in_memory_exercise_library_repo):
+        """Returns sorted, distinct equipment values."""
+        items = [
+            ExerciseLibraryItem(name="Bench Press", muscle_group="Chest", equipment="Barbell", video_url=None, image_url=None),
+            ExerciseLibraryItem(name="Dumbbell Press", muscle_group="Chest", equipment="Dumbbell", video_url=None, image_url=None),
+            ExerciseLibraryItem(name="Machine Press", muscle_group="Chest", equipment="Machine", video_url=None, image_url=None),
+            ExerciseLibraryItem(name="Bodyweight Push-up", muscle_group="Chest", equipment="Bodyweight", video_url=None, image_url=None),
+            ExerciseLibraryItem(name="Cable Fly", muscle_group="Chest", equipment="Cable", video_url=None, image_url=None),
+            # Duplicate equipment
+            ExerciseLibraryItem(name="Incline Dumbbell Press", muscle_group="Chest", equipment="Dumbbell", video_url=None, image_url=None),
+        ]
+        for item in items:
+            in_memory_exercise_library_repo.upsert(item)
+
+        use_case = GetEquipmentOptions(in_memory_exercise_library_repo)
+
+        # Execute
+        equipment = use_case.execute()
+
+        # Verify
+        assert equipment == ["Barbell", "Bodyweight", "Cable", "Dumbbell", "Machine"]  # Sorted, no duplicates
+
+    def test_empty_library(self, in_memory_exercise_library_repo):
+        """Empty library returns empty list."""
+        use_case = GetEquipmentOptions(in_memory_exercise_library_repo)
+
+        # Execute
+        equipment = use_case.execute()
+
+        # Verify
+        assert equipment == []
+
+    def test_filters_null_equipment(self, in_memory_exercise_library_repo):
+        """Returns only non-null equipment values."""
+        items = [
+            ExerciseLibraryItem(name="Bench Press", muscle_group="Chest", equipment="Barbell", video_url=None, image_url=None),
+            ExerciseLibraryItem(name="Unknown Exercise", muscle_group="Chest", equipment=None, video_url=None, image_url=None),
+            ExerciseLibraryItem(name="Dumbbell Press", muscle_group="Chest", equipment="Dumbbell", video_url=None, image_url=None),
+        ]
+        for item in items:
+            in_memory_exercise_library_repo.upsert(item)
+
+        use_case = GetEquipmentOptions(in_memory_exercise_library_repo)
+
+        # Execute
+        equipment = use_case.execute()
+
+        # Verify - should only contain non-null equipment
+        assert equipment == ["Barbell", "Dumbbell"]

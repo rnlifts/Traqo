@@ -6,8 +6,9 @@ from src.infrastructure.security.oauth2 import get_current_user_id
 from ..application.use_cases.create_exercise import CreateExercise
 from ..application.use_cases.delete_exercise import DeleteExercise
 from ..application.use_cases.list_exercises import ListExercises
+from ..application.use_cases.update_exercise import UpdateExercise
 from ..infrastructure.repositories.exercise_repository_impl import ExerciseRepositoryImpl
-from .schemas import CreateExerciseRequest, ExerciseResponse
+from .schemas import CreateExerciseRequest, UpdateExerciseRequest, ExerciseResponse
 
 exercises_router = APIRouter(prefix="/api/exercises", tags=["exercises"])
 
@@ -21,20 +22,80 @@ async def create_exercise(
     """Create a new exercise for the authenticated user."""
     exercise_repository = ExerciseRepositoryImpl(db)
     use_case = CreateExercise(exercise_repository)
-    exercise = use_case.execute(user_id, req.name, category=req.category, logging_type=req.logging_type)
-    return ExerciseResponse(id=exercise.id, name=exercise.name, category=exercise.category, logging_type=exercise.logging_type)
+    exercise = use_case.execute(
+        user_id,
+        req.name,
+        muscle_group=req.muscle_group,
+        logging_type=req.logging_type,
+        equipment=req.equipment,
+        video_url=req.video_url,
+        is_custom=req.is_custom,
+    )
+    return ExerciseResponse(
+        id=exercise.id,
+        name=exercise.name,
+        muscle_group=exercise.muscle_group,
+        logging_type=exercise.logging_type,
+        equipment=exercise.equipment,
+        video_url=exercise.video_url,
+        is_custom=exercise.is_custom,
+    )
 
 
 @exercises_router.get("", response_model=list[ExerciseResponse])
 async def list_exercises(
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
+    custom_only: bool = False,
 ):
-    """List all exercises for the authenticated user."""
+    """List exercises for the authenticated user."""
     exercise_repository = ExerciseRepositoryImpl(db)
-    use_case = ListExercises(exercise_repository)
-    exercises = use_case.execute(user_id)
-    return [ExerciseResponse(id=e.id, name=e.name, category=e.category, logging_type=e.logging_type) for e in exercises]
+    if custom_only:
+        exercises = exercise_repository.list_by_user_custom_only(user_id)
+    else:
+        use_case = ListExercises(exercise_repository)
+        exercises = use_case.execute(user_id)
+    return [
+        ExerciseResponse(
+            id=e.id,
+            name=e.name,
+            muscle_group=e.muscle_group,
+            logging_type=e.logging_type,
+            equipment=e.equipment,
+            video_url=e.video_url,
+            is_custom=e.is_custom,
+        )
+        for e in exercises
+    ]
+
+
+@exercises_router.put("/{exercise_id}", response_model=ExerciseResponse, status_code=status.HTTP_200_OK)
+async def update_exercise(
+    exercise_id: int,
+    req: UpdateExerciseRequest,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """Update an exercise's fields (only the owner can update it)."""
+    exercise_repository = ExerciseRepositoryImpl(db)
+    use_case = UpdateExercise(exercise_repository)
+    exercise = use_case.execute(
+        exercise_id,
+        user_id,
+        name=req.name,
+        muscle_group=req.muscle_group,
+        equipment=req.equipment,
+        video_url=req.video_url,
+    )
+    return ExerciseResponse(
+        id=exercise.id,
+        name=exercise.name,
+        muscle_group=exercise.muscle_group,
+        logging_type=exercise.logging_type,
+        equipment=exercise.equipment,
+        video_url=exercise.video_url,
+        is_custom=exercise.is_custom,
+    )
 
 
 @exercises_router.delete("/{exercise_id}", status_code=status.HTTP_200_OK)

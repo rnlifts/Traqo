@@ -26,6 +26,7 @@ export interface WorkoutExercise {
   set_targets: { set_number: number; target_reps: string | null; target_weight: number | null; target_duration_seconds: number | null }[];
   notes?: string;
   exercise_name?: string;
+  video_url?: string | null;
 }
 
 export interface PlanDay {

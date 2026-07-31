@@ -7,7 +7,17 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 
+from src.config.settings import settings
 from src.infrastructure.database import Base
+
+
+@pytest.fixture(scope="function", autouse=True)
+def set_test_environment():
+    """Ensure ENVIRONMENT is set to 'test' for all tests to disable rate limiting."""
+    original_env = settings.ENVIRONMENT
+    settings.ENVIRONMENT = "test"
+    yield
+    settings.ENVIRONMENT = original_env
 from src.modules.workouts.domain.entities.workout_plan import WorkoutPlan
 from src.modules.workouts.domain.entities.workout_exercise import WorkoutExercise
 from src.modules.workouts.domain.entities.plan_day import PlanDay
@@ -55,6 +65,24 @@ class InMemoryUserRepository(UserRepository):
 
     def exists_by_username(self, username: str) -> bool:
         return self.get_by_username(username) is not None
+
+    def record_failed_login(self, user: User) -> None:
+        """Increment failed login attempts and set lockout if threshold reached."""
+        from src.config.settings import settings
+        from datetime import datetime, timedelta
+
+        if user.id in self.users:
+            self.users[user.id].failed_login_attempts += 1
+            if self.users[user.id].failed_login_attempts >= settings.LOGIN_LOCKOUT_MAX_ATTEMPTS:
+                self.users[user.id].locked_until = datetime.utcnow() + timedelta(
+                    minutes=settings.LOGIN_LOCKOUT_DURATION_MINUTES
+                )
+
+    def reset_login_attempts(self, user: User) -> None:
+        """Clear failed login attempts and lockout state on successful login."""
+        if user.id in self.users:
+            self.users[user.id].failed_login_attempts = 0
+            self.users[user.id].locked_until = None
 
 
 # ============================================================================
@@ -183,6 +211,9 @@ class InMemoryExerciseRepository(ExerciseRepository):
     def list_by_user(self, user_id: int) -> list[Exercise]:
         return [e for e in self.exercises.values() if e.user_id == user_id]
 
+    def list_by_user_custom_only(self, user_id: int) -> list[Exercise]:
+        return [e for e in self.exercises.values() if e.user_id == user_id and e.is_custom]
+
     def get_by_id(self, exercise_id: int) -> Exercise | None:
         return self.exercises.get(exercise_id)
 
@@ -198,6 +229,18 @@ class InMemoryExerciseRepository(ExerciseRepository):
             e.user_id == user_id and e.name.lower() == name.lower()
             for e in self.exercises.values()
         )
+
+    def exists_by_user_and_name_excluding_id(self, user_id: int, name: str, exclude_id: int) -> bool:
+        return any(
+            e.user_id == user_id and e.name.lower() == name.lower() and e.id != exclude_id
+            for e in self.exercises.values()
+        )
+
+    def update(self, exercise: Exercise) -> Exercise:
+        if exercise.id in self.exercises:
+            self.exercises[exercise.id] = exercise
+            return exercise
+        return None
 
 
 # ============================================================================
@@ -485,6 +528,10 @@ class InMemoryExerciseLibraryItemRepository(ExerciseLibraryRepository):
     def get_distinct_muscle_groups(self) -> list[str]:
         groups = set(i.muscle_group for i in self.items.values())
         return sorted(list(groups))
+
+    def get_distinct_equipment(self) -> list[str]:
+        equipment_set = set(i.equipment for i in self.items.values() if i.equipment is not None)
+        return sorted(list(equipment_set))
 
     def upsert(self, item: ExerciseLibraryItem) -> ExerciseLibraryItem:
         # Find by (name, muscle_group)

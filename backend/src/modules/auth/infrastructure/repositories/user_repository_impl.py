@@ -44,6 +44,28 @@ class UserRepositoryImpl(UserRepository):
         """Check if a username already exists."""
         return self.session.query(UserModel).filter_by(username=username).first() is not None
 
+    def record_failed_login(self, user: User) -> None:
+        """Increment failed login attempts and set lockout if threshold reached."""
+        from src.config.settings import settings
+        from datetime import datetime, timedelta
+
+        model = self.session.get(UserModel, user.id)
+        model.failed_login_attempts += 1
+
+        if model.failed_login_attempts >= settings.LOGIN_LOCKOUT_MAX_ATTEMPTS:
+            model.locked_until = datetime.utcnow() + timedelta(
+                minutes=settings.LOGIN_LOCKOUT_DURATION_MINUTES
+            )
+
+        self.session.commit()
+
+    def reset_login_attempts(self, user: User) -> None:
+        """Clear failed login attempts and lockout state on successful login."""
+        model = self.session.get(UserModel, user.id)
+        model.failed_login_attempts = 0
+        model.locked_until = None
+        self.session.commit()
+
     def _model_to_entity(self, model: UserModel) -> User:
         """Convert a SQLAlchemy model to a domain entity."""
         return User(
@@ -52,4 +74,6 @@ class UserRepositoryImpl(UserRepository):
             display_name=model.display_name,
             password_hash=model.password_hash,
             created_at=model.created_at,
+            failed_login_attempts=model.failed_login_attempts,
+            locked_until=model.locked_until,
         )

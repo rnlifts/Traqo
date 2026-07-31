@@ -11,9 +11,13 @@ class User:
         password_hash: str,
         id: int | None = None,
         created_at: datetime | None = None,
+        failed_login_attempts: int = 0,
+        locked_until: datetime | None = None,
     ):
         self.id = id
         self.username = username
         self.display_name = display_name
         self.password_hash = password_hash
         self.created_at = created_at or datetime.utcnow()
+        self.failed_login_attempts = failed_login_attempts
+        self.locked_until = locked_until

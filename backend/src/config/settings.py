@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     # CORS — comma-separated list of allowed frontend origins
     CORS_ORIGINS: str = "http://localhost:5173"
 
+    # Login lockout — per-account failed-attempt tracking
+    LOGIN_LOCKOUT_MAX_ATTEMPTS: int = 5
+    LOGIN_LOCKOUT_DURATION_MINUTES: int = 15
+
     class Config:
         env_file = ".env"
 

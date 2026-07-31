@@ -134,6 +134,9 @@ class WorkoutExerciseDetailedResponse(BaseModel):
     has_reps: bool = True
     has_weight: bool = True
     has_duration: bool = False
+    video_url: str | None = None
+    muscle_group: str | None = None
+    equipment: str | None = None
     set_targets: list[SetTargetResponse] = []
 
 

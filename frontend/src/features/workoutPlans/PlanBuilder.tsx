@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import client from '../../api/client';
 import {
@@ -22,7 +22,9 @@ import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { useToast } from '../../components/Toast';
 import { DurationInput } from '../../components/DurationInput';
 import { TrashIcon, InfoIcon } from '../../components/icons';
-import { ExerciseLibrarySidebar } from '../exerciseLibrary/ExerciseLibrarySidebar';
+import { ExerciseLibrarySidebar, type SelectedExerciseInfo } from '../exerciseLibrary/ExerciseLibrarySidebar';
+import { ExercisePreviewPanel } from '../../components/ExercisePreviewPanel';
+import { getYoutubeThumbnailUrl } from '../../utils/youtube';
 
 interface PlanDraft {
   name: string;
@@ -99,6 +101,10 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
     dayId?: number;
     exerciseId?: number;
   }>({ isOpen: false, type: 'day' });
+
+  // Exercise preview panel state
+  const [selectedPreview, setSelectedPreview] = useState<{ name: string; video_url: string | null } | null>(null);
+  const pageContainerRef = useRef<HTMLDivElement>(null);
 
   // Per-set override UI state
   const [varyBySetRows, setVaryBySetRows] = useState<Set<number>>(new Set());
@@ -360,7 +366,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
   // Core logic: find-or-create exercise and add to current day
   // Shared by both form submission and sidebar quick-add
   async function addExerciseToCurrentDay(
-    name: string,
+    exerciseInfo: SelectedExerciseInfo,
     targetSetsValue: string | null,
     targetRepsValue: string | null,
     targetWeightValue: string | null,
@@ -370,6 +376,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
     hasDuration: boolean,
     notesValue: string,
   ) {
+    const name = exerciseInfo.name;
     if (!name.trim()) throw new Error('Exercise name required');
 
     const days = getActiveDays();
@@ -385,7 +392,16 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
     if (existingExercise) {
       exerciseId = existingExercise.id;
     } else {
-      const newExercise = await exercisesApi.create({ name });
+      // This is a library exercise being added to a plan for the first time
+      // Mark it as not custom (is_custom: false) so it doesn't pollute the Custom Exercises tab
+      // Pass through video_url, muscle_group, and equipment from the library exercise
+      const newExercise = await exercisesApi.create({
+        name,
+        video_url: exerciseInfo.video_url,
+        muscle_group: exerciseInfo.muscle_group,
+        equipment: exerciseInfo.equipment,
+        is_custom: false,
+      });
       exerciseId = newExercise.id;
       setAvailableExercises([...availableExercises, newExercise]);
     }
@@ -412,6 +428,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
         set_targets: [],
         notes: notesValue || '',
         exercise_name: name,
+        video_url: exerciseInfo.video_url || null,
       };
 
       if (draftUnitType === 'days') {
@@ -448,10 +465,10 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
   }
 
   // Quick-add from sidebar: add exercise immediately with default targets
-  async function handleQuickAddExercise(name: string) {
+  async function handleQuickAddExercise(exerciseInfo: SelectedExerciseInfo) {
     try {
       await addExerciseToCurrentDay(
-        name,
+        exerciseInfo,
         null, // targetSets: empty
         null, // targetReps: empty
         null, // targetWeight: empty
@@ -461,10 +478,18 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
         false, // has_duration: default to false
         '' // notes: empty
       );
-      showToast(`${name} added to ${draftUnitType === 'days' ? 'day' : 'week'}!`, 'success');
+      showToast(`${exerciseInfo.name} added to ${draftUnitType === 'days' ? 'day' : 'week'}!`, 'success');
     } catch (err) {
       setError((err as Error).message);
     }
+  }
+
+  // Handle exercise preview selection from sidebar or day list
+  function handlePreviewExercise(exerciseInfo: SelectedExerciseInfo) {
+    setSelectedPreview({
+      name: exerciseInfo.name,
+      video_url: exerciseInfo.video_url || null,
+    });
   }
 
   function handleExerciseCreated(exercise: Exercise) {
@@ -674,79 +699,90 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
   return (
     <div style={{ display: 'flex', height: '100vh' }}>
       {/* Main Content */}
-      <div className="page-container" style={{ flex: 1, overflowY: 'auto' }}>
-      <div style={{ marginBottom: '20px' }}>
-        <button
-          onClick={() => {
-            if (props.isCreateMode) {
-              setShowBackConfirm(true);
-            } else {
-              navigate('/workout-plans');
-            }
-          }}
-          className="btn btn-secondary"
-        >
-          ← Back
-        </button>
-      </div>
-
-      {error && (
-        <div
-          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}
-          className="error-message"
-        >
-          <span>{error}</span>
-          <button
-            onClick={() => setError('')}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: '#721c24',
-              fontSize: '20px',
-              cursor: 'pointer',
-              padding: '0 0 0 12px',
-            }}
-            aria-label="Dismiss error"
-          >
-            ×
-          </button>
-        </div>
-      )}
-
-      {/* Plan Name */}
-      <div style={{ marginBottom: '20px' }}>
-        {isRenamingPlan ? (
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <input
-              type="text"
-              value={renamePlanName}
-              onChange={(e) => setRenamePlanName(e.target.value)}
-              className="input-field"
-              style={{ flex: 1 }}
-            />
-            <button onClick={handleUpdatePlanName} className="btn btn-primary">
-              Save
-            </button>
+      <div ref={pageContainerRef} className="page-container" style={{ flex: 1, overflowY: 'auto' }}>
+      {/* Top Header with Back Button, Plan Name, and Preview Panel */}
+      <div style={{ display: 'flex', gap: '20px', marginBottom: '20px', alignItems: 'flex-start' }}>
+        {/* Left Column: Back Button and Plan Name */}
+        <div style={{ flex: 1 }}>
+          <div style={{ marginBottom: '20px' }}>
             <button
               onClick={() => {
-                setRenamePlanName(draftName);
-                setIsRenamingPlan(false);
+                if (props.isCreateMode) {
+                  setShowBackConfirm(true);
+                } else {
+                  navigate('/workout-plans');
+                }
               }}
               className="btn btn-secondary"
             >
-              Cancel
+              ← Back
             </button>
           </div>
-        ) : (
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h2 style={{ margin: 0 }}>{draftName}</h2>
-            {!props.isCreateMode && (
-              <button onClick={() => setIsRenamingPlan(true)} className="btn">
-                Rename
+
+          {error && (
+            <div
+              style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}
+              className="error-message"
+            >
+              <span>{error}</span>
+              <button
+                onClick={() => setError('')}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#721c24',
+                  fontSize: '20px',
+                  cursor: 'pointer',
+                  padding: '0 0 0 12px',
+                }}
+                aria-label="Dismiss error"
+              >
+                ×
               </button>
+            </div>
+          )}
+
+          {/* Plan Name */}
+          <div style={{ marginBottom: '20px' }}>
+            {isRenamingPlan ? (
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input
+                  type="text"
+                  value={renamePlanName}
+                  onChange={(e) => setRenamePlanName(e.target.value)}
+                  className="input-field"
+                  style={{ flex: 1 }}
+                />
+                <button onClick={handleUpdatePlanName} className="btn btn-primary">
+                  Save
+                </button>
+                <button
+                  onClick={() => {
+                    setRenamePlanName(draftName);
+                    setIsRenamingPlan(false);
+                  }}
+                  className="btn btn-secondary"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h2 style={{ margin: 0 }}>{draftName}</h2>
+                {!props.isCreateMode && (
+                  <button onClick={() => setIsRenamingPlan(true)} className="btn">
+                    Rename
+                  </button>
+                )}
+              </div>
             )}
           </div>
-        )}
+        </div>
+
+        {/* Right Column: Exercise Preview Panel */}
+        <div style={{ flexShrink: 0 }}>
+          <ExercisePreviewPanel selected={selectedPreview} />
+        </div>
       </div>
 
       {/* Week Rail (for weeks-type plans) */}
@@ -856,15 +892,59 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                     <div key={ex.id}>
                       <div
                         className="exercise-row"
+                        onClick={() => {
+                          handlePreviewExercise({
+                            name: ex.exercise_name || `Exercise ${ex.exercise_id}`,
+                            video_url: ex.video_url || null,
+                          });
+                          try {
+                            pageContainerRef.current?.scrollTo?.({ top: 0, behavior: 'smooth' });
+                          } catch {
+                            // Scroll may not be available in test environment
+                          }
+                        }}
                         style={{
                           opacity: isLinkedWeek ? 0.6 : 1,
                           pointerEvents: isLinkedWeek ? 'none' : 'auto',
+                          cursor: 'pointer',
                         }}
                       >
                         <div className="field-cell field-cell-name">
                           <span className="cell-label">Name</span>
-                          <div className="cell-static-value">
-                            {idx + 1}. {ex.exercise_name || `Exercise ${ex.exercise_id}`}
+                          <div className="cell-static-value" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            {getYoutubeThumbnailUrl(ex.video_url) ? (
+                              <img
+                                src={getYoutubeThumbnailUrl(ex.video_url)!}
+                                alt={ex.exercise_name || `Exercise ${ex.exercise_id}`}
+                                style={{
+                                  width: '40px',
+                                  height: '40px',
+                                  borderRadius: '4px',
+                                  objectFit: 'cover',
+                                  flexShrink: 0,
+                                }}
+                              />
+                            ) : (
+                              <div
+                                style={{
+                                  width: '40px',
+                                  height: '40px',
+                                  borderRadius: '4px',
+                                  backgroundColor: 'var(--border)',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  color: 'var(--text-h)',
+                                  fontSize: '18px',
+                                  flexShrink: 0,
+                                }}
+                              >
+                                🏋️
+                              </div>
+                            )}
+                            <span>
+                              {idx + 1}. {ex.exercise_name || `Exercise ${ex.exercise_id}`}
+                            </span>
                           </div>
                         </div>
                         <div className="field-cell">
@@ -873,6 +953,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                             type="number"
                             value={ex.target_sets || ''}
                             onChange={(e) => handleUpdateExercise(ex.id, 'sets', e.target.value ? Number(e.target.value) : null)}
+                            onClick={(e) => e.stopPropagation()}
                             placeholder="Sets"
                             className="input-field"
                             disabled={isLinkedWeek}
@@ -901,13 +982,17 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                                     });
                                   }
                                 }}
+                                onClick={(e) => e.stopPropagation()}
                                 placeholder="e.g. 10 or 10-12"
                                 className="input-field"
                                 disabled={isLinkedWeek}
                                 style={{ width: '140px' }}
                               />
                               <button
-                                onClick={() => handleUpdateExercise(ex.id, 'has_reps', false)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleUpdateExercise(ex.id, 'has_reps', false);
+                                }}
                                 className="field-remove-badge"
                                 disabled={isLinkedWeek}
                                 title="Cross out reps"
@@ -920,7 +1005,10 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                           <div className="field-cell">
                             <span className="cell-label">Reps</span>
                             <button
-                              onClick={() => handleUpdateExercise(ex.id, 'has_reps', true)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleUpdateExercise(ex.id, 'has_reps', true);
+                              }}
                               className="field-restore-chip"
                               disabled={isLinkedWeek}
                             >
@@ -951,13 +1039,17 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                                     });
                                   }
                                 }}
+                                onClick={(e) => e.stopPropagation()}
                                 placeholder="Weight"
                                 className="input-field"
                                 disabled={isLinkedWeek}
                                 style={{ width: '75px' }}
                               />
                               <button
-                                onClick={() => handleUpdateExercise(ex.id, 'has_weight', false)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleUpdateExercise(ex.id, 'has_weight', false);
+                                }}
                                 className="field-remove-badge"
                                 disabled={isLinkedWeek}
                                 title="Cross out weight"
@@ -970,7 +1062,10 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                           <div className="field-cell">
                             <span className="cell-label">Weight</span>
                             <button
-                              onClick={() => handleUpdateExercise(ex.id, 'has_weight', true)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleUpdateExercise(ex.id, 'has_weight', true);
+                              }}
                               className="field-restore-chip"
                               disabled={isLinkedWeek}
                             >
@@ -979,7 +1074,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                           </div>
                         )}
                         {ex.has_duration ? (
-                          <div className="field-cell">
+                          <div className="field-cell" onClick={(e) => e.stopPropagation()}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                               <span className="cell-label">Duration</span>
                               <span title="Target time to sustain this exercise (e.g. treadmill, plank) — not how long the set took." style={{ cursor: 'help', display: 'flex', alignItems: 'center' }}>
@@ -1010,7 +1105,10 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                           <div className="field-cell">
                             <span className="cell-label">Duration</span>
                             <button
-                              onClick={() => handleUpdateExercise(ex.id, 'has_duration', true)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleUpdateExercise(ex.id, 'has_duration', true);
+                              }}
                               className="field-restore-chip"
                               disabled={isLinkedWeek}
                             >
@@ -1024,6 +1122,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                             type="text"
                             value={ex.notes || ''}
                             onChange={(e) => handleUpdateExercise(ex.id, 'notes', e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
                             placeholder="Notes"
                             className="input-field"
                             disabled={isLinkedWeek}
@@ -1031,7 +1130,8 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                         </div>
                         <div className="row-actions">
                           <button
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation();
                               const newVaryBySet = !isVaryBySetMode;
                               if (newVaryBySet) {
                                 setVaryBySetRows((prev) => new Set([...prev, ex.id]));
@@ -1079,7 +1179,10 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                             Vary by set
                           </button>
                           <button
-                            onClick={() => setDeleteConfirm({ isOpen: true, type: 'exercise', dayId: currentDay.id, exerciseId: ex.id })}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteConfirm({ isOpen: true, type: 'exercise', dayId: currentDay.id, exerciseId: ex.id });
+                            }}
                             className="row-delete-btn"
                             disabled={isLinkedWeek}
                             title="Remove exercise"
@@ -1328,8 +1431,8 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
       </div>
 
       {/* Exercise Library Sidebar */}
-      <div style={{ width: '320px', maxWidth: '30vw', display: 'flex', flexDirection: 'column' }}>
-        <ExerciseLibrarySidebar onSelectExercise={handleQuickAddExercise} onExerciseCreated={handleExerciseCreated} />
+      <div style={{ width: '320px', maxWidth: '30vw', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+        <ExerciseLibrarySidebar onSelectExercise={handleQuickAddExercise} onExerciseCreated={handleExerciseCreated} onPreviewExercise={handlePreviewExercise} />
       </div>
     </div>
   );
