@@ -106,6 +106,10 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
   const [selectedPreview, setSelectedPreview] = useState<{ name: string; video_url: string | null } | null>(null);
   const pageContainerRef = useRef<HTMLDivElement>(null);
 
+  // Guards against a rapid double-tap on "+ Add" firing two create requests
+  // for the same exercise before the first one's response updates the cache.
+  const pendingAddsRef = useRef<Set<string>>(new Set());
+
   // Mobile detection
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
@@ -476,6 +480,9 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
 
   // Quick-add from sidebar: add exercise immediately with default targets
   async function handleQuickAddExercise(exerciseInfo: SelectedExerciseInfo) {
+    const key = exerciseInfo.name.toLowerCase();
+    if (pendingAddsRef.current.has(key)) return; // ignore rapid double-tap on the same exercise
+    pendingAddsRef.current.add(key);
     try {
       await addExerciseToCurrentDay(
         exerciseInfo,
@@ -491,6 +498,8 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
       showToast(`${exerciseInfo.name} added to ${draftUnitType === 'days' ? 'day' : 'week'}!`, 'success');
     } catch (err) {
       setError((err as Error).message);
+    } finally {
+      pendingAddsRef.current.delete(key);
     }
   }
 
