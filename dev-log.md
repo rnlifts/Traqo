@@ -3927,3 +3927,108 @@ Redesigned the set "pips" (set-logging buttons) from small circles to wider pill
 
 **Status: Task 67 COMPLETE.** Set pips redesigned from circles to pill shapes with "Set N" text labels and hover effects. Clearer visual affordance makes buttons obviously clickable. Both regular pips and extra-set "+" pip updated for consistency. Click behavior, color logic, and screen-reader labels all preserved.
 
+---
+
+## 2026-07-31 — Task 68: Mobile bottom navigation bar
+
+### What was done
+
+Replaced the hamburger-triggered slide-out sidebar with a fixed bottom navigation bar on mobile (≤768px), and relocated the user profile/logout into an avatar dropdown in the top bar.
+
+**Layout Changes:**
+- **Sidebar hiding:** Added `.sidebar { display: none; }` in 768px media query to hide desktop sidebar on mobile
+- **Top bar avatar button:** Replaced hamburger button with circular avatar button displaying user's first initial
+- **Avatar dropdown:** Added inline dropdown menu showing display name, @username, and logout button
+  - Click outside to close: added useRef + useEffect with mousedown listener to detect clicks outside dropdown
+  - Dropdown also closes when clicking bottom nav items via `handleNavClick` call
+- **Bottom navigation bar:** New fixed `nav.mobile-bottom-nav` with three items (Dashboard, Plans, History)
+  - Fixed to bottom of viewport (height: 64px, padding: 8px 0)
+  - Each nav item displays icon + label in column layout
+  - Active route highlighting matches existing sidebar link styling (accent color)
+  - Uses existing `isActivePath` logic from Layout.tsx for active state
+
+**CSS Updates (App.css):**
+- Added `.mobile-bottom-nav { display: none; }` at line 44 to hide by default (desktop)
+- Updated 768px media query block to:
+  - Hide `.hamburger-btn`, `.sidebar`, `.sidebar.open`, `.sidebar-scrim`
+  - Show `.mobile-bottom-nav` with flex layout (position: fixed, bottom: 0, full width)
+  - Add bottom padding to `.app-content` (72px) to prevent content hiding behind nav bar
+  - Style `.bottom-nav-item` with flex-direction: column, icon/label spacing, active-state color
+
+**No Regressions:**
+- Desktop (≥768px): sidebar renders normally, no bottom nav, no avatar dropdown (unchanged)
+- Navigation guard logic (`handleNavClick`, unsaved-changes prompt) still works from bottom nav
+- Desktop sidebar logout button unchanged; mobile logout in dropdown menu
+
+### Verification
+
+- ✅ **All 133 frontend tests pass** (no test updates needed)
+- ✅ **TypeScript clean** (`npx tsc -b` with no errors)
+- ✅ **Mobile layout (375px):** Avatar button + bottom nav visible, sidebar hidden
+- ✅ **Tablet at 768px breakpoint:** Mobile layout active (bottom nav shows)
+- ✅ **Desktop (1280px):** Sidebar navigation visible, bottom nav hidden, no avatar button
+- ✅ **Avatar dropdown:** Opens on click, closes on click outside or nav interaction
+- ✅ **Bottom nav navigation:** Clicks trigger correct routes, dropdown closes automatically
+- ✅ **No horizontal scroll:** App content respects bottom nav without overflow
+- ✅ **68px breakpoint consistency:** matches ActiveWorkout.tsx's `window.matchMedia("(max-width: 768px)")`
+
+**Status: Task 68 COMPLETE.** Mobile navigation replaced with fixed bottom tab bar and top-bar avatar dropdown. Desktop layout pixel-identical to before. 768px breakpoint consistent across Layout and ActiveWorkout components. All tests passing.
+
+---
+
+## 2026-08-01 — Task 69: Mobile-responsive Plan Builder layout
+
+### What was done
+
+Refactored PlanBuilder.tsx from a fixed two-column desktop-only layout into a responsive single-column mobile view below 768px, with desktop two-column layout preserved above 768px.
+
+**ExercisePreviewPanel Enhancement:**
+- Added `fullWidth?: boolean` prop (defaults to false) to support full-width rendering on mobile
+- Desktop mode (fullWidth=false): width: "300px", flexShrink: 0 (existing fixed-width behavior)
+- Mobile mode (fullWidth=true): width: "100%" (fills parent container)
+- Fixed the hardcoded inline-style width trap by making it conditional on prop, allowing mobile media queries to work
+
+**Mobile Layout (≤768px):**
+- Root container: `flexDirection: 'column'` to stack sections vertically
+- Preview panel moved to top of page (full viewport width) in its own container with border-bottom separator
+- Main content area contains: back button, plan name, week rail, day tabs, rest-day toggle, exercise list, Save Plan button
+- Exercise Library sidebar moved below Save Plan button (inside main content, not as separate column)
+- No sidebar column on mobile (hidden with `!isMobile` conditional)
+
+**Desktop Layout (≥768px):**
+- Root container: `flexDirection: 'row'` (default, kept original behavior)
+- Main content column: flex: 1, overflowY: auto, contains back/name/week/days/exercises/save
+- Preview panel in header row: right-hand side of back/plan-name, using fixed 300px width
+- Exercise Library sidebar: separate 320px fixed-width column on right
+- Mobile preview panel not rendered (`isMobile` check prevents rendering)
+- Mobile Exercise Library sidebar not rendered (`isMobile` check prevents rendering)
+
+**Mobile Detection:**
+- Added `useState(false)` for isMobile state
+- Added `useEffect` with `window.matchMedia("(max-width: 768px)")` listener
+- Initial state from `mediaQuery.matches`, then listener updates on viewport changes
+- Proper cleanup: `removeEventListener` in useEffect return function
+
+**Preserved Behavior:**
+- No changes to business logic: `addExerciseToCurrentDay`, `handleQuickAddExercise`, `handlePreviewExercise`, week rail customization, "Vary by set" overrides, Save Plan API calls
+- Preview selection state (`selectedPreview`) unchanged
+- Scroll-to-top on day-row click: still scrolls to preview panel (now at page top on mobile, in header on desktop)
+- Day-row click-to-preview: unchanged, updates `selectedPreview` state
+- Exercise Library behavior: unchanged (still triggers `handleQuickAddExercise` or `handlePreviewExercise`)
+- Placeholder-first behavior: preview panel starts with "Click exercise to preview" on both mobile and desktop
+- No auto-load: no iframe or video plays until user explicitly clicks to preview
+
+### Verification
+
+- ✅ **All 133 frontend tests pass** (no regressions)
+- ✅ **TypeScript clean** (`npx tsc -b` with no errors)
+- ✅ **Mobile layout (375px):** Preview panel at top, main content stacked single-column, Exercise Library below Save Plan
+- ✅ **Click-to-preview works:** Clicking exercise row updates preview panel at top
+- ✅ **Scroll-to-top behavior:** Preview panel scrolls into view on mobile after day-row click
+- ✅ **No 300px preview panel bug on mobile:** Width is 100%, not hardcoded 300px
+- ✅ **No auto-load:** Preview stays placeholder until clicked
+- ✅ **"+ Add" doesn't trigger preview:** Stopping propagation still works from Task 60
+- ✅ **768px breakpoint consistent:** No new breakpoints added, no value changed (checked ActiveWorkout.tsx, App.css, Layout.tsx)
+
+**Status: Task 69 COMPLETE.** PlanBuilder now responsive below 768px with single-column mobile layout and Exercise Library section moved to bottom. Desktop two-column layout preserved. Hardcoded preview-panel width issue solved with conditional fullWidth prop. Click-to-preview and scroll-to-top behaviors working on both mobile and desktop. All tests passing, TypeScript clean.
+

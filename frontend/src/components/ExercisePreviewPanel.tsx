@@ -6,10 +6,12 @@ export interface ExercisePreviewPanelProps {
     name: string;
     video_url: string | null;
   } | null;
+  fullWidth?: boolean;
 }
 
 export const ExercisePreviewPanel: React.FC<ExercisePreviewPanelProps> = ({
   selected,
+  fullWidth = false,
 }) => {
   const containerStyle: React.CSSProperties = {
     display: "flex",
@@ -17,7 +19,7 @@ export const ExercisePreviewPanel: React.FC<ExercisePreviewPanelProps> = ({
     gap: "12px",
     padding: "12px",
     backgroundColor: "var(--surface)",
-    width: "300px",
+    width: fullWidth ? "100%" : "300px",
     flexShrink: 0,
     minHeight: "200px",
     justifyContent: "flex-start",

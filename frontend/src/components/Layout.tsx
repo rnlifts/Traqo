@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../features/auth/AuthContext';
 import { useUnsavedChanges } from '../contexts/UnsavedChangesContext';
@@ -20,8 +20,22 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
   const { logout, currentUser } = useAuth();
   const { hasUnsavedChanges } = useUnsavedChanges();
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false); // Avatar dropdown on mobile
   const [pendingNavTarget, setPendingNavTarget] = useState<string | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setDropdownOpen(false);
+      }
+    };
+
+    if (dropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [dropdownOpen]);
 
   const handleLogout = () => {
     logout();
@@ -33,7 +47,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       e.preventDefault();
       setPendingNavTarget(path);
     }
-    setMenuOpen(false);
+    setDropdownOpen(false);
   };
 
   const isActivePath = (path: string) =>
@@ -47,19 +61,81 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         <Link to="/dashboard" className="sidebar-brand">
           TRA<span className="brand-accent">QO</span>
         </Link>
-        <button
-          onClick={() => setMenuOpen(!menuOpen)}
-          className="hamburger-btn"
-          aria-label="Toggle menu"
-        >
-          ☰
-        </button>
+        <div ref={dropdownRef} style={{ position: 'relative' }}>
+          <button
+            onClick={() => setDropdownOpen(!dropdownOpen)}
+            className="avatar-btn"
+            aria-label="User menu"
+            style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '50%',
+              background: 'var(--accent-soft)',
+              color: 'var(--accent)',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontWeight: 700,
+              fontSize: '16px',
+            }}
+          >
+            {initial}
+          </button>
+          {dropdownOpen && (
+            <div
+              style={{
+                position: 'absolute',
+                top: '100%',
+                right: 0,
+                marginTop: '8px',
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
+                borderRadius: '8px',
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                zIndex: 1000,
+                minWidth: '200px',
+                overflow: 'hidden',
+              }}
+            >
+              <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
+                <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--ink)' }}>
+                  {currentUser?.display_name}
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--text)', opacity: 0.7, marginTop: '4px', fontFamily: 'monospace' }}>
+                  @{currentUser?.username}
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  handleLogout();
+                  setDropdownOpen(false);
+                }}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--accent)',
+                  fontWeight: '600',
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+              >
+                <span style={{ fontSize: '16px' }}>⎋</span>
+                Logout
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
-      <aside
-        className={`sidebar${menuOpen ? ' open' : ''}`}
-        style={menuOpen ? { transform: 'translateX(0)' } : undefined}
-      >
+      <aside className="sidebar">
         <Link to="/dashboard" className="sidebar-brand sidebar-brand-desktop">
           TRA<span className="brand-accent">QO</span>
         </Link>
@@ -96,15 +172,23 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         </div>
       </aside>
 
-      {menuOpen && (
-        <button
-          className="sidebar-scrim"
-          aria-label="Close menu"
-          onClick={() => setMenuOpen(false)}
-        />
-      )}
-
       <main className="app-content">{children}</main>
+
+      {/* Mobile bottom navigation bar */}
+      <nav className="mobile-bottom-nav">
+        {navItems.map(({ path, label, Icon }) => (
+          <Link
+            key={path}
+            to={path}
+            className={`bottom-nav-item${isActivePath(path) ? ' active' : ''}`}
+            aria-current={isActivePath(path) ? 'page' : undefined}
+            onClick={(e) => handleNavClick(path, e)}
+          >
+            <Icon size={24} />
+            <span>{label}</span>
+          </Link>
+        ))}
+      </nav>
 
       <ConfirmDialog
         isOpen={pendingNavTarget !== null}

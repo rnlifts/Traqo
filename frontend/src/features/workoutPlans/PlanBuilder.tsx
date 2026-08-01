@@ -106,6 +106,16 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
   const [selectedPreview, setSelectedPreview] = useState<{ name: string; video_url: string | null } | null>(null);
   const pageContainerRef = useRef<HTMLDivElement>(null);
 
+  // Mobile detection
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(max-width: 768px)');
+    setIsMobile(mediaQuery.matches);
+    const listener = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mediaQuery.addEventListener('change', listener);
+    return () => mediaQuery.removeEventListener('change', listener);
+  }, []);
+
   // Per-set override UI state
   const [varyBySetRows, setVaryBySetRows] = useState<Set<number>>(new Set());
   const [perSetEditsByExerciseId, setPerSetEditsByExerciseId] = useState<
@@ -697,13 +707,20 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
   const isLinkedWeek = draftUnitType === 'weeks' && draftWeeks[activeWeekIndex]?.mode === 'linked';
 
   return (
-    <div style={{ display: 'flex', height: '100vh' }}>
+    <div style={{ display: 'flex', height: '100vh', flexDirection: isMobile ? 'column' : 'row' }}>
+      {/* Preview Panel (mobile only, at top) */}
+      {isMobile && (
+        <div style={{ padding: '20px', overflowY: 'auto', borderBottom: '1px solid var(--border)' }}>
+          <ExercisePreviewPanel selected={selectedPreview} fullWidth={true} />
+        </div>
+      )}
+
       {/* Main Content */}
       <div ref={pageContainerRef} className="page-container" style={{ flex: 1, overflowY: 'auto' }}>
-      {/* Top Header with Back Button, Plan Name, and Preview Panel */}
+      {/* Top Header with Back Button, Plan Name, and Preview Panel (desktop only) */}
       <div style={{ display: 'flex', gap: '20px', marginBottom: '20px', alignItems: 'flex-start' }}>
         {/* Left Column: Back Button and Plan Name */}
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ marginBottom: '20px' }}>
             <button
               onClick={() => {
@@ -779,10 +796,12 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
           </div>
         </div>
 
-        {/* Right Column: Exercise Preview Panel */}
-        <div style={{ flexShrink: 0 }}>
-          <ExercisePreviewPanel selected={selectedPreview} />
-        </div>
+        {/* Right Column: Exercise Preview Panel (desktop only) */}
+        {!isMobile && (
+          <div style={{ flexShrink: 0 }}>
+            <ExercisePreviewPanel selected={selectedPreview} fullWidth={false} />
+          </div>
+        )}
       </div>
 
       {/* Week Rail (for weeks-type plans) */}
@@ -1385,6 +1404,13 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
         </button>
       )}
 
+      {/* Exercise Library Sidebar (mobile only, below Save Plan) */}
+      {isMobile && (
+        <div style={{ marginTop: '20px', borderTop: '1px solid var(--border)', paddingTop: '20px' }}>
+          <ExerciseLibrarySidebar onSelectExercise={handleQuickAddExercise} onExerciseCreated={handleExerciseCreated} onPreviewExercise={handlePreviewExercise} />
+        </div>
+      )}
+
       {/* Back Confirm Dialog (create mode only) */}
       <ConfirmDialog
         isOpen={showBackConfirm}
@@ -1430,10 +1456,12 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
       {Toast}
       </div>
 
-      {/* Exercise Library Sidebar */}
-      <div style={{ width: '320px', maxWidth: '30vw', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
-        <ExerciseLibrarySidebar onSelectExercise={handleQuickAddExercise} onExerciseCreated={handleExerciseCreated} onPreviewExercise={handlePreviewExercise} />
-      </div>
+      {/* Exercise Library Sidebar (desktop only) */}
+      {!isMobile && (
+        <div style={{ width: '320px', maxWidth: '30vw', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+          <ExerciseLibrarySidebar onSelectExercise={handleQuickAddExercise} onExerciseCreated={handleExerciseCreated} onPreviewExercise={handlePreviewExercise} />
+        </div>
+      )}
     </div>
   );
 };
