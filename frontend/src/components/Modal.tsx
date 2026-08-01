@@ -5,6 +5,7 @@ export interface ModalProps {
   onClose: () => void;
   children: React.ReactNode;
   title?: string;
+  fullScreen?: boolean;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -12,6 +13,7 @@ export const Modal: React.FC<ModalProps> = ({
   onClose,
   children,
   title,
+  fullScreen = false,
 }) => {
   useEffect(() => {
     if (isOpen) {
@@ -39,16 +41,29 @@ export const Modal: React.FC<ModalProps> = ({
     zIndex: 1000,
   };
 
-  const modalStyle: React.CSSProperties = {
-    backgroundColor: "var(--surface)",
-    borderRadius: "8px",
-    padding: "20px",
-    maxWidth: "90vw",
-    maxHeight: "90vh",
-    overflow: "auto",
-    position: "relative",
-    boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
-  };
+  const modalStyle: React.CSSProperties = fullScreen
+    ? {
+        backgroundColor: "var(--surface)",
+        width: "100vw",
+        height: "100vh",
+        maxWidth: "100vw",
+        maxHeight: "100vh",
+        borderRadius: "0",
+        padding: "0",
+        overflow: "auto",
+        position: "relative",
+        boxShadow: "none",
+      }
+    : {
+        backgroundColor: "var(--surface)",
+        borderRadius: "8px",
+        padding: "20px",
+        maxWidth: "90vw",
+        maxHeight: "90vh",
+        overflow: "auto",
+        position: "relative",
+        boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
+      };
 
   const headerStyle: React.CSSProperties = {
     display: "flex",

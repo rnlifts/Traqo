@@ -24,6 +24,7 @@ import { DurationInput } from '../../components/DurationInput';
 import { TrashIcon, InfoIcon } from '../../components/icons';
 import { ExerciseLibrarySidebar, type SelectedExerciseInfo } from '../exerciseLibrary/ExerciseLibrarySidebar';
 import { ExercisePreviewPanel } from '../../components/ExercisePreviewPanel';
+import { Modal } from '../../components/Modal';
 import { getYoutubeThumbnailUrl } from '../../utils/youtube';
 
 interface PlanDraft {
@@ -120,13 +121,17 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
     return () => mediaQuery.removeEventListener('change', listener);
   }, []);
 
-  // Per-set override UI state
-  const [varyBySetRows, setVaryBySetRows] = useState<Set<number>>(new Set());
-  const [perSetEditsByExerciseId, setPerSetEditsByExerciseId] = useState<
-    Map<number, Array<{ set_number: number; target_reps: string | null; target_weight: number | null; target_duration_seconds: number | null }>>
-  >(new Map());
-  const [savingSetTargets, setSavingSetTargets] = useState<Set<number>>(new Set());
-  const [savedSetTargets, setSavedSetTargets] = useState<Set<number>>(new Set());
+  // Exercise picker modal state (mobile only)
+  const [showExercisePicker, setShowExercisePicker] = useState(false);
+
+  // Preview modal state (mobile only)
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+
+  // Set list UI state - which set is expanded per exercise (pure UI state, not derived from backend)
+  const [expandedSetByExerciseId, setExpandedSetByExerciseId] = useState<Map<number, number | null>>(new Map());
+
+  // Auto-save debounce refs
+  const autoSaveTimeoutsRef = useRef<Map<number, NodeJS.Timeout>>(new Map());
 
   // Load data for edit mode
   useEffect(() => {
@@ -276,7 +281,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
             has_weight: ex.has_weight,
             has_duration: ex.has_duration,
             notes: ex.notes || '',
-            set_targets: perSetEditsByExerciseId.get(ex.id) || [],
+            set_targets: ex.set_targets || [],
           })),
         }));
       } else {
@@ -300,7 +305,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                 has_weight: ex.has_weight,
                 has_duration: ex.has_duration,
                 notes: ex.notes || '',
-                set_targets: perSetEditsByExerciseId.get(ex.id) || [],
+                set_targets: ex.set_targets || [],
               })),
             }));
           }
@@ -509,6 +514,9 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
       name: exerciseInfo.name,
       video_url: exerciseInfo.video_url || null,
     });
+    if (isMobile) {
+      setShowPreviewModal(true);
+    }
   }
 
   function handleExerciseCreated(exercise: Exercise) {
@@ -638,6 +646,259 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
     }
   }
 
+  // Derive sets for an exercise from backend set_targets or synthesize Set 1
+  function getSetsList(ex: WorkoutExercise): Array<{ set_number: number; target_reps: string | null; target_weight: number | null; target_duration_seconds: number | null }> {
+    if (ex.set_targets && ex.set_targets.length > 0) {
+      return ex.set_targets;
+    }
+    // Synthesize Set 1 from main row fields
+    return [{
+      set_number: 1,
+      target_reps: ex.target_reps || null,
+      target_weight: ex.target_weight || null,
+      target_duration_seconds: ex.target_duration_seconds || null,
+    }];
+  }
+
+  // Update a set's value (reps, weight, duration)
+  async function handleUpdateSet(exerciseId: number, setNumber: number, field: string, value: any) {
+    const days = getActiveDays();
+    const currentDay = days[activeDayIndex];
+    if (!currentDay) return;
+
+    const ex = currentDay.exercises.find((e) => e.id === exerciseId);
+    if (!ex) return;
+
+    const currentSets = getSetsList(ex);
+    const setIndex = currentSets.findIndex((s) => s.set_number === setNumber);
+    if (setIndex === -1) return;
+
+    const updatedSet = { ...currentSets[setIndex] };
+    if (field === 'reps') updatedSet.target_reps = value || null;
+    if (field === 'weight') updatedSet.target_weight = value || null;
+    if (field === 'duration') updatedSet.target_duration_seconds = value || null;
+
+    const updatedSets = [...currentSets];
+    updatedSets[setIndex] = updatedSet;
+
+    // Update draft in create mode
+    if (props.isCreateMode) {
+      if (draftUnitType === 'days') {
+        setDraftDays((prev) =>
+          prev.map((d) =>
+            d.id === currentDay.id
+              ? {
+                  ...d,
+                  exercises: d.exercises.map((e) =>
+                    e.id === exerciseId ? { ...e, set_targets: updatedSets, target_sets: updatedSets.length } : e
+                  ),
+                }
+              : d
+          )
+        );
+      } else {
+        setDraftWeeks((prev) =>
+          prev.map((week, wIdx) => {
+            if (wIdx === activeWeekIndex) {
+              return {
+                ...week,
+                days: week.days.map((d) =>
+                  d.id === currentDay.id
+                    ? {
+                        ...d,
+                        exercises: d.exercises.map((e) =>
+                          e.id === exerciseId ? { ...e, set_targets: updatedSets, target_sets: updatedSets.length } : e
+                        ),
+                      }
+                    : d
+                ),
+              };
+            }
+            return week;
+          })
+        );
+      }
+    } else if (planId) {
+      // Edit mode: single debounced write combining both set_targets and exercise fields
+      const timeoutId = autoSaveTimeoutsRef.current.get(exerciseId);
+      if (timeoutId) clearTimeout(timeoutId);
+
+      const newTimeoutId = setTimeout(async () => {
+        try {
+          const exerciseUpdates: any = { target_sets: updatedSets.length };
+          // For Set 1, also update the exercise-level field
+          if (setNumber === 1) {
+            if (field === 'reps') exerciseUpdates.target_reps = updatedSet.target_reps;
+            if (field === 'weight') exerciseUpdates.target_weight = updatedSet.target_weight;
+            if (field === 'duration') exerciseUpdates.target_duration_seconds = updatedSet.target_duration_seconds;
+          }
+          await Promise.all([
+            replaceSetTargets(planId, currentDay.id, exerciseId, updatedSets),
+            updateExerciseInDay(planId, currentDay.id, exerciseId, exerciseUpdates),
+          ]);
+          await loadPlanForEdit();
+        } catch (err) {
+          setError((err as Error).message);
+        }
+      }, 500);
+
+      autoSaveTimeoutsRef.current.set(exerciseId, newTimeoutId);
+    }
+  }
+
+  // Add a new set to an exercise
+  async function handleAddSet(exerciseId: number) {
+    const days = getActiveDays();
+    const currentDay = days[activeDayIndex];
+    if (!currentDay) return;
+
+    const ex = currentDay.exercises.find((e) => e.id === exerciseId);
+    if (!ex) return;
+
+    const currentSets = getSetsList(ex);
+    const lastSet = currentSets[currentSets.length - 1];
+    const newSet = {
+      set_number: lastSet.set_number + 1,
+      target_reps: lastSet.target_reps,
+      target_weight: lastSet.target_weight,
+      target_duration_seconds: lastSet.target_duration_seconds,
+    };
+
+    const updatedSets = [...currentSets, newSet];
+
+    // Expand the new set
+    setExpandedSetByExerciseId((prev) => new Map(prev).set(exerciseId, newSet.set_number));
+
+    // Update draft in create mode
+    if (props.isCreateMode) {
+      if (draftUnitType === 'days') {
+        setDraftDays((prev) =>
+          prev.map((d) =>
+            d.id === currentDay.id
+              ? {
+                  ...d,
+                  exercises: d.exercises.map((e) =>
+                    e.id === exerciseId ? { ...e, set_targets: updatedSets, target_sets: updatedSets.length } : e
+                  ),
+                }
+              : d
+          )
+        );
+      } else {
+        setDraftWeeks((prev) =>
+          prev.map((week, wIdx) => {
+            if (wIdx === activeWeekIndex) {
+              return {
+                ...week,
+                days: week.days.map((d) =>
+                  d.id === currentDay.id
+                    ? {
+                        ...d,
+                        exercises: d.exercises.map((e) =>
+                          e.id === exerciseId ? { ...e, set_targets: updatedSets, target_sets: updatedSets.length } : e
+                        ),
+                      }
+                    : d
+                ),
+              };
+            }
+            return week;
+          })
+        );
+      }
+    } else if (planId) {
+      // Edit mode: batch the set_targets and target_sets updates
+      try {
+        await Promise.all([
+          replaceSetTargets(planId, currentDay.id, exerciseId, updatedSets),
+          updateExerciseInDay(planId, currentDay.id, exerciseId, { target_sets: updatedSets.length }),
+        ]);
+        await loadPlanForEdit();
+      } catch (err) {
+        setError((err as Error).message);
+      }
+    }
+  }
+
+  // Remove a set from an exercise
+  async function handleRemoveSet(exerciseId: number, setNumber: number) {
+    const days = getActiveDays();
+    const currentDay = days[activeDayIndex];
+    if (!currentDay) return;
+
+    const ex = currentDay.exercises.find((e) => e.id === exerciseId);
+    if (!ex) return;
+
+    const currentSets = getSetsList(ex);
+    if (currentSets.length <= 1) return; // Can't remove the last set
+
+    const updatedSets = currentSets
+      .filter((s) => s.set_number !== setNumber)
+      .map((s, idx) => ({
+        ...s,
+        set_number: idx + 1,
+      }));
+
+    // Collapse the exercise if the expanded set was removed
+    setExpandedSetByExerciseId((prev) => {
+      const expanded = prev.get(exerciseId);
+      if (expanded === setNumber) {
+        return new Map(prev).set(exerciseId, null);
+      }
+      return prev;
+    });
+
+    // Update draft in create mode
+    if (props.isCreateMode) {
+      if (draftUnitType === 'days') {
+        setDraftDays((prev) =>
+          prev.map((d) =>
+            d.id === currentDay.id
+              ? {
+                  ...d,
+                  exercises: d.exercises.map((e) =>
+                    e.id === exerciseId ? { ...e, set_targets: updatedSets, target_sets: updatedSets.length } : e
+                  ),
+                }
+              : d
+          )
+        );
+      } else {
+        setDraftWeeks((prev) =>
+          prev.map((week, wIdx) => {
+            if (wIdx === activeWeekIndex) {
+              return {
+                ...week,
+                days: week.days.map((d) =>
+                  d.id === currentDay.id
+                    ? {
+                        ...d,
+                        exercises: d.exercises.map((e) =>
+                          e.id === exerciseId ? { ...e, set_targets: updatedSets, target_sets: updatedSets.length } : e
+                        ),
+                      }
+                    : d
+                ),
+              };
+            }
+            return week;
+          })
+        );
+      }
+    } else if (planId) {
+      // Edit mode: batch the set_targets and target_sets updates
+      try {
+        await Promise.all([
+          replaceSetTargets(planId, currentDay.id, exerciseId, updatedSets),
+          updateExerciseInDay(planId, currentDay.id, exerciseId, { target_sets: updatedSets.length }),
+        ]);
+        await loadPlanForEdit();
+      } catch (err) {
+        setError((err as Error).message);
+      }
+    }
+  }
+
   async function handleCustomizeWeek() {
     if (props.isCreateMode) {
       // Customize in draft - deep copy effective days
@@ -717,13 +978,6 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
 
   return (
     <div style={{ display: 'flex', height: '100vh', flexDirection: isMobile ? 'column' : 'row' }}>
-      {/* Preview Panel (mobile only, at top) */}
-      {isMobile && (
-        <div style={{ padding: '20px', overflowY: 'auto', borderBottom: '1px solid var(--border)' }}>
-          <ExercisePreviewPanel selected={selectedPreview} fullWidth={true} />
-        </div>
-      )}
-
       {/* Main Content */}
       <div ref={pageContainerRef} className="page-container" style={{ flex: 1, overflowY: 'auto' }}>
       {/* Top Header with Back Button, Plan Name, and Preview Panel (desktop only) */}
@@ -912,9 +1166,8 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                 <div className="exercise-section-label">Exercises</div>
 
                 {currentDay.exercises.map((ex, idx) => {
-                  const isVaryBySetMode = varyBySetRows.has(ex.id);
-                  const perSetEdits = perSetEditsByExerciseId.get(ex.id) || (ex.set_targets || []);
-                  const numSets = ex.target_sets || 1;
+                  const sets = getSetsList(ex);
+                  const expandedSetNumber = expandedSetByExerciseId.get(ex.id);
 
                   return (
                     <div key={ex.id}>
@@ -925,10 +1178,14 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                             name: ex.exercise_name || `Exercise ${ex.exercise_id}`,
                             video_url: ex.video_url || null,
                           });
-                          try {
-                            pageContainerRef.current?.scrollTo?.({ top: 0, behavior: 'smooth' });
-                          } catch {
-                            // Scroll may not be available in test environment
+                          if (isMobile) {
+                            setShowPreviewModal(true);
+                          } else {
+                            try {
+                              pageContainerRef.current?.scrollTo?.({ top: 0, behavior: 'smooth' });
+                            } catch {
+                              // Scroll may not be available in test environment
+                            }
                           }
                         }}
                         style={{
@@ -975,19 +1232,6 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                             </span>
                           </div>
                         </div>
-                        <div className="field-cell">
-                          <span className="cell-label">Sets</span>
-                          <input
-                            type="number"
-                            value={ex.target_sets || ''}
-                            onChange={(e) => handleUpdateExercise(ex.id, 'sets', e.target.value ? Number(e.target.value) : null)}
-                            onClick={(e) => e.stopPropagation()}
-                            placeholder="Sets"
-                            className="input-field"
-                            disabled={isLinkedWeek}
-                            style={{ width: '50px' }}
-                          />
-                        </div>
                         {ex.has_reps ? (
                           <div className="field-cell">
                             <span className="cell-label">Reps</span>
@@ -997,18 +1241,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                                 value={ex.target_reps || ''}
                                 onChange={(e) => {
                                   const newValue = e.target.value || null;
-                                  handleUpdateExercise(ex.id, 'reps', newValue);
-                                  // Sync Set 1 in the vary-by-set panel if it's open
-                                  if (isVaryBySetMode && perSetEditsByExerciseId.has(ex.id)) {
-                                    setPerSetEditsByExerciseId((prev) => {
-                                      const updated = new Map(prev);
-                                      const edits = updated.get(ex.id) || [];
-                                      updated.set(ex.id, edits.map((s) =>
-                                        s.set_number === 1 ? { ...s, target_reps: newValue } : s
-                                      ));
-                                      return updated;
-                                    });
-                                  }
+                                  handleUpdateSet(ex.id, 1, 'reps', newValue);
                                 }}
                                 onClick={(e) => e.stopPropagation()}
                                 placeholder="e.g. 10 or 10-12"
@@ -1054,18 +1287,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                                 value={ex.target_weight || ''}
                                 onChange={(e) => {
                                   const newValue = e.target.value ? Number(e.target.value) : null;
-                                  handleUpdateExercise(ex.id, 'weight', newValue);
-                                  // Sync Set 1 in the vary-by-set panel if it's open
-                                  if (isVaryBySetMode && perSetEditsByExerciseId.has(ex.id)) {
-                                    setPerSetEditsByExerciseId((prev) => {
-                                      const updated = new Map(prev);
-                                      const edits = updated.get(ex.id) || [];
-                                      updated.set(ex.id, edits.map((s) =>
-                                        s.set_number === 1 ? { ...s, target_weight: newValue } : s
-                                      ));
-                                      return updated;
-                                    });
-                                  }
+                                  handleUpdateSet(ex.id, 1, 'weight', newValue);
                                 }}
                                 onClick={(e) => e.stopPropagation()}
                                 placeholder="Weight"
@@ -1113,18 +1335,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                               value={ex.target_duration_seconds || null}
                               onChange={(value) => {
                                 const newValue = value || null;
-                                handleUpdateExercise(ex.id, 'target_duration_seconds', newValue);
-                                // Sync Set 1 in the vary-by-set panel if it's open
-                                if (isVaryBySetMode && perSetEditsByExerciseId.has(ex.id)) {
-                                  setPerSetEditsByExerciseId((prev) => {
-                                    const updated = new Map(prev);
-                                    const edits = updated.get(ex.id) || [];
-                                    updated.set(ex.id, edits.map((s) =>
-                                      s.set_number === 1 ? { ...s, target_duration_seconds: newValue } : s
-                                    ));
-                                    return updated;
-                                  });
-                                }
+                                handleUpdateSet(ex.id, 1, 'duration', newValue);
                               }}
                               onRemove={() => handleUpdateExercise(ex.id, 'has_duration', false)}
                             />
@@ -1160,55 +1371,6 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              const newVaryBySet = !isVaryBySetMode;
-                              if (newVaryBySet) {
-                                setVaryBySetRows((prev) => new Set([...prev, ex.id]));
-                                if (!perSetEditsByExerciseId.has(ex.id)) {
-                                  // Start with backend set_targets or create empty array for this exercise's sets
-                                  const baseEdits = ex.set_targets && ex.set_targets.length > 0
-                                    ? ex.set_targets
-                                    : Array.from({ length: numSets }, (_, i) => ({
-                                        set_number: i + 1,
-                                        target_reps: null,
-                                        target_weight: null,
-                                        target_duration_seconds: null,
-                                      }));
-
-                                  // Map over to seed Set 1 if it has no real override yet
-                                  const initialEdits = baseEdits.map((setTarget) => {
-                                    // For Set 1, if all fields are null, seed from main row
-                                    if (setTarget.set_number === 1 && setTarget.target_reps === null && setTarget.target_weight === null && setTarget.target_duration_seconds === null) {
-                                      return {
-                                        ...setTarget,
-                                        target_reps: ex.target_reps,
-                                        target_weight: ex.target_weight,
-                                        target_duration_seconds: ex.target_duration_seconds,
-                                      };
-                                    }
-                                    // For Set 1 with real overrides, or Sets 2+, keep as-is
-                                    return setTarget;
-                                  });
-
-                                  setPerSetEditsByExerciseId((prev) => new Map(prev).set(ex.id, initialEdits));
-                                }
-                              } else {
-                                setVaryBySetRows((prev) => {
-                                  const updated = new Set(prev);
-                                  updated.delete(ex.id);
-                                  return updated;
-                                });
-                              }
-                            }}
-                            className={`btn vary-by-set-btn ${isVaryBySetMode ? 'btn-primary' : ''}`}
-                            disabled={isLinkedWeek}
-                            title="Edit per-set overrides"
-                            style={{ fontSize: '12px', padding: '8px 12px' }}
-                          >
-                            Vary by set
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
                               setDeleteConfirm({ isOpen: true, type: 'exercise', dayId: currentDay.id, exerciseId: ex.id });
                             }}
                             className="row-delete-btn"
@@ -1221,154 +1383,141 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                         </div>
                       </div>
 
-                      {isVaryBySetMode && (
-                        <div className="set-detail-panel">
-                          <div className="set-detail-panel-title">Per-Set Overrides</div>
-                          {Array.from({ length: numSets }, (_, i) => {
-                            const setNum = i + 1;
-                            const currentSetEdit = perSetEdits.find((s) => s.set_number === setNum) || { set_number: setNum, target_reps: null, target_weight: null, target_duration_seconds: null };
-                            return (
-                              <div key={setNum} className="set-line">
-                                <span>Set {setNum}</span>
+                      {/* Collapsible Set List */}
+                      <div style={{ marginLeft: '20px', borderLeft: '2px solid var(--border)', paddingLeft: '12px' }}>
+                        {sets.map((set) => (
+                          <div key={set.set_number} style={{ marginBottom: '8px' }}>
+                            {/* Set Header (collapsed) */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setExpandedSetByExerciseId((prev) => {
+                                  const expanded = prev.get(ex.id);
+                                  return new Map(prev).set(ex.id, expanded === set.set_number ? null : set.set_number);
+                                });
+                              }}
+                              style={{
+                                width: '100%',
+                                background: 'transparent',
+                                border: 'none',
+                                padding: '8px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                cursor: 'pointer',
+                                borderRadius: '4px',
+                              }}
+                              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-hover)')}
+                              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                              disabled={isLinkedWeek}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, textAlign: 'left' }}>
+                                <span style={{ fontSize: '12px', color: 'var(--text-h)', minWidth: '50px' }}>
+                                  Set {set.set_number}
+                                </span>
+                                <span style={{ fontSize: '12px', color: 'var(--text-h)' }}>
+                                  {[
+                                    set.target_weight && `${set.target_weight} lbs`,
+                                    set.target_reps && `× ${set.target_reps} reps`,
+                                    set.target_duration_seconds && `· ${Math.floor(set.target_duration_seconds / 60)}:${String(set.target_duration_seconds % 60).padStart(2, '0')}`,
+                                  ]
+                                    .filter(Boolean)
+                                    .join(' ') || 'not set'}
+                                </span>
+                              </div>
+                              <span style={{ fontSize: '16px', color: 'var(--text-h)', transition: 'transform 0.2s' }}>
+                                {expandedSetNumber === set.set_number ? '▼' : '▶'}
+                              </span>
+                            </button>
+
+                            {/* Set Expanded (editable fields) */}
+                            {expandedSetNumber === set.set_number && (
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  gap: '8px',
+                                  alignItems: 'center',
+                                  padding: '8px',
+                                  backgroundColor: 'var(--bg-hover)',
+                                  borderRadius: '4px',
+                                  marginBottom: '8px',
+                                  flexWrap: 'wrap',
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                              >
                                 {ex.has_reps && (
                                   <input
                                     type="text"
-                                    value={currentSetEdit.target_reps || ''}
-                                    onChange={(e) => {
-                                      const newValue = e.target.value || null;
-                                      const updated = perSetEdits.map((s) =>
-                                        s.set_number === setNum ? { ...s, target_reps: newValue } : s
-                                      );
-                                      setPerSetEditsByExerciseId((prev) => new Map(prev).set(ex.id, updated));
-                                      // Sync Set 1 to the main row
-                                      if (setNum === 1) {
-                                        handleUpdateExercise(ex.id, 'reps', newValue);
-                                      }
-                                    }}
+                                    value={set.target_reps || ''}
+                                    onChange={(e) => handleUpdateSet(ex.id, set.set_number, 'reps', e.target.value)}
                                     placeholder="Reps (e.g. 10-12)"
                                     className="input-field"
+                                    disabled={isLinkedWeek}
+                                    style={{ width: '120px', fontSize: '12px' }}
                                   />
                                 )}
                                 {ex.has_weight && (
                                   <input
                                     type="number"
                                     step="0.5"
-                                    value={currentSetEdit.target_weight || ''}
-                                    onChange={(e) => {
-                                      const newValue = e.target.value ? Number(e.target.value) : null;
-                                      const updated = perSetEdits.map((s) =>
-                                        s.set_number === setNum ? { ...s, target_weight: newValue } : s
-                                      );
-                                      setPerSetEditsByExerciseId((prev) => new Map(prev).set(ex.id, updated));
-                                      // Sync Set 1 to the main row
-                                      if (setNum === 1) {
-                                        handleUpdateExercise(ex.id, 'weight', newValue);
-                                      }
-                                    }}
+                                    value={set.target_weight || ''}
+                                    onChange={(e) => handleUpdateSet(ex.id, set.set_number, 'weight', e.target.value ? Number(e.target.value) : null)}
                                     placeholder="Weight"
                                     className="input-field"
+                                    disabled={isLinkedWeek}
+                                    style={{ width: '80px', fontSize: '12px' }}
                                   />
                                 )}
                                 {ex.has_duration && (
-                                  <DurationInput
-                                    value={currentSetEdit.target_duration_seconds || null}
-                                    onChange={(value) => {
-                                      const newValue = value || null;
-                                      const updated = perSetEdits.map((s) =>
-                                        s.set_number === setNum ? { ...s, target_duration_seconds: newValue } : s
-                                      );
-                                      setPerSetEditsByExerciseId((prev) => new Map(prev).set(ex.id, updated));
-                                      // Sync Set 1 to the main row
-                                      if (setNum === 1) {
-                                        handleUpdateExercise(ex.id, 'target_duration_seconds', newValue);
-                                      }
-                                    }}
-                                  />
+                                  <div style={{ flexGrow: 1, minWidth: '120px' }}>
+                                    <DurationInput
+                                      value={set.target_duration_seconds || null}
+                                      onChange={(value) => handleUpdateSet(ex.id, set.set_number, 'duration', value)}
+                                    />
+                                  </div>
                                 )}
                               </div>
-                            );
-                          })}
+                            )}
+                          </div>
+                        ))}
+
+                        {/* Add Set Button */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAddSet(ex.id);
+                          }}
+                          className="btn btn-secondary"
+                          disabled={isLinkedWeek}
+                          style={{ fontSize: '12px', padding: '6px 10px', marginTop: '8px', width: '100%' }}
+                        >
+                          + Add Set
+                        </button>
+
+                        {/* Remove Set Buttons (shown when expanded) */}
+                        {expandedSetNumber && sets.length > 1 && (
                           <button
-                            onClick={async () => {
-                              if (props.isCreateMode && !isLinkedWeek) {
-                                // Draft-only: edits already in perSetEditsByExerciseId
-                                setSavingSetTargets((prev) => new Set([...prev, ex.id]));
-                                await new Promise(r => setTimeout(r, 300)); // Brief save animation
-                                setSavingSetTargets((prev) => {
-                                  const updated = new Set(prev);
-                                  updated.delete(ex.id);
-                                  return updated;
-                                });
-                                setSavedSetTargets((prev) => new Set([...prev, ex.id]));
-                                await new Promise(r => setTimeout(r, 700));
-                                setVaryBySetRows((prev) => {
-                                  const updated = new Set(prev);
-                                  updated.delete(ex.id);
-                                  return updated;
-                                });
-                                setSavedSetTargets((prev) => {
-                                  const updated = new Set(prev);
-                                  updated.delete(ex.id);
-                                  return updated;
-                                });
-                              } else if (planId && !isLinkedWeek) {
-                                setSavingSetTargets((prev) => new Set([...prev, ex.id]));
-                                try {
-                                  const perSetEdits = perSetEditsByExerciseId.get(ex.id) || [];
-                                  await replaceSetTargets(planId, currentDay.id, ex.id, perSetEdits);
-                                  // Show "Saved" state
-                                  setSavingSetTargets((prev) => {
-                                    const updated = new Set(prev);
-                                    updated.delete(ex.id);
-                                    return updated;
-                                  });
-                                  setSavedSetTargets((prev) => new Set([...prev, ex.id]));
-                                  // Wait for user to register the state change
-                                  await new Promise(r => setTimeout(r, 700));
-                                  // Then collapse panel and reload
-                                  setVaryBySetRows((prev) => {
-                                    const updated = new Set(prev);
-                                    updated.delete(ex.id);
-                                    return updated;
-                                  });
-                                  await loadPlanForEdit();
-                                  // Clean up saved state
-                                  setSavedSetTargets((prev) => {
-                                    const updated = new Set(prev);
-                                    updated.delete(ex.id);
-                                    return updated;
-                                  });
-                                } catch (err) {
-                                  setError((err as Error).message);
-                                  // Clean up both states on error
-                                  setSavingSetTargets((prev) => {
-                                    const updated = new Set(prev);
-                                    updated.delete(ex.id);
-                                    return updated;
-                                  });
-                                  setSavedSetTargets((prev) => {
-                                    const updated = new Set(prev);
-                                    updated.delete(ex.id);
-                                    return updated;
-                                  });
-                                }
-                              }
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemoveSet(ex.id, expandedSetNumber);
                             }}
-                            className={`btn set-save-button ${savedSetTargets.has(ex.id) ? 'btn-secondary' : 'btn-primary'}`}
-                            disabled={isLinkedWeek || savingSetTargets.has(ex.id) || savedSetTargets.has(ex.id)}
+                            className="row-delete-btn"
+                            disabled={isLinkedWeek}
+                            title="Remove this set"
+                            style={{ marginTop: '4px', fontSize: '12px', padding: '4px 8px' }}
                           >
-                            {savingSetTargets.has(ex.id) ? 'Saving...' : savedSetTargets.has(ex.id) ? '✓ Saved' : 'Save set targets'}
+                            ✕ Remove Set {expandedSetNumber}
                           </button>
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </div>
                   );
                 })}
               </div>
 
-              {/* Add Exercise Form */}
+              {/* Add Exercise Hint */}
               <div style={{ marginBottom: '12px', padding: '12px 14px', fontSize: '13px', color: 'var(--text-h)' }}>
-                Add exercises using the panel on the right →
+                {isMobile ? 'Tap "+ Add Exercise" to browse and add exercises' : 'Add exercises using the panel on the right →'}
               </div>
             </>
           )}
@@ -1381,6 +1530,27 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
             </div>
           )}
         </>
+      )}
+
+      {/* Mobile Exercise Picker Button */}
+      {isMobile && (
+        <button
+          onClick={() => setShowExercisePicker(true)}
+          style={{
+            width: '100%',
+            padding: '12px',
+            marginTop: '20px',
+            background: 'var(--accent)',
+            color: 'white',
+            border: 'none',
+            borderRadius: '6px',
+            fontSize: '14px',
+            fontWeight: '600',
+            cursor: 'pointer',
+          }}
+        >
+          + Add Exercise
+        </button>
       )}
 
       {!props.isCreateMode && isQuickStart && (
@@ -1413,11 +1583,32 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
         </button>
       )}
 
-      {/* Exercise Library Sidebar (mobile only, below Save Plan) */}
+      {/* Exercise Picker Modal (mobile only) */}
       {isMobile && (
-        <div style={{ marginTop: '20px', borderTop: '1px solid var(--border)', paddingTop: '20px' }}>
-          <ExerciseLibrarySidebar onSelectExercise={handleQuickAddExercise} onExerciseCreated={handleExerciseCreated} onPreviewExercise={handlePreviewExercise} />
-        </div>
+        <Modal
+          isOpen={showExercisePicker}
+          onClose={() => setShowExercisePicker(false)}
+          title="Add Exercise"
+          fullScreen={true}
+        >
+          <div style={{ padding: '12px 16px', paddingTop: '0' }}>
+            <ExerciseLibrarySidebar onSelectExercise={handleQuickAddExercise} onExerciseCreated={handleExerciseCreated} onPreviewExercise={handlePreviewExercise} />
+          </div>
+        </Modal>
+      )}
+
+      {/* Preview Modal (mobile only) */}
+      {isMobile && (
+        <Modal
+          isOpen={showPreviewModal}
+          onClose={() => setShowPreviewModal(false)}
+          title={selectedPreview?.name || 'Exercise Preview'}
+          fullScreen={true}
+        >
+          <div style={{ padding: '12px 16px', paddingTop: '0' }}>
+            <ExercisePreviewPanel selected={selectedPreview} fullWidth={true} />
+          </div>
+        </Modal>
       )}
 
       {/* Back Confirm Dialog (create mode only) */}
