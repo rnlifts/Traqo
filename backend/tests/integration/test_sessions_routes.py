@@ -431,3 +431,106 @@ class TestDeleteWorkoutSetRoute:
             headers=auth_headers,
         )
         assert len(detail_response.json()["sets"]) == 0
+
+
+# ============================================================================
+# Active Workout Bootstrap Tests (Task 83)
+# ============================================================================
+
+
+class TestActiveWorkoutBootstrapRoute:
+    """Tests for GET /api/workout-sessions/{id}/bootstrap endpoint."""
+
+    def test_bootstrap_success(
+        self, client, auth_headers, test_plan_and_day, test_exercise_and_workout_exercise
+    ):
+        """GET /workout-sessions/{id}/bootstrap returns session, plan, and exercises in one call."""
+        start_response = client.post(
+            "/api/workout-sessions",
+            json={
+                "workout_plan_id": test_plan_and_day["plan_id"],
+                "plan_day_id": test_plan_and_day["day_id"],
+            },
+            headers=auth_headers,
+        )
+        session_id = start_response.json()["session_id"]
+
+        response = client.get(
+            f"/api/workout-sessions/{session_id}/bootstrap",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        data = response.json()
+
+        # Session
+        assert data["session"]["session"]["id"] == session_id
+        assert data["session"]["session"]["plan_name"] == "Test Plan"
+        assert isinstance(data["session"]["sets"], list)
+
+        # Plan
+        assert data["plan"] is not None
+        assert data["plan"]["plan"]["id"] == test_plan_and_day["plan_id"]
+
+        # Exercises
+        assert isinstance(data["exercises"], list)
+        assert any(e["id"] == test_exercise_and_workout_exercise["exercise_id"] for e in data["exercises"])
+
+    def test_bootstrap_returns_null_plan_for_deleted_plan(
+        self, client, auth_headers, test_plan_and_day, test_session_factory
+    ):
+        """GET /workout-sessions/{id}/bootstrap returns plan: null (not an error) when the
+        session's workout_plan_id is null — the state a session ends up in per the Task 74
+        SET NULL fix once its plan is deleted.
+
+        NOTE: this simulates that end state directly via the DB rather than going through
+        DELETE /workout-plans/{id}, because the SQLAlchemy *model* FKs on WorkoutSessionModel
+        (workout_plan_id/plan_day_id/plan_week_id) were never updated to declare
+        ondelete='SET NULL' after the Task 74 migration applied it directly to the real
+        database — so a fresh SQLite test DB built from these models still enforces the old
+        blocking FK behavior and a real cascade-delete-through-the-API fails here with an
+        IntegrityError. That's a genuine, separate gap (model/migration drift), out of scope
+        for this task — flagged in the completion report, not fixed here.
+        """
+        start_response = client.post(
+            "/api/workout-sessions",
+            json={
+                "workout_plan_id": test_plan_and_day["plan_id"],
+                "plan_day_id": test_plan_and_day["day_id"],
+            },
+            headers=auth_headers,
+        )
+        session_id = start_response.json()["session_id"]
+
+        # Simulate the post-plan-deletion state directly (see NOTE above)
+        db = test_session_factory()
+        from src.modules.sessions.infrastructure.models.workout_session_model import WorkoutSessionModel
+
+        session_model = db.query(WorkoutSessionModel).filter(WorkoutSessionModel.id == session_id).first()
+        session_model.workout_plan_id = None
+        session_model.plan_day_id = None
+        db.commit()
+        db.close()
+
+        response = client.get(
+            f"/api/workout-sessions/{session_id}/bootstrap",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["plan"] is None
+        assert data["session"]["session"]["workout_plan_id"] is None
+        # Exercises should still load fine even with no plan
+        assert isinstance(data["exercises"], list)
+
+    def test_bootstrap_without_auth_fails(self, client, test_plan_and_day):
+        """GET /workout-sessions/{id}/bootstrap without auth returns 401."""
+        response = client.get("/api/workout-sessions/1/bootstrap")
+        assert response.status_code == 401
+
+    def test_bootstrap_nonexistent_session_fails(self, client, auth_headers):
+        """GET /workout-sessions/{id}/bootstrap for a session that doesn't exist returns an error, not a 500."""
+        response = client.get(
+            "/api/workout-sessions/999999/bootstrap",
+            headers=auth_headers,
+        )
+        assert response.status_code in (404, 400)

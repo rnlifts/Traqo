@@ -106,6 +106,85 @@ from .schemas import (
 workouts_router = APIRouter(prefix="/api/workout-plans", tags=["workouts"])
 
 
+def build_plan_detail_response(
+    plan, plan_id: int, use_case, exercise_repo, day_repo, week_repo, db: Session
+) -> WorkoutPlanDetailResponse:
+    """Build a WorkoutPlanDetailResponse by assembling days/weeks and exercises.
+
+    This shared function is used by both the GET /workout-plans/{plan_id} endpoint
+    and the bootstrap endpoint to avoid duplicating response assembly logic.
+    """
+    def build_day_response(day):
+        exercises = exercise_repo.list_by_day(day.id)
+        exercise_responses = []
+        for ex in exercises:
+            exercise_responses.append(_build_workout_exercise_response(ex, db, include_exercise_name=True))
+        return PlanDayDetailResponse(
+            id=day.id,
+            label=day.label,
+            order_position=day.order_position,
+            is_rest=day.is_rest,
+            exercises=exercise_responses,
+            created_at=day.created_at,
+            updated_at=day.updated_at,
+        )
+
+    # Handle weeks-type vs days-type plans differently
+    if plan.unit_type == "weeks":
+        from .schemas import PlanWeekDetailResponse
+        weeks_detail = []
+        for week_num in range(1, (plan.total_units or 0) + 1):
+            effective_week_data = use_case.get_effective_week(plan_id, week_num)
+            if effective_week_data:
+                week = week_repo.get_by_plan_and_week_number(plan_id, week_num)
+                days_responses = [
+                    build_day_response(day)
+                    for day in effective_week_data["days"]
+                ]
+                weeks_detail.append(
+                    PlanWeekDetailResponse(
+                        week_number=week_num,
+                        mode=week.mode,
+                        resolved_week_number=effective_week_data["resolved_week_number"],
+                        days=days_responses,
+                    )
+                )
+
+        return WorkoutPlanDetailResponse(
+            plan=WorkoutPlanDetailResponse.Plan(
+                id=plan.id,
+                user_id=plan.user_id,
+                name=plan.name,
+                unit_type=plan.unit_type,
+                total_units=plan.total_units,
+                is_quick_start=plan.is_quick_start,
+                created_at=plan.created_at,
+                updated_at=plan.updated_at,
+            ),
+            weeks=weeks_detail,
+            days=None,
+        )
+    else:
+        # For days-type plans, return flat day list
+        days = day_repo.list_by_plan(plan_id)
+        days_detail = [build_day_response(day) for day in days]
+
+        return WorkoutPlanDetailResponse(
+            plan=WorkoutPlanDetailResponse.Plan(
+                id=plan.id,
+                user_id=plan.user_id,
+                name=plan.name,
+                unit_type=plan.unit_type,
+                total_units=plan.total_units,
+                is_quick_start=plan.is_quick_start,
+                created_at=plan.created_at,
+                updated_at=plan.updated_at,
+            ),
+            days=days_detail,
+            weeks=None,
+        )
+
+
 def _build_workout_exercise_response(
     exercise, db: Session, include_exercise_name: bool = False
 ) -> WorkoutExerciseResponse | WorkoutExerciseDetailedResponse:
@@ -455,83 +534,12 @@ async def get_workout_plan_detail(
     plan_repo = WorkoutPlanRepositoryImpl(db)
     day_repo = PlanDayRepositoryImpl(db)
     exercise_repo = WorkoutExerciseRepositoryImpl(db)
-    exercise_domain_repo = ExerciseRepositoryImpl(db)
     week_repo = PlanWeekRepositoryImpl(db)
 
     use_case = GetWorkoutPlanDetail(plan_repo, exercise_repo, day_repo, week_repo)
     plan, _ = use_case.execute(plan_id, user_id)
 
-    # Helper function to build day detail responses
-    def build_day_response(day):
-        exercises = exercise_repo.list_by_day(day.id)
-        exercise_responses = []
-        for ex in exercises:
-            exercise_responses.append(_build_workout_exercise_response(ex, db, include_exercise_name=True))
-        return PlanDayDetailResponse(
-            id=day.id,
-            label=day.label,
-            order_position=day.order_position,
-            is_rest=day.is_rest,
-            exercises=exercise_responses,
-            created_at=day.created_at,
-            updated_at=day.updated_at,
-        )
-
-    # Handle weeks-type vs days-type plans differently
-    if plan.unit_type == "weeks":
-        # Resolve each week's effective days
-        from .schemas import PlanWeekDetailResponse
-        weeks_detail = []
-        for week_num in range(1, (plan.total_units or 0) + 1):
-            effective_week_data = use_case.get_effective_week(plan_id, week_num)
-            if effective_week_data:
-                week = week_repo.get_by_plan_and_week_number(plan_id, week_num)
-                days_responses = [
-                    build_day_response(day)
-                    for day in effective_week_data["days"]
-                ]
-                weeks_detail.append(
-                    PlanWeekDetailResponse(
-                        week_number=week_num,
-                        mode=week.mode,
-                        resolved_week_number=effective_week_data["resolved_week_number"],
-                        days=days_responses,
-                    )
-                )
-
-        return WorkoutPlanDetailResponse(
-            plan=WorkoutPlanDetailResponse.Plan(
-                id=plan.id,
-                user_id=plan.user_id,
-                name=plan.name,
-                unit_type=plan.unit_type,
-                total_units=plan.total_units,
-                is_quick_start=plan.is_quick_start,
-                created_at=plan.created_at,
-                updated_at=plan.updated_at,
-            ),
-            weeks=weeks_detail,
-            days=None,
-        )
-    else:
-        # For days-type plans, return flat day list as before
-        days = day_repo.list_by_plan(plan_id)
-        days_detail = [build_day_response(day) for day in days]
-
-        return WorkoutPlanDetailResponse(
-            plan=WorkoutPlanDetailResponse.Plan(
-                id=plan.id,
-                user_id=plan.user_id,
-                name=plan.name,
-                unit_type=plan.unit_type,
-                total_units=plan.total_units,
-                is_quick_start=plan.is_quick_start,
-                created_at=plan.created_at,
-                updated_at=plan.updated_at,
-            ),
-            days=days_detail,
-            weeks=None,
-        )
+    return build_plan_detail_response(plan, plan_id, use_case, exercise_repo, day_repo, week_repo, db)
 
 
 @workouts_router.put("/{plan_id}", response_model=WorkoutPlanResponse)

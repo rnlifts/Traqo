@@ -6,9 +6,18 @@ from src.infrastructure.security.oauth2 import get_current_user_id
 from src.modules.exercises.infrastructure.repositories.exercise_repository_impl import (
     ExerciseRepositoryImpl,
 )
+from src.modules.exercises.application.use_cases.list_exercises import ListExercises
+from src.modules.exercises.presentation.schemas import ExerciseResponse
 from src.modules.workouts.infrastructure.repositories.workout_plan_repository_impl import (
     WorkoutPlanRepositoryImpl,
 )
+from src.modules.workouts.application.use_cases.get_workout_plan_detail import (
+    GetWorkoutPlanDetail,
+)
+from src.modules.workouts.infrastructure.repositories.workout_exercise_repository_impl import (
+    WorkoutExerciseRepositoryImpl,
+)
+from src.modules.workouts.presentation.routes import build_plan_detail_response
 from ..application.use_cases.add_workout_set import AddWorkoutSet
 from ..application.use_cases.delete_workout_set import DeleteWorkoutSet
 from ..application.use_cases.finish_workout import FinishWorkout
@@ -41,6 +50,7 @@ from .schemas import (
     WorkoutSessionDetailResponse,
     WorkoutSetResponse,
     WorkoutSetWithExerciseResponse,
+    ActiveWorkoutBootstrapResponse,
 )
 
 sessions_router = APIRouter(prefix="/api/workout-sessions", tags=["sessions"])
@@ -171,6 +181,90 @@ async def get_workout_session_detail(
                 notes=sd.workout_set.notes,
             )
             for sd in set_details
+        ],
+    )
+
+
+@sessions_router.get("/{session_id}/bootstrap", response_model=ActiveWorkoutBootstrapResponse)
+async def get_active_workout_bootstrap(
+    session_id: int,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """Bootstrap endpoint for ActiveWorkout: returns session, plan, and exercises in one call."""
+    # Get session detail
+    session_repo = WorkoutSessionRepositoryImpl(db)
+    set_repo = WorkoutSetRepositoryImpl(db)
+    plan_repo = WorkoutPlanRepositoryImpl(db)
+    day_repo = PlanDayRepositoryImpl(db)
+    week_repo = PlanWeekRepositoryImpl(db)
+    exercise_repo = ExerciseRepositoryImpl(db)
+    workout_exercise_repo = WorkoutExerciseRepositoryImpl(db)
+
+    # Get session and sets
+    use_case_session = GetWorkoutSessionDetail(
+        session_repo, set_repo, plan_repo, day_repo, week_repo, exercise_repo
+    )
+    session, set_details, plan_name, day_label, week_number, duration_minutes = use_case_session.execute(
+        user_id, session_id
+    )
+    session_detail_response = WorkoutSessionDetailResponse(
+        session=WorkoutSessionDetailResponse.Session(
+            id=session.id,
+            user_id=session.user_id,
+            workout_plan_id=session.workout_plan_id,
+            plan_name=plan_name,
+            plan_day_id=session.plan_day_id,
+            day_label=day_label,
+            plan_week_id=session.plan_week_id,
+            week_number=week_number,
+            started_at=session.started_at,
+            completed_at=session.completed_at,
+            duration_minutes=duration_minutes,
+        ),
+        sets=[
+            WorkoutSetWithExerciseResponse(
+                id=sd.workout_set.id,
+                exercise_id=sd.workout_set.exercise_id,
+                workout_exercise_id=sd.workout_set.workout_exercise_id,
+                exercise_name=sd.exercise_name,
+                set_number=sd.workout_set.set_number,
+                weight=sd.workout_set.weight,
+                reps=sd.workout_set.reps,
+                duration_seconds=sd.workout_set.duration_seconds,
+                notes=sd.workout_set.notes,
+            )
+            for sd in set_details
+        ],
+    )
+
+    # Get plan detail if plan_id is not null
+    plan_response = None
+    if session.workout_plan_id:
+        use_case_plan = GetWorkoutPlanDetail(plan_repo, workout_exercise_repo, day_repo, week_repo)
+        plan, _ = use_case_plan.execute(session.workout_plan_id, user_id)
+        plan_response = build_plan_detail_response(
+            plan, session.workout_plan_id, use_case_plan, workout_exercise_repo, day_repo, week_repo, db
+        )
+
+    # Get available exercises
+    use_case_exercises = ListExercises(exercise_repo)
+    exercises = use_case_exercises.execute(user_id)
+
+    return ActiveWorkoutBootstrapResponse(
+        session=session_detail_response,
+        plan=plan_response,
+        exercises=[
+            ExerciseResponse(
+                id=e.id,
+                name=e.name,
+                muscle_group=e.muscle_group,
+                logging_type=e.logging_type,
+                equipment=e.equipment,
+                video_url=e.video_url,
+                is_custom=e.is_custom,
+            )
+            for e in exercises
         ],
     )
 

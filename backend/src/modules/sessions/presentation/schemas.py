@@ -1,6 +1,8 @@
 from datetime import datetime
 
 from pydantic import BaseModel, Field
+from src.modules.workouts.presentation.schemas import WorkoutPlanDetailResponse
+from src.modules.exercises.presentation.schemas import ExerciseResponse
 
 
 class StartWorkoutRequest(BaseModel):
@@ -161,3 +163,11 @@ class GetUnresolvedSessionResponse(BaseModel):
     """Response containing unresolved session or null."""
 
     session: UnresolvedSessionResponse | None
+
+
+class ActiveWorkoutBootstrapResponse(BaseModel):
+    """Bootstrap response for ActiveWorkout: session + plan + exercises in one call."""
+
+    session: WorkoutSessionDetailResponse
+    plan: WorkoutPlanDetailResponse | None  # null if workout_plan_id is null (deleted plan)
+    exercises: list[ExerciseResponse]

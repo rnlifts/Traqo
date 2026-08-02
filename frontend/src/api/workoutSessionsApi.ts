@@ -1,4 +1,6 @@
 import client from "./client";
+import type { WorkoutPlanDetail } from "./workoutPlansApi";
+import type { Exercise } from "./exercisesApi";
 
 export interface WorkoutSet {
   id: number;
@@ -65,6 +67,12 @@ export interface WorkoutHistoryEntry {
   date: string;
   workout: string;
   duration: string;
+}
+
+export interface ActiveWorkoutBootstrap {
+  session: WorkoutSessionDetailResponse;
+  plan: WorkoutPlanDetail | null;
+  exercises: Exercise[];
 }
 
 export const workoutSessionsApi = {
@@ -145,5 +153,12 @@ export const workoutSessionsApi = {
 
   async discardSession(sessionId: number): Promise<void> {
     await client.delete(`/workout-sessions/${sessionId}`);
+  },
+
+  async getActiveWorkoutBootstrap(sessionId: number): Promise<ActiveWorkoutBootstrap> {
+    const response = await client.get<ActiveWorkoutBootstrap>(
+      `/workout-sessions/${sessionId}/bootstrap`
+    );
+    return response.data;
   },
 };
