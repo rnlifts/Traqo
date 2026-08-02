@@ -1,9 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BrowserRouter } from 'react-router-dom';
 import { PlanBuilder } from './PlanBuilder';
 import * as exercisesApiModule from '../../api/exercisesApi';
+import { customizeWeek, updateExerciseInDay } from '../../api/workoutPlansApi';
+import client from '../../api/client';
+import type { WorkoutPlanDetail } from '../../api/workoutPlansApi';
 
 // Mock dependencies
 vi.mock('../../api/workoutPlansApi', () => ({
@@ -232,5 +235,185 @@ describe('PlanBuilder Preview Panel', () => {
 
     const previewPanel = screen.getByTestId('preview-panel');
     expect(previewPanel).toHaveTextContent('Preview: Bench Press (has video)');
+  });
+});
+
+describe('PlanBuilder Task 79: Optimistic Updates (Edit Mode)', () => {
+  const daysFixture: WorkoutPlanDetail = {
+    plan: {
+      id: 5,
+      user_id: 1,
+      name: 'Edit Mode Plan',
+      unit_type: 'days',
+      total_units: 1,
+      is_quick_start: false,
+      created_at: '2026-08-01T00:00:00Z',
+      updated_at: '2026-08-01T00:00:00Z',
+    },
+    days: [
+      {
+        id: 100,
+        label: 'Day 1',
+        order_position: 1,
+        is_rest: false,
+        exercises: [
+          {
+            id: 200,
+            plan_day_id: 100,
+            exercise_id: 1,
+            order_number: 1,
+            target_sets: 1,
+            target_reps: '10',
+            target_weight: null,
+            target_duration_seconds: null,
+            has_reps: true,
+            has_weight: true,
+            has_duration: false,
+            set_targets: [],
+            notes: '',
+            exercise_name: 'Bench Press',
+            video_url: null,
+          },
+        ],
+      },
+    ],
+    weeks: null,
+  };
+
+  const weeksFixture = (week2Mode: 'linked' | 'custom', week2Days: WorkoutPlanDetail['days']): WorkoutPlanDetail => ({
+    plan: {
+      id: 5,
+      user_id: 1,
+      name: 'Weeks Plan',
+      unit_type: 'weeks',
+      total_units: 2,
+      is_quick_start: false,
+      created_at: '2026-08-01T00:00:00Z',
+      updated_at: '2026-08-01T00:00:00Z',
+    },
+    days: null,
+    weeks: [
+      {
+        week_number: 1,
+        mode: 'base',
+        resolved_week_number: 1,
+        days: [
+          {
+            id: 100,
+            label: 'Mon',
+            order_position: 1,
+            is_rest: false,
+            exercises: [
+              {
+                id: 200,
+                plan_day_id: 100,
+                exercise_id: 1,
+                order_number: 1,
+                target_sets: 1,
+                target_reps: '10',
+                target_weight: null,
+                target_duration_seconds: null,
+                has_reps: true,
+                has_weight: true,
+                has_duration: false,
+                set_targets: [],
+                notes: '',
+                exercise_name: 'Bench Press',
+                video_url: null,
+              },
+            ],
+          },
+        ],
+      },
+      {
+        week_number: 2,
+        mode: week2Mode,
+        resolved_week_number: week2Mode === 'linked' ? 1 : 2,
+        days: week2Days || [],
+      },
+    ],
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    const mocked = vi.mocked(exercisesApiModule.exercisesApi);
+    mocked.list.mockResolvedValue([]);
+  });
+
+  it('toggling has_reps in edit mode patches local state without re-fetching the plan', async () => {
+    const user = userEvent.setup();
+    vi.mocked(client.get).mockResolvedValue({ data: daysFixture } as any);
+    vi.mocked(updateExerciseInDay).mockResolvedValue({} as any);
+
+    render(
+      <BrowserRouter>
+        <PlanBuilder isCreateMode={false} planId={5} />
+      </BrowserRouter>
+    );
+
+    await screen.findByText('Bench Press');
+    expect(vi.mocked(client.get)).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole('button', { name: 'Expand Bench Press' }));
+    await user.click(screen.getByRole('button', { name: 'Reps ✕' }));
+
+    // Local state patch reflects the toggle immediately
+    await screen.findByText('+ Reps');
+
+    expect(vi.mocked(updateExerciseInDay)).toHaveBeenCalledWith(5, 100, 200, { has_reps: false });
+    // The core Task 79 regression check: no second plan-detail fetch after the edit
+    expect(vi.mocked(client.get)).toHaveBeenCalledTimes(1);
+  });
+
+  it('customizing a linked week deliberately re-fetches the plan to sync new backend IDs', async () => {
+    const user = userEvent.setup();
+    const customizedDays = [
+      {
+        id: 101,
+        label: 'Mon',
+        order_position: 1,
+        is_rest: false,
+        exercises: [
+          {
+            id: 201,
+            plan_day_id: 101,
+            exercise_id: 1,
+            order_number: 1,
+            target_sets: 1,
+            target_reps: '10',
+            target_weight: null,
+            target_duration_seconds: null,
+            has_reps: true,
+            has_weight: true,
+            has_duration: false,
+            set_targets: [],
+            notes: '',
+            exercise_name: 'Bench Press',
+            video_url: null,
+          },
+        ],
+      },
+    ];
+    vi.mocked(client.get)
+      .mockResolvedValueOnce({ data: weeksFixture('linked', []) } as any)
+      .mockResolvedValueOnce({ data: weeksFixture('custom', customizedDays) } as any);
+    vi.mocked(customizeWeek).mockResolvedValue(undefined as any);
+
+    render(
+      <BrowserRouter>
+        <PlanBuilder isCreateMode={false} planId={5} />
+      </BrowserRouter>
+    );
+
+    await screen.findByText('Mon');
+    expect(vi.mocked(client.get)).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole('button', { name: 'Week 2, linked' }));
+    await user.click(await screen.findByRole('button', { name: 'Customize this week' }));
+
+    // handleCustomizeWeek deliberately reloads (backend assigns new day/exercise IDs
+    // that a local patch can't know in advance) — this is the one intentional exception.
+    await waitFor(() => expect(vi.mocked(client.get)).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(customizeWeek)).toHaveBeenCalledWith(5, 2);
   });
 });

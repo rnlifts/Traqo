@@ -66,8 +66,6 @@ export default function PlanList() {
     }
   }
 
-  if (loading) return <div className="loading">Loading workout plans...</div>;
-
   return (
     <div className="page-container">
       <p className="kicker">Your ledger</p>
@@ -97,7 +95,9 @@ export default function PlanList() {
       <PlanActionCards />
 
       <p className="section-label">Saved plans</p>
-      {plans.length > 0 ? (
+      {loading ? (
+        <div className="loading">Loading workout plans...</div>
+      ) : plans.length > 0 ? (
         <div className="plan-grid">
           {plans.map((plan) => (
             <div key={plan.id} className="plan-card">

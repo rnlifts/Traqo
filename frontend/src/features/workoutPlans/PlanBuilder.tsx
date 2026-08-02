@@ -351,7 +351,6 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
         setDraftName(renamePlanName);
         setIsRenamingPlan(false);
         showToast('Plan name updated!', 'success');
-        await loadPlanForEdit();
       } catch (err) {
         setError((err as Error).message);
       }
@@ -392,11 +391,32 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
         );
       }
     } else if (planId) {
-      // Edit mode - call API immediately
+      // Edit mode - patch local state
       try {
         await updateDay(planId, currentDay.id, { is_rest: newRestState });
         showToast('Day updated!', 'success');
-        await loadPlanForEdit();
+        // Patch local state instead of reloading
+        if (draftUnitType === 'days') {
+          setDraftDays((prev) =>
+            prev.map((d) =>
+              d.id === currentDay.id ? { ...d, is_rest: newRestState } : d
+            )
+          );
+        } else {
+          setDraftWeeks((prev) =>
+            prev.map((week, wIdx) => {
+              if (wIdx === activeWeekIndex) {
+                return {
+                  ...week,
+                  days: week.days.map((d) =>
+                    d.id === currentDay.id ? { ...d, is_rest: newRestState } : d
+                  ),
+                };
+              }
+              return week;
+            })
+          );
+        }
       } catch (err) {
         setError((err as Error).message);
       }
@@ -498,11 +518,36 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
       }
       setExpandedExerciseIds((prev) => new Set(prev).add(newExercise.id));
     } else if (planId) {
-      // Edit mode - call API
+      // Edit mode - patch local state
       const created = await addExerciseToDay(planId, currentDay.id, exerciseId, sets, reps, weight, durationSeconds, hasReps, hasWeight, hasDuration);
       setExpandedExerciseIds((prev) => new Set(prev).add(created.id));
       showToast('Exercise added!', 'success');
-      await loadPlanForEdit();
+      // Patch local state instead of reloading
+      if (draftUnitType === 'days') {
+        setDraftDays((prev) =>
+          prev.map((d) =>
+            d.id === currentDay.id
+              ? { ...d, exercises: [...d.exercises, created] }
+              : d
+          )
+        );
+      } else {
+        setDraftWeeks((prev) =>
+          prev.map((week, wIdx) => {
+            if (wIdx === activeWeekIndex) {
+              return {
+                ...week,
+                days: week.days.map((d) =>
+                  d.id === currentDay.id
+                    ? { ...d, exercises: [...d.exercises, created] }
+                    : d
+                ),
+              };
+            }
+            return week;
+          })
+        );
+      }
     }
   }
 
@@ -604,7 +649,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
         );
       }
     } else if (planId) {
-      // Edit mode - call API immediately
+      // Edit mode - patch local state
       try {
         const updates: any = {};
         if (field === 'sets') updates.target_sets = value;
@@ -617,7 +662,42 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
         if (field === 'notes') updates.notes = value;
 
         await updateExerciseInDay(planId, currentDay.id, exerciseId, updates);
-        await loadPlanForEdit();
+        // Patch local state instead of reloading
+        if (draftUnitType === 'days') {
+          setDraftDays((prev) =>
+            prev.map((d) =>
+              d.id === currentDay.id
+                ? {
+                    ...d,
+                    exercises: d.exercises.map((ex) =>
+                      ex.id === exerciseId ? { ...ex, ...updates } : ex
+                    ),
+                  }
+                : d
+            )
+          );
+        } else {
+          setDraftWeeks((prev) =>
+            prev.map((week, wIdx) => {
+              if (wIdx === activeWeekIndex) {
+                return {
+                  ...week,
+                  days: week.days.map((d) =>
+                    d.id === currentDay.id
+                      ? {
+                          ...d,
+                          exercises: d.exercises.map((ex) =>
+                            ex.id === exerciseId ? { ...ex, ...updates } : ex
+                          ),
+                        }
+                      : d
+                  ),
+                };
+              }
+              return week;
+            })
+          );
+        }
       } catch (err) {
         setError((err as Error).message);
       }
@@ -661,7 +741,32 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
       try {
         await removeExerciseFromDay(planId, currentDay.id, exerciseId);
         showToast('Exercise removed!', 'success');
-        await loadPlanForEdit();
+        // Patch local state instead of reloading
+        if (draftUnitType === 'days') {
+          setDraftDays((prev) =>
+            prev.map((d) =>
+              d.id === currentDay.id
+                ? { ...d, exercises: d.exercises.filter((ex) => ex.id !== exerciseId) }
+                : d
+            )
+          );
+        } else {
+          setDraftWeeks((prev) =>
+            prev.map((week, wIdx) => {
+              if (wIdx === activeWeekIndex) {
+                return {
+                  ...week,
+                  days: week.days.map((d) =>
+                    d.id === currentDay.id
+                      ? { ...d, exercises: d.exercises.filter((ex) => ex.id !== exerciseId) }
+                      : d
+                  ),
+                };
+              }
+              return week;
+            })
+          );
+        }
         setDeleteConfirm({ isOpen: false, type: 'exercise' });
       } catch (err) {
         setError((err as Error).message);
@@ -789,7 +894,42 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
             replaceSetTargets(planId, currentDay.id, exerciseId, updatedSets),
             updateExerciseInDay(planId, currentDay.id, exerciseId, exerciseUpdates),
           ]);
-          await loadPlanForEdit();
+          // Patch local state instead of reloading (values already known)
+          if (draftUnitType === 'days') {
+            setDraftDays((prev) =>
+              prev.map((d) =>
+                d.id === currentDay.id
+                  ? {
+                      ...d,
+                      exercises: d.exercises.map((e) =>
+                        e.id === exerciseId ? { ...e, set_targets: updatedSets, ...exerciseUpdates } : e
+                      ),
+                    }
+                  : d
+              )
+            );
+          } else {
+            setDraftWeeks((prev) =>
+              prev.map((week, wIdx) => {
+                if (wIdx === activeWeekIndex) {
+                  return {
+                    ...week,
+                    days: week.days.map((d) =>
+                      d.id === currentDay.id
+                        ? {
+                            ...d,
+                            exercises: d.exercises.map((e) =>
+                              e.id === exerciseId ? { ...e, set_targets: updatedSets, ...exerciseUpdates } : e
+                            ),
+                          }
+                        : d
+                    ),
+                  };
+                }
+                return week;
+              })
+            );
+          }
         } catch (err) {
           setError((err as Error).message);
         }
@@ -863,13 +1003,48 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
         );
       }
     } else if (planId) {
-      // Edit mode: batch the set_targets and target_sets updates
+      // Edit mode: patch local state
       try {
         await Promise.all([
           replaceSetTargets(planId, currentDay.id, exerciseId, updatedSets),
           updateExerciseInDay(planId, currentDay.id, exerciseId, { target_sets: updatedSets.length }),
         ]);
-        await loadPlanForEdit();
+        // Patch local state instead of reloading (values already known)
+        if (draftUnitType === 'days') {
+          setDraftDays((prev) =>
+            prev.map((d) =>
+              d.id === currentDay.id
+                ? {
+                    ...d,
+                    exercises: d.exercises.map((e) =>
+                      e.id === exerciseId ? { ...e, set_targets: updatedSets, target_sets: updatedSets.length } : e
+                    ),
+                  }
+                : d
+            )
+          );
+        } else {
+          setDraftWeeks((prev) =>
+            prev.map((week, wIdx) => {
+              if (wIdx === activeWeekIndex) {
+                return {
+                  ...week,
+                  days: week.days.map((d) =>
+                    d.id === currentDay.id
+                      ? {
+                          ...d,
+                          exercises: d.exercises.map((e) =>
+                            e.id === exerciseId ? { ...e, set_targets: updatedSets, target_sets: updatedSets.length } : e
+                          ),
+                        }
+                      : d
+                  ),
+                };
+              }
+              return week;
+            })
+          );
+        }
       } catch (err) {
         setError((err as Error).message);
       }
@@ -943,13 +1118,48 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
         );
       }
     } else if (planId) {
-      // Edit mode: batch the set_targets and target_sets updates
+      // Edit mode: patch local state
       try {
         await Promise.all([
           replaceSetTargets(planId, currentDay.id, exerciseId, updatedSets),
           updateExerciseInDay(planId, currentDay.id, exerciseId, { target_sets: updatedSets.length }),
         ]);
-        await loadPlanForEdit();
+        // Patch local state instead of reloading (values already known)
+        if (draftUnitType === 'days') {
+          setDraftDays((prev) =>
+            prev.map((d) =>
+              d.id === currentDay.id
+                ? {
+                    ...d,
+                    exercises: d.exercises.map((e) =>
+                      e.id === exerciseId ? { ...e, set_targets: updatedSets, target_sets: updatedSets.length } : e
+                    ),
+                  }
+                : d
+            )
+          );
+        } else {
+          setDraftWeeks((prev) =>
+            prev.map((week, wIdx) => {
+              if (wIdx === activeWeekIndex) {
+                return {
+                  ...week,
+                  days: week.days.map((d) =>
+                    d.id === currentDay.id
+                      ? {
+                          ...d,
+                          exercises: d.exercises.map((e) =>
+                            e.id === exerciseId ? { ...e, set_targets: updatedSets, target_sets: updatedSets.length } : e
+                          ),
+                        }
+                      : d
+                  ),
+                };
+              }
+              return week;
+            })
+          );
+        }
       } catch (err) {
         setError((err as Error).message);
       }
@@ -985,6 +1195,8 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
       try {
         await customizeWeek(planId, draftWeeks[activeWeekIndex].week_number);
         showToast('Week customized!', 'success');
+        // Backend creates new day/exercise IDs during customization.
+        // API response doesn't include full nested data, so reload to get correct IDs.
         await loadPlanForEdit();
       } catch (err) {
         setError((err as Error).message);
@@ -1011,7 +1223,19 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
       try {
         await matchPreviousWeek(planId, draftWeeks[activeWeekIndex].week_number);
         showToast('Week reverted!', 'success');
-        await loadPlanForEdit();
+        // Patch local state: set mode='linked' and days=[]
+        setDraftWeeks((prev) =>
+          prev.map((week, idx) => {
+            if (idx === activeWeekIndex) {
+              return {
+                ...week,
+                mode: 'linked' as const,
+                days: [],
+              };
+            }
+            return week;
+          })
+        );
       } catch (err: any) {
         if (err.response?.status === 409) {
           setError(err.response?.data?.error || 'Cannot revert this week');
