@@ -346,14 +346,17 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
 
   async function handleUpdatePlanName() {
     if (!props.isCreateMode && planId && renamePlanName.trim()) {
-      try {
-        await updateWorkoutPlan(planId, renamePlanName);
-        setDraftName(renamePlanName);
-        setIsRenamingPlan(false);
-        showToast('Plan name updated!', 'success');
-      } catch (err) {
+      const previousName = draftName;
+      // Optimistic: update UI immediately
+      setDraftName(renamePlanName);
+      setIsRenamingPlan(false);
+      // Fire API call in background
+      updateWorkoutPlan(planId, renamePlanName).catch((err) => {
+        // On failure: revert and show error
+        setDraftName(previousName);
+        setIsRenamingPlan(true);
         setError((err as Error).message);
-      }
+      });
     } else {
       setDraftName(renamePlanName);
       setIsRenamingPlan(false);
@@ -391,15 +394,36 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
         );
       }
     } else if (planId) {
-      // Edit mode - patch local state
-      try {
-        await updateDay(planId, currentDay.id, { is_rest: newRestState });
-        showToast('Day updated!', 'success');
-        // Patch local state instead of reloading
+      // Edit mode - optimistic update: patch local state immediately
+      const previousRestState = currentDay.is_rest || false;
+      if (draftUnitType === 'days') {
+        setDraftDays((prev) =>
+          prev.map((d) =>
+            d.id === currentDay.id ? { ...d, is_rest: newRestState } : d
+          )
+        );
+      } else {
+        setDraftWeeks((prev) =>
+          prev.map((week, wIdx) => {
+            if (wIdx === activeWeekIndex) {
+              return {
+                ...week,
+                days: week.days.map((d) =>
+                  d.id === currentDay.id ? { ...d, is_rest: newRestState } : d
+                ),
+              };
+            }
+            return week;
+          })
+        );
+      }
+      // Fire API call in background
+      updateDay(planId, currentDay.id, { is_rest: newRestState }).catch((err) => {
+        // On failure: revert to previous state
         if (draftUnitType === 'days') {
           setDraftDays((prev) =>
             prev.map((d) =>
-              d.id === currentDay.id ? { ...d, is_rest: newRestState } : d
+              d.id === currentDay.id ? { ...d, is_rest: previousRestState } : d
             )
           );
         } else {
@@ -409,7 +433,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                 return {
                   ...week,
                   days: week.days.map((d) =>
-                    d.id === currentDay.id ? { ...d, is_rest: newRestState } : d
+                    d.id === currentDay.id ? { ...d, is_rest: previousRestState } : d
                   ),
                 };
               }
@@ -417,9 +441,8 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
             })
           );
         }
-      } catch (err) {
         setError((err as Error).message);
-      }
+      });
     }
   }
 
@@ -518,16 +541,32 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
       }
       setExpandedExerciseIds((prev) => new Set(prev).add(newExercise.id));
     } else if (planId) {
-      // Edit mode - patch local state
-      const created = await addExerciseToDay(planId, currentDay.id, exerciseId, sets, reps, weight, durationSeconds, hasReps, hasWeight, hasDuration);
-      setExpandedExerciseIds((prev) => new Set(prev).add(created.id));
-      showToast('Exercise added!', 'success');
-      // Patch local state instead of reloading
+      // Edit mode - optimistic: add with temporary ID immediately, reconcile when API responds
+      const tempId = -(Date.now() + Math.random());
+      const tempExercise: WorkoutExercise = {
+        id: tempId,
+        plan_day_id: currentDay.id,
+        exercise_id: exerciseId,
+        order_number: (currentDay.exercises.length || 0) + 1,
+        target_sets: sets || null,
+        target_reps: reps || null,
+        target_weight: weight || null,
+        target_duration_seconds: durationSeconds || null,
+        has_reps: hasReps,
+        has_weight: hasWeight,
+        has_duration: hasDuration,
+        set_targets: [],
+        notes: notesValue || '',
+        exercise_name: name,
+        video_url: exerciseInfo.video_url || null,
+      };
+
+      // Add to local state immediately with temp ID
       if (draftUnitType === 'days') {
         setDraftDays((prev) =>
           prev.map((d) =>
             d.id === currentDay.id
-              ? { ...d, exercises: [...d.exercises, created] }
+              ? { ...d, exercises: [...d.exercises, tempExercise] }
               : d
           )
         );
@@ -539,7 +578,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                 ...week,
                 days: week.days.map((d) =>
                   d.id === currentDay.id
-                    ? { ...d, exercises: [...d.exercises, created] }
+                    ? { ...d, exercises: [...d.exercises, tempExercise] }
                     : d
                 ),
               };
@@ -548,6 +587,88 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
           })
         );
       }
+      setExpandedExerciseIds((prev) => new Set(prev).add(tempId));
+
+      // Fire API call in background
+      addExerciseToDay(planId, currentDay.id, exerciseId, sets, reps, weight, durationSeconds, hasReps, hasWeight, hasDuration)
+        .then((created) => {
+          // Reconcile temp ID with real ID
+          if (draftUnitType === 'days') {
+            setDraftDays((prev) =>
+              prev.map((d) =>
+                d.id === currentDay.id
+                  ? {
+                      ...d,
+                      exercises: d.exercises.map((ex) =>
+                        ex.id === tempId ? created : ex
+                      ),
+                    }
+                  : d
+              )
+            );
+          } else {
+            setDraftWeeks((prev) =>
+              prev.map((week, wIdx) => {
+                if (wIdx === activeWeekIndex) {
+                  return {
+                    ...week,
+                    days: week.days.map((d) =>
+                      d.id === currentDay.id
+                        ? {
+                            ...d,
+                            exercises: d.exercises.map((ex) =>
+                              ex.id === tempId ? created : ex
+                            ),
+                          }
+                        : d
+                    ),
+                  };
+                }
+                return week;
+              })
+            );
+          }
+          setExpandedExerciseIds((prev) => {
+            const next = new Set(prev);
+            next.delete(tempId);
+            next.add(created.id);
+            return next;
+          });
+        })
+        .catch((err) => {
+          // On failure: remove the optimistically-added exercise
+          if (draftUnitType === 'days') {
+            setDraftDays((prev) =>
+              prev.map((d) =>
+                d.id === currentDay.id
+                  ? { ...d, exercises: d.exercises.filter((ex) => ex.id !== tempId) }
+                  : d
+              )
+            );
+          } else {
+            setDraftWeeks((prev) =>
+              prev.map((week, wIdx) => {
+                if (wIdx === activeWeekIndex) {
+                  return {
+                    ...week,
+                    days: week.days.map((d) =>
+                      d.id === currentDay.id
+                        ? { ...d, exercises: d.exercises.filter((ex) => ex.id !== tempId) }
+                        : d
+                    ),
+                  };
+                }
+                return week;
+              })
+            );
+          }
+          setExpandedExerciseIds((prev) => {
+            const next = new Set(prev);
+            next.delete(tempId);
+            return next;
+          });
+          setError((err as Error).message);
+        });
     }
   }
 
@@ -649,20 +770,62 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
         );
       }
     } else if (planId) {
-      // Edit mode - patch local state
-      try {
-        const updates: any = {};
-        if (field === 'sets') updates.target_sets = value;
-        if (field === 'reps') updates.target_reps = value;
-        if (field === 'weight') updates.target_weight = value;
-        if (field === 'target_duration_seconds') updates.target_duration_seconds = value;
-        if (field === 'has_reps') updates.has_reps = value;
-        if (field === 'has_weight') updates.has_weight = value;
-        if (field === 'has_duration') updates.has_duration = value;
-        if (field === 'notes') updates.notes = value;
+      // Edit mode - optimistic: update immediately
+      // Capture previous values for rollback
+      const exercise = currentDay.exercises.find((ex) => ex.id === exerciseId);
+      if (!exercise) return;
+      const previousValue = exercise[field as keyof WorkoutExercise];
 
-        await updateExerciseInDay(planId, currentDay.id, exerciseId, updates);
-        // Patch local state instead of reloading
+      const updates: any = {};
+      if (field === 'sets') updates.target_sets = value;
+      if (field === 'reps') updates.target_reps = value;
+      if (field === 'weight') updates.target_weight = value;
+      if (field === 'target_duration_seconds') updates.target_duration_seconds = value;
+      if (field === 'has_reps') updates.has_reps = value;
+      if (field === 'has_weight') updates.has_weight = value;
+      if (field === 'has_duration') updates.has_duration = value;
+      if (field === 'notes') updates.notes = value;
+
+      // Update local state immediately
+      if (draftUnitType === 'days') {
+        setDraftDays((prev) =>
+          prev.map((d) =>
+            d.id === currentDay.id
+              ? {
+                  ...d,
+                  exercises: d.exercises.map((ex) =>
+                    ex.id === exerciseId ? { ...ex, ...updates } : ex
+                  ),
+                }
+              : d
+          )
+        );
+      } else {
+        setDraftWeeks((prev) =>
+          prev.map((week, wIdx) => {
+            if (wIdx === activeWeekIndex) {
+              return {
+                ...week,
+                days: week.days.map((d) =>
+                  d.id === currentDay.id
+                    ? {
+                        ...d,
+                        exercises: d.exercises.map((ex) =>
+                          ex.id === exerciseId ? { ...ex, ...updates } : ex
+                        ),
+                      }
+                    : d
+                ),
+              };
+            }
+            return week;
+          })
+        );
+      }
+
+      // Fire API call in background
+      updateExerciseInDay(planId, currentDay.id, exerciseId, updates).catch((err) => {
+        // On failure: revert the specific field
         if (draftUnitType === 'days') {
           setDraftDays((prev) =>
             prev.map((d) =>
@@ -670,7 +833,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                 ? {
                     ...d,
                     exercises: d.exercises.map((ex) =>
-                      ex.id === exerciseId ? { ...ex, ...updates } : ex
+                      ex.id === exerciseId ? { ...ex, [field]: previousValue } : ex
                     ),
                   }
                 : d
@@ -687,7 +850,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                       ? {
                           ...d,
                           exercises: d.exercises.map((ex) =>
-                            ex.id === exerciseId ? { ...ex, ...updates } : ex
+                            ex.id === exerciseId ? { ...ex, [field]: previousValue } : ex
                           ),
                         }
                       : d
@@ -698,9 +861,8 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
             })
           );
         }
-      } catch (err) {
         setError((err as Error).message);
-      }
+      });
     }
   }
 
@@ -738,17 +900,53 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
       }
       setDeleteConfirm({ isOpen: false, type: 'exercise' });
     } else if (planId) {
-      try {
-        await removeExerciseFromDay(planId, currentDay.id, exerciseId);
-        showToast('Exercise removed!', 'success');
-        // Patch local state instead of reloading
+      // Edit mode - optimistic: remove immediately
+      // Capture the exercise for rollback
+      const exerciseToRemove = currentDay.exercises.find((ex) => ex.id === exerciseId);
+      if (!exerciseToRemove) return;
+      const exerciseIndex = currentDay.exercises.indexOf(exerciseToRemove);
+
+      // Remove from local state immediately
+      if (draftUnitType === 'days') {
+        setDraftDays((prev) =>
+          prev.map((d) =>
+            d.id === currentDay.id
+              ? { ...d, exercises: d.exercises.filter((ex) => ex.id !== exerciseId) }
+              : d
+          )
+        );
+      } else {
+        setDraftWeeks((prev) =>
+          prev.map((week, wIdx) => {
+            if (wIdx === activeWeekIndex) {
+              return {
+                ...week,
+                days: week.days.map((d) =>
+                  d.id === currentDay.id
+                    ? { ...d, exercises: d.exercises.filter((ex) => ex.id !== exerciseId) }
+                    : d
+                ),
+              };
+            }
+            return week;
+          })
+        );
+      }
+      setDeleteConfirm({ isOpen: false, type: 'exercise' });
+
+      // Fire API call in background
+      removeExerciseFromDay(planId, currentDay.id, exerciseId).catch((err) => {
+        // On failure: re-insert the exercise at its original position
         if (draftUnitType === 'days') {
           setDraftDays((prev) =>
-            prev.map((d) =>
-              d.id === currentDay.id
-                ? { ...d, exercises: d.exercises.filter((ex) => ex.id !== exerciseId) }
-                : d
-            )
+            prev.map((d) => {
+              if (d.id === currentDay.id) {
+                const newExercises = [...d.exercises];
+                newExercises.splice(exerciseIndex, 0, exerciseToRemove);
+                return { ...d, exercises: newExercises };
+              }
+              return d;
+            })
           );
         } else {
           setDraftWeeks((prev) =>
@@ -756,21 +954,22 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
               if (wIdx === activeWeekIndex) {
                 return {
                   ...week,
-                  days: week.days.map((d) =>
-                    d.id === currentDay.id
-                      ? { ...d, exercises: d.exercises.filter((ex) => ex.id !== exerciseId) }
-                      : d
-                  ),
+                  days: week.days.map((d) => {
+                    if (d.id === currentDay.id) {
+                      const newExercises = [...d.exercises];
+                      newExercises.splice(exerciseIndex, 0, exerciseToRemove);
+                      return { ...d, exercises: newExercises };
+                    }
+                    return d;
+                  }),
                 };
               }
               return week;
             })
           );
         }
-        setDeleteConfirm({ isOpen: false, type: 'exercise' });
-      } catch (err) {
         setError((err as Error).message);
-      }
+      });
     }
   }
 
@@ -877,14 +1076,72 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
         );
       }
     } else if (planId) {
-      // Edit mode: single debounced write combining both set_targets and exercise fields
+      // Edit mode: optimistic update immediately, debounce API call
+      // Capture previous sets for rollback
+      const previousSets = [...currentSets];
+
+      // Update local state immediately
+      if (draftUnitType === 'days') {
+        setDraftDays((prev) =>
+          prev.map((d) =>
+            d.id === currentDay.id
+              ? {
+                  ...d,
+                  exercises: d.exercises.map((e) => {
+                    if (e.id === exerciseId) {
+                      const exerciseUpdates: any = { target_sets: updatedSets.length };
+                      if (setNumber === 1) {
+                        if (field === 'reps') exerciseUpdates.target_reps = updatedSet.target_reps;
+                        if (field === 'weight') exerciseUpdates.target_weight = updatedSet.target_weight;
+                        if (field === 'duration') exerciseUpdates.target_duration_seconds = updatedSet.target_duration_seconds;
+                      }
+                      return { ...e, set_targets: updatedSets, ...exerciseUpdates };
+                    }
+                    return e;
+                  }),
+                }
+              : d
+          )
+        );
+      } else {
+        setDraftWeeks((prev) =>
+          prev.map((week, wIdx) => {
+            if (wIdx === activeWeekIndex) {
+              return {
+                ...week,
+                days: week.days.map((d) =>
+                  d.id === currentDay.id
+                    ? {
+                        ...d,
+                        exercises: d.exercises.map((e) => {
+                          if (e.id === exerciseId) {
+                            const exerciseUpdates: any = { target_sets: updatedSets.length };
+                            if (setNumber === 1) {
+                              if (field === 'reps') exerciseUpdates.target_reps = updatedSet.target_reps;
+                              if (field === 'weight') exerciseUpdates.target_weight = updatedSet.target_weight;
+                              if (field === 'duration') exerciseUpdates.target_duration_seconds = updatedSet.target_duration_seconds;
+                            }
+                            return { ...e, set_targets: updatedSets, ...exerciseUpdates };
+                          }
+                          return e;
+                        }),
+                      }
+                    : d
+                ),
+              };
+            }
+            return week;
+          })
+        );
+      }
+
+      // Debounce the API call
       const timeoutId = autoSaveTimeoutsRef.current.get(exerciseId);
       if (timeoutId) clearTimeout(timeoutId);
 
       const newTimeoutId = setTimeout(async () => {
         try {
           const exerciseUpdates: any = { target_sets: updatedSets.length };
-          // For Set 1, also update the exercise-level field
           if (setNumber === 1) {
             if (field === 'reps') exerciseUpdates.target_reps = updatedSet.target_reps;
             if (field === 'weight') exerciseUpdates.target_weight = updatedSet.target_weight;
@@ -894,7 +1151,8 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
             replaceSetTargets(planId, currentDay.id, exerciseId, updatedSets),
             updateExerciseInDay(planId, currentDay.id, exerciseId, exerciseUpdates),
           ]);
-          // Patch local state instead of reloading (values already known)
+        } catch (err) {
+          // On failure: revert to previous sets
           if (draftUnitType === 'days') {
             setDraftDays((prev) =>
               prev.map((d) =>
@@ -902,7 +1160,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                   ? {
                       ...d,
                       exercises: d.exercises.map((e) =>
-                        e.id === exerciseId ? { ...e, set_targets: updatedSets, ...exerciseUpdates } : e
+                        e.id === exerciseId ? { ...e, set_targets: previousSets, target_sets: previousSets.length } : e
                       ),
                     }
                   : d
@@ -919,7 +1177,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                         ? {
                             ...d,
                             exercises: d.exercises.map((e) =>
-                              e.id === exerciseId ? { ...e, set_targets: updatedSets, ...exerciseUpdates } : e
+                              e.id === exerciseId ? { ...e, set_targets: previousSets, target_sets: previousSets.length } : e
                             ),
                           }
                         : d
@@ -930,7 +1188,6 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
               })
             );
           }
-        } catch (err) {
           setError((err as Error).message);
         }
       }, 500);
@@ -1003,13 +1260,53 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
         );
       }
     } else if (planId) {
-      // Edit mode: patch local state
-      try {
-        await Promise.all([
-          replaceSetTargets(planId, currentDay.id, exerciseId, updatedSets),
-          updateExerciseInDay(planId, currentDay.id, exerciseId, { target_sets: updatedSets.length }),
-        ]);
-        // Patch local state instead of reloading (values already known)
+      // Edit mode - optimistic: add set immediately
+      // Capture previous sets for rollback
+      const previousSets = [...currentSets];
+
+      // Update local state immediately
+      if (draftUnitType === 'days') {
+        setDraftDays((prev) =>
+          prev.map((d) =>
+            d.id === currentDay.id
+              ? {
+                  ...d,
+                  exercises: d.exercises.map((e) =>
+                    e.id === exerciseId ? { ...e, set_targets: updatedSets, target_sets: updatedSets.length } : e
+                  ),
+                }
+              : d
+          )
+        );
+      } else {
+        setDraftWeeks((prev) =>
+          prev.map((week, wIdx) => {
+            if (wIdx === activeWeekIndex) {
+              return {
+                ...week,
+                days: week.days.map((d) =>
+                  d.id === currentDay.id
+                    ? {
+                        ...d,
+                        exercises: d.exercises.map((e) =>
+                          e.id === exerciseId ? { ...e, set_targets: updatedSets, target_sets: updatedSets.length } : e
+                        ),
+                      }
+                    : d
+                ),
+              };
+            }
+            return week;
+          })
+        );
+      }
+
+      // Fire API call in background
+      Promise.all([
+        replaceSetTargets(planId, currentDay.id, exerciseId, updatedSets),
+        updateExerciseInDay(planId, currentDay.id, exerciseId, { target_sets: updatedSets.length }),
+      ]).catch((err) => {
+        // On failure: revert to previous sets
         if (draftUnitType === 'days') {
           setDraftDays((prev) =>
             prev.map((d) =>
@@ -1017,7 +1314,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                 ? {
                     ...d,
                     exercises: d.exercises.map((e) =>
-                      e.id === exerciseId ? { ...e, set_targets: updatedSets, target_sets: updatedSets.length } : e
+                      e.id === exerciseId ? { ...e, set_targets: previousSets, target_sets: previousSets.length } : e
                     ),
                   }
                 : d
@@ -1034,7 +1331,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                       ? {
                           ...d,
                           exercises: d.exercises.map((e) =>
-                            e.id === exerciseId ? { ...e, set_targets: updatedSets, target_sets: updatedSets.length } : e
+                            e.id === exerciseId ? { ...e, set_targets: previousSets, target_sets: previousSets.length } : e
                           ),
                         }
                       : d
@@ -1045,9 +1342,8 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
             })
           );
         }
-      } catch (err) {
         setError((err as Error).message);
-      }
+      });
     }
   }
 
@@ -1118,13 +1414,53 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
         );
       }
     } else if (planId) {
-      // Edit mode: patch local state
-      try {
-        await Promise.all([
-          replaceSetTargets(planId, currentDay.id, exerciseId, updatedSets),
-          updateExerciseInDay(planId, currentDay.id, exerciseId, { target_sets: updatedSets.length }),
-        ]);
-        // Patch local state instead of reloading (values already known)
+      // Edit mode - optimistic: remove set immediately
+      // Capture previous sets for rollback
+      const previousSets = [...currentSets];
+
+      // Update local state immediately
+      if (draftUnitType === 'days') {
+        setDraftDays((prev) =>
+          prev.map((d) =>
+            d.id === currentDay.id
+              ? {
+                  ...d,
+                  exercises: d.exercises.map((e) =>
+                    e.id === exerciseId ? { ...e, set_targets: updatedSets, target_sets: updatedSets.length } : e
+                  ),
+                }
+              : d
+          )
+        );
+      } else {
+        setDraftWeeks((prev) =>
+          prev.map((week, wIdx) => {
+            if (wIdx === activeWeekIndex) {
+              return {
+                ...week,
+                days: week.days.map((d) =>
+                  d.id === currentDay.id
+                    ? {
+                        ...d,
+                        exercises: d.exercises.map((e) =>
+                          e.id === exerciseId ? { ...e, set_targets: updatedSets, target_sets: updatedSets.length } : e
+                        ),
+                      }
+                    : d
+                ),
+              };
+            }
+            return week;
+          })
+        );
+      }
+
+      // Fire API call in background
+      Promise.all([
+        replaceSetTargets(planId, currentDay.id, exerciseId, updatedSets),
+        updateExerciseInDay(planId, currentDay.id, exerciseId, { target_sets: updatedSets.length }),
+      ]).catch((err) => {
+        // On failure: revert to previous sets
         if (draftUnitType === 'days') {
           setDraftDays((prev) =>
             prev.map((d) =>
@@ -1132,7 +1468,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                 ? {
                     ...d,
                     exercises: d.exercises.map((e) =>
-                      e.id === exerciseId ? { ...e, set_targets: updatedSets, target_sets: updatedSets.length } : e
+                      e.id === exerciseId ? { ...e, set_targets: previousSets, target_sets: previousSets.length } : e
                     ),
                   }
                 : d
@@ -1149,7 +1485,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                       ? {
                           ...d,
                           exercises: d.exercises.map((e) =>
-                            e.id === exerciseId ? { ...e, set_targets: updatedSets, target_sets: updatedSets.length } : e
+                            e.id === exerciseId ? { ...e, set_targets: previousSets, target_sets: previousSets.length } : e
                           ),
                         }
                       : d
@@ -1160,9 +1496,8 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
             })
           );
         }
-      } catch (err) {
         setError((err as Error).message);
-      }
+      });
     }
   }
 
