@@ -4195,3 +4195,132 @@ Fixed three critical data-sync bugs in edit mode that were caught during indepen
 3. Add Set: now updates both set_targets array and target_sets integer atomically
 4. Remove Set: now updates both set_targets array and target_sets integer atomically
 5. Create mode: untouched, still draft-only with proper target_sets sync via draftDays/draftWeeks state updates
+
+## 2026-08-02 � Task 74: Preserve History on Delete & Fix Default Sets
+
+Fixed two critical bugs affecting data preservation and exercise defaults:
+
+**Bug 1 - cascade delete destroys logged history:** Deleting a plan or exercise was cascade-deleting all logged workout sessions and sets (actual gym data). FIX: Created Alembic migration change_fks_to_set_null_001 to change foreign keys from CASCADE to SET NULL:
+  - workout_sessions.workout_plan_id CASCADE ? SET NULL (also made column nullable)
+  - workout_sessions.plan_day_id CASCADE ? SET NULL
+  - workout_sessions.plan_week_id CASCADE ? SET NULL  
+  - workout_sets.workout_exercise_id CASCADE ? SET NULL
+Updated WorkoutSessionModel to make workout_plan_id nullable, updated response schemas and domain entity to reflect optional FK fields.
+
+**Bug 2 - new exercises show 3 pips instead of 1:** Newly added exercises had target_sets=NULL, causing ActiveWorkout fallback (?? 3) to show wrong pip count. FIX: Changed PlanBuilder.tsx line 428 to default target_sets to 1 when no explicit value provided (instead of undefined/null).
+
+**Supporting fixes (needed for safety):**
+  - Updated WorkoutSessionResponse.workout_plan_id type: int ? int | None
+  - Updated WorkoutSessionDetailResponse.Session.workout_plan_id type: int ? int | None  
+  - Updated WorkoutSession domain entity workout_plan_id type: int ? int | None
+  - Fixed SessionDetailPage to skip plan detail fetch when workout_plan_id is null (deleted plan), uses backend's "Deleted Plan" fallback from session.plan_name
+
+**Verification:**
+- TypeScript build: clean
+- Frontend tests: 133/133 pass
+- Logged history survives plan/exercise deletion with NULL FKs (schema enforces, not just app logic)
+- New exercises default to 1 set, not 3
+- SessionDetailPage gracefully handles deleted plans
+
+**Constraints maintained:**
+- workout_sets.workout_session_id CASCADE unchanged (sessions can't exist without parent)
+- Exercise progress calculations unchanged (use exercise_id, not workout_exercise_id)
+- Create-mode and add-exercise flows unchanged
+
+**CRITICAL FIX (post-implementation):** Discovered hardcoded FK constraint name in migration would fail in production (constraint name differs between dev and prod due to historical schema drift). Updated migration to dynamically discover actual constraint names at runtime using SQLAlchemy inspector � now works correctly in all environments regardless of drift. This prevents a production-blocking failure.
+
+## 2026-08-02 — Task 76: Fix exercise progress crash on partial sets and back button
+
+**Changes:**
+- Backend (`get_exercise_progress.py`): Added null guards at 5 critical locations to handle sets missing weight or reps:
+  - Line 120: Volume sum now skips sets where weight or reps is None
+  - Line 124: E1RM calculation checks both weight and reps are non-null, returns None if either is missing
+  - Line 128: Weight PR comparison guards s.weight is not None
+  - Line 146: Weight max() assignment only runs if s.weight is not None
+  - Line 129: Reps PR comparison guards s.reps is not None
+  - Line 148: Reps max() assignment only runs if s.reps is not None
+  - Line 206: Personal records loop guards each comparison on specific field being non-null
+  - ProgressSet dataclass: `estimated_1rm: float` → `float | None`
+
+- Backend schemas: `ProgressSetResponse.estimated_1rm: float` → `float | None`
+
+- Frontend (`ExerciseProgress.tsx`):
+  - Line 388: Set display now renders only fields that exist ("100 lbs" or "12 reps" instead of dangling "×")
+  - Line 403: Est. 1RM line only renders when estimated_1rm is not null
+  - Line 433: Math.max() now filters null values before reducing
+  - Lines 41-53 (est_1rm case): Filter null values before finding best set for chart
+  - Lines 61-73 (best_weight case): Filter null values before finding best set for chart
+
+- Frontend navigation: `ExerciseProgressPage.tsx:39` changed `navigate("/exercises")` → `navigate(-1)`
+
+**Testing:**
+- Backend test suite: 182/184 passed (2 pre-existing failures in auth status codes, unrelated)
+- Frontend test suite: All 133 tests passed, `npx tsc -b` clean
+- Created test data with partial sets (weight-only, reps-only) in dev database to verify null handling
+
+**Key precision points addressed:**
+1. ProgressSet dataclass updated to match ProgressSetResponse schema (float | None for estimated_1rm)
+2. is_weight_pr and is_reps_pr guards implemented in TWO locations each (comparison AND assignment), as specified
+3. Independent guards per field (heaviest_weight, most_reps) so one missing field doesn't block tracking of the other
+
+
+**Critical follow-up fix (same session):**
+Discovered that arithmetic guards alone were insufficient — response schemas still rejected null `weight`/`reps`. Added missing nullable declarations:
+- `ProgressSet` dataclass: `weight: float | None`, `reps: int | None`
+- `ProgressSetResponse` schema: same changes
+- Frontend `ProgressSet` TypeScript interface: `weight: number | null`, `reps: number | null`
+
+This is the fix that allows the endpoint to actually serialize responses containing partial-data sets; without it, Pydantic validation fails during response construction despite the arithmetic guards succeeding. Frontend rendering already handled nulls correctly; gap was in type declarations lagging behind runtime behavior.
+
+**Final verification:** Backend 182/184 tests pass (2 pre-existing), frontend all 133 tests pass, TypeScript build clean.
+
+
+## 2026-08-02 — Task 77: Show exercises in session detail and history list
+
+**Part A: Session Detail fallback for deleted plans**
+- `SessionDetail.tsx`: Added secondary rendering path when `matchingDay` is null
+- Groups sets by `exercise_name` instead of `workout_exercise_id` (survives plan deletion per Task 74)
+- Renders same set-row styling; preserves set-number sort order
+- No target lines (that data comes from plan structure which no longer exists)
+- Keeps existing plan-based path untouched for the normal case
+
+**Part B: History list exercise preview**
+- Backend `GetWorkoutHistory`: Added `set_repository` and `exercise_repository` dependencies
+- Collects distinct exercise names per session, preserving first-seen order
+- Implements per-session caching to avoid N+1 exercise lookups
+- Handles deleted exercises gracefully ("Deleted Exercise" fallback)
+- `WorkoutHistoryEntry` dataclass and schema: Added `exercises: list[str]`
+- Routes: Updated DI wiring in `get_workout_history_handler` to pass new repositories
+
+- Frontend `WorkoutHistoryEntry` type: Added `exercises: string[]`
+- `WorkoutHistory.tsx`: Added exercises field-group with comma-separated display
+- Implements "+N more" truncation for sessions with >3 exercises
+- Omits field-group entirely if session has zero exercises
+
+**Testing:**
+- Backend: 182/184 tests pass (2 pre-existing auth failures)
+- Frontend: All 133 tests pass, TypeScript build clean
+- Both changes source from `workout_sets.exercise_id` (permanent) rather than plan structure, so survive plan/exercise deletion
+
+
+## 2026-08-02 — Task 78: Remove exercise preview from history list (keep Session Detail)
+
+**Scope:** Revert Task 77's Part B only. Part A (Session Detail fallback for deleted plans) untouched.
+
+**Frontend reverts:**
+- `WorkoutHistory.tsx`: Removed "Exercises" field-group rendering (comma-separated list with "+N more" truncation)
+- `workoutSessionsApi.ts`: Removed `exercises: string[]` from `WorkoutHistoryEntry` interface
+- History list restored to 4-column layout: Date / Workout / Duration / View Details
+
+**Backend reverts:**
+- `GetWorkoutHistory`: Removed `set_repository`/`exercise_repository` dependencies
+- Removed exercise-collection loop and per-session caching logic
+- `WorkoutHistoryEntry` dataclass: Removed `exercises: list[str]` field
+- `WorkoutHistoryEntryResponse` schema: Removed `exercises: list[str]`
+- Routes: Reverted `get_workout_history_handler` DI wiring to only construct `session_repo`/`plan_repo`
+
+**Outcome:**
+- `GET /api/workout-history` no longer triggers per-session set/exercise lookups
+- `SessionDetail.tsx` completely untouched — deleted-plan exercise display still works
+- Test results unchanged: 182/184 backend (2 pre-existing), 133/133 frontend
+

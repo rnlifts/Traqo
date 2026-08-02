@@ -7,7 +7,7 @@ class WorkoutSession:
     def __init__(
         self,
         user_id: int,
-        workout_plan_id: int,
+        workout_plan_id: int | None,
         started_at: datetime,
         plan_day_id: int | None = None,
         plan_week_id: int | None = None,

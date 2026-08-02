@@ -16,10 +16,10 @@ class ProgressSet:
     """A single set in an exercise progress view."""
 
     set_number: int
-    weight: float
-    reps: int
+    weight: float | None
+    reps: int | None
     notes: str
-    estimated_1rm: float
+    estimated_1rm: float | None
     is_weight_pr: bool
     is_reps_pr: bool
     is_e1rm_pr: bool
@@ -117,17 +117,17 @@ class GetExerciseProgress:
                 continue
 
             progress_sets = []
-            volume = sum(s.weight * s.reps for s in session_sets)
+            volume = sum(s.weight * s.reps for s in session_sets if s.weight is not None and s.reps is not None)
 
             for s in session_sets:
-                # Epley formula: weight × (1 + reps / 30)
-                e1rm = round(s.weight * (1 + s.reps / 30), 1)
+                # Epley formula: weight × (1 + reps / 30); requires both weight and reps
+                e1rm = round(s.weight * (1 + s.reps / 30), 1) if (s.weight is not None and s.reps is not None) else None
 
                 # PR flags: only if strictly beats existing running max
                 # First-ever data point never flags as PR (running maxes start at None)
-                is_weight_pr = running_max_weight is not None and s.weight > running_max_weight
-                is_reps_pr = running_max_reps is not None and s.reps > running_max_reps
-                is_e1rm_pr = running_max_e1rm is not None and e1rm > running_max_e1rm
+                is_weight_pr = running_max_weight is not None and s.weight is not None and s.weight > running_max_weight
+                is_reps_pr = running_max_reps is not None and s.reps is not None and s.reps > running_max_reps
+                is_e1rm_pr = running_max_e1rm is not None and e1rm is not None and e1rm > running_max_e1rm
 
                 progress_sets.append(
                     ProgressSet(
@@ -142,10 +142,13 @@ class GetExerciseProgress:
                     )
                 )
 
-                # Update running maxes (using max() with None is handled via 'or 0')
-                running_max_weight = max(running_max_weight or 0, s.weight)
-                running_max_reps = max(running_max_reps or 0, s.reps)
-                running_max_e1rm = max(running_max_e1rm or 0, e1rm)
+                # Update running maxes (skip None values for weight/reps/e1rm)
+                if s.weight is not None:
+                    running_max_weight = max(running_max_weight or 0, s.weight)
+                if s.reps is not None:
+                    running_max_reps = max(running_max_reps or 0, s.reps)
+                if e1rm is not None:
+                    running_max_e1rm = max(running_max_e1rm or 0, e1rm)
 
             # Volume PR (only if strictly beats running max)
             is_volume_pr = running_max_volume is not None and volume > running_max_volume
@@ -192,15 +195,15 @@ class GetExerciseProgress:
 
             # Check each set in the entry
             for s in entry.sets:
-                if heaviest_weight is None or s.weight > heaviest_weight:
+                if s.weight is not None and (heaviest_weight is None or s.weight > heaviest_weight):
                     heaviest_weight = s.weight
                     heaviest_weight_date = entry.date
 
-                if most_reps is None or s.reps > most_reps:
+                if s.reps is not None and (most_reps is None or s.reps > most_reps):
                     most_reps = s.reps
                     most_reps_date = entry.date
 
-                if best_e1rm is None or s.estimated_1rm > best_e1rm:
+                if s.estimated_1rm is not None and (best_e1rm is None or s.estimated_1rm > best_e1rm):
                     best_e1rm = s.estimated_1rm
                     best_e1rm_date = entry.date
 

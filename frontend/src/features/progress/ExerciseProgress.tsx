@@ -39,17 +39,21 @@ export const ExerciseProgress: React.FC<ExerciseProgressProps> = ({
   const buildChartData = (): TrendChartDataPoint[] => {
     switch (selectedMetric) {
       case "est_1rm": {
-        // For Est. 1RM, find the best estimated_1rm in each session
-        return data.sessions.map((session) => {
-          const bestSet = session.sets.reduce((max, current) =>
-            current.estimated_1rm > max.estimated_1rm ? current : max
-          );
-          return {
-            date: session.date,
-            value: bestSet.estimated_1rm,
-            isPR: bestSet.is_e1rm_pr,
-          };
-        });
+        // For Est. 1RM, find the best estimated_1rm in each session (filter out nulls)
+        return data.sessions
+          .map((session) => {
+            const setsWithE1rm = session.sets.filter((s) => s.estimated_1rm !== null);
+            if (setsWithE1rm.length === 0) return null;
+            const bestSet = setsWithE1rm.reduce((max, current) =>
+              current.estimated_1rm! > max.estimated_1rm! ? current : max
+            );
+            return {
+              date: session.date,
+              value: bestSet.estimated_1rm!,
+              isPR: bestSet.is_e1rm_pr,
+            };
+          })
+          .filter((p) => p !== null) as TrendChartDataPoint[];
       }
       case "volume": {
         return data.sessions.map((session) => ({
@@ -59,17 +63,21 @@ export const ExerciseProgress: React.FC<ExerciseProgressProps> = ({
         }));
       }
       case "best_weight": {
-        // For Best Weight, find the heaviest weight in each session
-        return data.sessions.map((session) => {
-          const bestSet = session.sets.reduce((max, current) =>
-            current.weight > max.weight ? current : max
-          );
-          return {
-            date: session.date,
-            value: bestSet.weight,
-            isPR: bestSet.is_weight_pr,
-          };
-        });
+        // For Best Weight, find the heaviest weight in each session (filter out nulls)
+        return data.sessions
+          .map((session) => {
+            const setsWithWeight = session.sets.filter((s) => s.weight !== null);
+            if (setsWithWeight.length === 0) return null;
+            const bestSet = setsWithWeight.reduce((max, current) =>
+              current.weight! > max.weight! ? current : max
+            );
+            return {
+              date: session.date,
+              value: bestSet.weight!,
+              isPR: bestSet.is_weight_pr,
+            };
+          })
+          .filter((p) => p !== null) as TrendChartDataPoint[];
       }
     }
   };
@@ -385,7 +393,7 @@ export const ExerciseProgress: React.FC<ExerciseProgressProps> = ({
                       >
                         <div>
                           <span style={{ fontWeight: "500" }}>
-                            Set {set.set_number}: {set.weight} × {set.reps}
+                            Set {set.set_number}: {set.weight !== null && set.reps !== null ? `${set.weight} × ${set.reps}` : set.weight !== null ? `${set.weight} lbs` : set.reps !== null ? `${set.reps} reps` : "not set"}
                           </span>
                           {renderPRBadge(
                             set.is_weight_pr,
@@ -393,15 +401,17 @@ export const ExerciseProgress: React.FC<ExerciseProgressProps> = ({
                             set.is_e1rm_pr
                           )}
                         </div>
-                        <div
-                          style={{
-                            fontSize: "12px",
-                            color: "var(--text)",
-                            textAlign: "right",
-                          }}
-                        >
-                          Est. 1RM: {set.estimated_1rm} lbs
-                        </div>
+                        {set.estimated_1rm !== null && (
+                          <div
+                            style={{
+                              fontSize: "12px",
+                              color: "var(--text)",
+                              textAlign: "right",
+                            }}
+                          >
+                            Est. 1RM: {set.estimated_1rm} lbs
+                          </div>
+                        )}
                       </div>
                       {set.notes && (
                         <div
@@ -420,22 +430,27 @@ export const ExerciseProgress: React.FC<ExerciseProgressProps> = ({
                 </div>
 
                 {/* Est. 1RM of best set */}
-                <div
-                  style={{
-                    marginTop: "12px",
-                    paddingTop: "12px",
-                    borderTop: "1px solid var(--border)",
-                    fontSize: "14px",
-                  }}
-                >
-                  Best Set Est. 1RM:{" "}
-                  <strong>
-                    {Math.max(...session.sets.map((s) => s.estimated_1rm)).toFixed(
-                      1
-                    )}{" "}
-                    lbs
-                  </strong>
-                </div>
+                {(() => {
+                  const e1rms = session.sets.map((s) => s.estimated_1rm).filter((e) => e !== null);
+                  return e1rms.length > 0 ? (
+                    <div
+                      style={{
+                        marginTop: "12px",
+                        paddingTop: "12px",
+                        borderTop: "1px solid var(--border)",
+                        fontSize: "14px",
+                      }}
+                    >
+                      Best Set Est. 1RM:{" "}
+                      <strong>
+                        {Math.max(...(e1rms as number[])).toFixed(
+                          1
+                        )}{" "}
+                        lbs
+                      </strong>
+                    </div>
+                  ) : null;
+                })()}
               </div>
             ))}
           </div>

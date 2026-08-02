@@ -225,7 +225,9 @@ describe('PlanBuilder Preview Panel', () => {
     await user.click(addButton);
 
     // Click the real day-row rendered by PlanBuilder itself (not the mocked sidebar)
-    const dayRowName = await screen.findByText('1. Bench Press');
+    // Exercise name and its order-number badge are now separate elements (order-number
+    // badge overlays the thumbnail), so match on the name alone.
+    const dayRowName = await screen.findByText('Bench Press');
     await user.click(dayRowName);
 
     const previewPanel = screen.getByTestId('preview-panel');

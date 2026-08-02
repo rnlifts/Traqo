@@ -161,6 +161,79 @@ export const SessionDetail: React.FC<SessionDetailProps> = ({
             );
           })}
         </div>
+      ) : sets.length > 0 ? (
+        <div style={{ display: "grid", gap: "16px" }}>
+          {Array.from(
+            sets.reduce(
+              (acc, set) => {
+                const name = set.exercise_name || "Unknown Exercise";
+                if (!acc.has(name)) {
+                  acc.set(name, []);
+                }
+                acc.get(name)!.push(set);
+                return acc;
+              },
+              new Map<string, typeof sets>()
+            )
+          ).map(([exerciseName, exerciseSets]) => (
+            <div key={exerciseName} className="card">
+              {/* Exercise name as link (if exercise_id is available) */}
+              {exerciseSets[0].exercise_id ? (
+                <Link
+                  to={`/exercises/${exerciseSets[0].exercise_id}/progress`}
+                  style={{
+                    textDecoration: "none",
+                    color: "var(--accent)",
+                    fontWeight: "bold",
+                    fontSize: "16px",
+                    marginBottom: "8px",
+                    display: "inline-block",
+                  }}
+                >
+                  {exerciseName}
+                </Link>
+              ) : (
+                <div
+                  style={{
+                    color: "var(--accent)",
+                    fontWeight: "bold",
+                    fontSize: "16px",
+                    marginBottom: "8px",
+                  }}
+                >
+                  {exerciseName}
+                </div>
+              )}
+
+              {/* Sets list */}
+              <div style={{ display: "grid", gap: "8px" }}>
+                {exerciseSets
+                  .sort((a, b) => a.set_number - b.set_number)
+                  .map((set) => (
+                    <div
+                      key={set.id}
+                      style={{
+                        backgroundColor: "var(--surface)",
+                        border: "1px solid var(--border)",
+                        padding: "8px 12px",
+                        borderRadius: "16px",
+                        fontSize: "14px",
+                      }}
+                    >
+                      <div style={{ fontWeight: "500" }}>
+                        Set {set.set_number}: {set.weight} × {set.reps}
+                      </div>
+                      {set.notes && (
+                        <div style={{ fontSize: "13px", color: "var(--text)", fontStyle: "italic", marginTop: "4px" }}>
+                          {set.notes}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+              </div>
+            </div>
+          ))}
+        </div>
       ) : (
         <div className="empty-state">
           <p>No exercises in this workout day.</p>

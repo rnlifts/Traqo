@@ -2,10 +2,10 @@ import client from "./client";
 
 export interface ProgressSet {
   set_number: number;
-  weight: number;
-  reps: number;
+  weight: number | null;
+  reps: number | null;
   notes: string;
-  estimated_1rm: number;
+  estimated_1rm: number | null;
   is_weight_pr: boolean;
   is_reps_pr: boolean;
   is_e1rm_pr: boolean;

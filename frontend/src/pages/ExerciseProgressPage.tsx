@@ -36,7 +36,7 @@ export default function ExerciseProgressPage() {
     <Layout>
       <div className="page-container">
         <button
-          onClick={() => navigate("/exercises")}
+          onClick={() => navigate(-1)}
           className="btn btn-secondary"
           style={{ marginBottom: "20px" }}
         >

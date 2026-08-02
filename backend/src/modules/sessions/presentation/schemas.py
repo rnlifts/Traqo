@@ -16,7 +16,7 @@ class WorkoutSessionResponse(BaseModel):
 
     id: int
     user_id: int
-    workout_plan_id: int
+    workout_plan_id: int | None
     plan_day_id: int | None
     started_at: datetime
     completed_at: datetime | None
@@ -67,7 +67,7 @@ class WorkoutSessionDetailResponse(BaseModel):
     class Session(BaseModel):
         id: int
         user_id: int
-        workout_plan_id: int
+        workout_plan_id: int | None
         plan_name: str
         plan_day_id: int | None
         day_label: str | None
@@ -107,10 +107,10 @@ class ProgressSetResponse(BaseModel):
     """A single set in an exercise progress view."""
 
     set_number: int
-    weight: float
-    reps: int
+    weight: float | None
+    reps: int | None
     notes: str
-    estimated_1rm: float
+    estimated_1rm: float | None
     is_weight_pr: bool
     is_reps_pr: bool
     is_e1rm_pr: bool

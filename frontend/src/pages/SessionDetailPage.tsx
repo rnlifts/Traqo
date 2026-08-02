@@ -30,9 +30,14 @@ export default function SessionDetailPage() {
       const detail = await workoutSessionsApi.getSessionDetail(Number(sessionId));
       setSessionDetail(detail);
 
-      // Fetch plan detail
-      const plan = await getWorkoutPlanDetail(detail.session.workout_plan_id);
-      setPlanDetail(plan);
+      // Fetch plan detail only if the plan still exists
+      // (workout_plan_id is null if the plan was deleted; backend provides plan_name as "Deleted Plan")
+      if (detail.session.workout_plan_id !== null) {
+        const plan = await getWorkoutPlanDetail(detail.session.workout_plan_id);
+        setPlanDetail(plan);
+      } else {
+        setPlanDetail(null);
+      }
     } catch (err: any) {
       setError(err.response?.data?.error || "Failed to load workout session");
     } finally {
@@ -74,7 +79,7 @@ export default function SessionDetailPage() {
       </Layout>
     );
 
-  if (!sessionDetail || !planDetail) {
+  if (!sessionDetail) {
     return (
       <Layout>
         <div className="page-container">
@@ -92,13 +97,23 @@ export default function SessionDetailPage() {
     );
   }
 
-  // Resolve the day from the plan
-  const { matchingDay, dayLabel } = resolveSessionDay(
-    planDetail,
-    sessionDetail.session.plan_day_id
-  );
+  // Resolve the day from the plan (if plan still exists; if deleted, use default values)
+  let matchingDay: any = null;
+  let dayLabel: string;
 
-  if (!matchingDay) {
+  if (planDetail) {
+    const resolved = resolveSessionDay(
+      planDetail,
+      sessionDetail.session.plan_day_id
+    );
+    matchingDay = resolved.matchingDay;
+    dayLabel = resolved.dayLabel;
+  } else {
+    // Plan was deleted, use a default label
+    dayLabel = "Unknown Day";
+  }
+
+  if (!matchingDay && planDetail) {
     return (
       <Layout>
         <div className="page-container">

@@ -12,7 +12,7 @@ class WorkoutSessionModel(Base):
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    workout_plan_id = Column(Integer, ForeignKey("workout_plans.id"), nullable=False)
+    workout_plan_id = Column(Integer, ForeignKey("workout_plans.id"), nullable=True)
     plan_day_id = Column(Integer, ForeignKey("plan_days.id"), nullable=True)
     plan_week_id = Column(Integer, ForeignKey("plan_weeks.id"), nullable=True)
     started_at = Column(DateTime, nullable=False, default=datetime.utcnow)

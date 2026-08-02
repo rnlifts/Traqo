@@ -21,7 +21,7 @@ import { exercisesApi } from '../../api/exercisesApi';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { useToast } from '../../components/Toast';
 import { DurationInput } from '../../components/DurationInput';
-import { TrashIcon, InfoIcon } from '../../components/icons';
+import { TrashIcon, InfoIcon, ChevronDownIcon, NoteIcon } from '../../components/icons';
 import { ExerciseLibrarySidebar, type SelectedExerciseInfo } from '../exerciseLibrary/ExerciseLibrarySidebar';
 import { ExercisePreviewPanel } from '../../components/ExercisePreviewPanel';
 import { Modal } from '../../components/Modal';
@@ -61,6 +61,21 @@ function getEffectiveDaysForWeek(weeks: PlanWeek[], weekIndex: number): PlanDay[
   }
   return j >= 0 ? weeks[j].days : [];
 }
+
+// Chip button for "remove this field from tracking" (Reps ✕ / Weight ✕ / Duration ✕).
+// Plain inline styles — .field-remove-badge is absolutely positioned for a different
+// layout (a corner badge overlapping an input) and breaks when used as a normal chip.
+const toggleChipStyle: React.CSSProperties = {
+  background: 'var(--surface)',
+  border: '1.5px solid var(--border)',
+  color: 'var(--text-h)',
+  padding: '0 10px',
+  borderRadius: '8px',
+  fontSize: '12px',
+  cursor: 'pointer',
+  whiteSpace: 'nowrap',
+  height: '38px',
+};
 
 export const PlanBuilder = (props: PlanBuilderProps) => {
   const navigate = useNavigate();
@@ -128,10 +143,16 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
   const [showPreviewModal, setShowPreviewModal] = useState(false);
 
   // Set list UI state - which set is expanded per exercise (pure UI state, not derived from backend)
-  const [expandedSetByExerciseId, setExpandedSetByExerciseId] = useState<Map<number, number | null>>(new Map());
+  const [expandedExerciseIds, setExpandedExerciseIds] = useState<Set<number>>(new Set());
 
   // Auto-save debounce refs
   const autoSaveTimeoutsRef = useRef<Map<number, NodeJS.Timeout>>(new Map());
+
+  // Tracks which (exercise, set, field) values are still "inherited" from an earlier set
+  // and therefore eligible to be overwritten by a future cascade — vs. independently typed
+  // by the user (or loaded from an existing plan), which are never auto-overwritten.
+  // Keyed as `${exerciseId}:${setNumber}:${field}`. Reset per plan load (not persisted).
+  const inheritedSetFieldsRef = useRef<Set<string>>(new Set());
 
   // Load data for edit mode
   useEffect(() => {
@@ -425,7 +446,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
       setAvailableExercises([...availableExercises, newExercise]);
     }
 
-    const sets = targetSetsValue ? Number(targetSetsValue) : undefined;
+    const sets = targetSetsValue ? Number(targetSetsValue) : 1;
     const reps = hasReps && targetRepsValue ? targetRepsValue : undefined;
     const weight = hasWeight && targetWeightValue ? Number(targetWeightValue) : undefined;
     const durationSeconds = hasDuration && targetDurationValue ? targetDurationValue : undefined;
@@ -475,9 +496,11 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
           })
         );
       }
+      setExpandedExerciseIds((prev) => new Set(prev).add(newExercise.id));
     } else if (planId) {
       // Edit mode - call API
-      await addExerciseToDay(planId, currentDay.id, exerciseId, sets, reps, weight, durationSeconds, hasReps, hasWeight, hasDuration);
+      const created = await addExerciseToDay(planId, currentDay.id, exerciseId, sets, reps, weight, durationSeconds, hasReps, hasWeight, hasDuration);
+      setExpandedExerciseIds((prev) => new Set(prev).add(created.id));
       showToast('Exercise added!', 'success');
       await loadPlanForEdit();
     }
@@ -681,6 +704,36 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
     const updatedSets = [...currentSets];
     updatedSets[setIndex] = updatedSet;
 
+    // This set's value was just typed directly by the user — it's independent now,
+    // never auto-overwritten by a future cascade from an earlier set.
+    inheritedSetFieldsRef.current.delete(`${exerciseId}:${setNumber}:${field}`);
+
+    // Cascade the new value forward to subsequent sets, but only ones that are still
+    // empty or still "inherited" (never independently edited). Stop at the first set
+    // that has its own independently-set value — the chain is broken there.
+    let cascadeValue: any =
+      field === 'reps' ? updatedSet.target_reps
+      : field === 'weight' ? updatedSet.target_weight
+      : updatedSet.target_duration_seconds;
+
+    for (let i = setIndex + 1; i < updatedSets.length; i++) {
+      const nextSet = updatedSets[i];
+      const nextKey = `${exerciseId}:${nextSet.set_number}:${field}`;
+      const nextValue =
+        field === 'reps' ? nextSet.target_reps
+        : field === 'weight' ? nextSet.target_weight
+        : nextSet.target_duration_seconds;
+      const isEligible = nextValue === null || inheritedSetFieldsRef.current.has(nextKey);
+      if (!isEligible) break;
+
+      const cascadedSet = { ...nextSet };
+      if (field === 'reps') cascadedSet.target_reps = cascadeValue;
+      if (field === 'weight') cascadedSet.target_weight = cascadeValue;
+      if (field === 'duration') cascadedSet.target_duration_seconds = cascadeValue;
+      updatedSets[i] = cascadedSet;
+      inheritedSetFieldsRef.current.add(nextKey);
+    }
+
     // Update draft in create mode
     if (props.isCreateMode) {
       if (draftUnitType === 'days') {
@@ -764,10 +817,13 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
       target_duration_seconds: lastSet.target_duration_seconds,
     };
 
-    const updatedSets = [...currentSets, newSet];
+    // The new set is a one-time copy, not independently typed — keep it cascade-eligible
+    // so a later edit to an earlier set can still flow into it.
+    (['reps', 'weight', 'duration'] as const).forEach((field) => {
+      inheritedSetFieldsRef.current.add(`${exerciseId}:${newSet.set_number}:${field}`);
+    });
 
-    // Expand the new set
-    setExpandedSetByExerciseId((prev) => new Map(prev).set(exerciseId, newSet.set_number));
+    const updatedSets = [...currentSets, newSet];
 
     // Update draft in create mode
     if (props.isCreateMode) {
@@ -839,14 +895,15 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
         set_number: idx + 1,
       }));
 
-    // Collapse the exercise if the expanded set was removed
-    setExpandedSetByExerciseId((prev) => {
-      const expanded = prev.get(exerciseId);
-      if (expanded === setNumber) {
-        return new Map(prev).set(exerciseId, null);
+    // Removing a set renumbers everything after it, which would make the cascade
+    // "inherited" tracking (keyed by set_number) point at the wrong sets. Clear it for
+    // this exercise — safe default, remaining sets are simply treated as independent
+    // until the user edits one again.
+    for (const key of Array.from(inheritedSetFieldsRef.current)) {
+      if (key.startsWith(`${exerciseId}:`)) {
+        inheritedSetFieldsRef.current.delete(key);
       }
-      return prev;
-    });
+    }
 
     // Update draft in create mode
     if (props.isCreateMode) {
@@ -1167,12 +1224,31 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
 
                 {currentDay.exercises.map((ex, idx) => {
                   const sets = getSetsList(ex);
-                  const expandedSetNumber = expandedSetByExerciseId.get(ex.id);
+                  const isExpanded = expandedExerciseIds.has(ex.id);
+                  const summaryText = [
+                    `${sets.length} set${sets.length === 1 ? '' : 's'}`,
+                    ex.has_reps && ex.target_reps ? `${ex.target_reps} reps` : null,
+                    ex.has_weight && ex.target_weight ? `${ex.target_weight} lbs` : null,
+                    ex.has_duration && ex.target_duration_seconds
+                      ? `${Math.floor(ex.target_duration_seconds / 60)}:${String(ex.target_duration_seconds % 60).padStart(2, '0')}`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ');
 
                   return (
-                    <div key={ex.id}>
+                    <div
+                      key={ex.id}
+                      style={{
+                        border: '1px solid var(--border)',
+                        borderRadius: '12px',
+                        marginBottom: '12px',
+                        overflow: 'hidden',
+                        opacity: isLinkedWeek ? 0.6 : 1,
+                      }}
+                    >
+                      {/* Header: thumbnail, name, collapsed summary, remove, expand toggle */}
                       <div
-                        className="exercise-row"
                         onClick={() => {
                           handlePreviewExercise({
                             name: ex.exercise_name || `Exercise ${ex.exercise_id}`,
@@ -1189,327 +1265,318 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                           }
                         }}
                         style={{
-                          opacity: isLinkedWeek ? 0.6 : 1,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '12px',
+                          padding: '12px',
+                          cursor: isLinkedWeek ? 'default' : 'pointer',
                           pointerEvents: isLinkedWeek ? 'none' : 'auto',
-                          cursor: 'pointer',
                         }}
                       >
-                        <div className="field-cell field-cell-name">
-                          <span className="cell-label">Name</span>
-                          <div className="cell-static-value" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                            {getYoutubeThumbnailUrl(ex.video_url) ? (
-                              <img
-                                src={getYoutubeThumbnailUrl(ex.video_url)!}
-                                alt={ex.exercise_name || `Exercise ${ex.exercise_id}`}
-                                style={{
-                                  width: '40px',
-                                  height: '40px',
-                                  borderRadius: '4px',
-                                  objectFit: 'cover',
-                                  flexShrink: 0,
-                                }}
-                              />
-                            ) : (
-                              <div
-                                style={{
-                                  width: '40px',
-                                  height: '40px',
-                                  borderRadius: '4px',
-                                  backgroundColor: 'var(--border)',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  color: 'var(--text-h)',
-                                  fontSize: '18px',
-                                  flexShrink: 0,
-                                }}
-                              >
-                                🏋️
-                              </div>
-                            )}
-                            <span>
-                              {idx + 1}. {ex.exercise_name || `Exercise ${ex.exercise_id}`}
-                            </span>
-                          </div>
-                        </div>
-                        {ex.has_reps ? (
-                          <div className="field-cell">
-                            <span className="cell-label">Reps</span>
-                            <div className="field-with-badge">
-                              <input
-                                type="text"
-                                value={ex.target_reps || ''}
-                                onChange={(e) => {
-                                  const newValue = e.target.value || null;
-                                  handleUpdateSet(ex.id, 1, 'reps', newValue);
-                                }}
-                                onClick={(e) => e.stopPropagation()}
-                                placeholder="e.g. 10 or 10-12"
-                                className="input-field"
-                                disabled={isLinkedWeek}
-                                style={{ width: '140px' }}
-                              />
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleUpdateExercise(ex.id, 'has_reps', false);
-                                }}
-                                className="field-remove-badge"
-                                disabled={isLinkedWeek}
-                                title="Cross out reps"
-                              >
-                                ✕
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="field-cell">
-                            <span className="cell-label">Reps</span>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleUpdateExercise(ex.id, 'has_reps', true);
-                              }}
-                              className="field-restore-chip"
-                              disabled={isLinkedWeek}
-                            >
-                              + Reps
-                            </button>
-                          </div>
-                        )}
-                        {ex.has_weight ? (
-                          <div className="field-cell">
-                            <span className="cell-label">Weight</span>
-                            <div className="field-with-badge">
-                              <input
-                                type="number"
-                                step="0.5"
-                                value={ex.target_weight || ''}
-                                onChange={(e) => {
-                                  const newValue = e.target.value ? Number(e.target.value) : null;
-                                  handleUpdateSet(ex.id, 1, 'weight', newValue);
-                                }}
-                                onClick={(e) => e.stopPropagation()}
-                                placeholder="Weight"
-                                className="input-field"
-                                disabled={isLinkedWeek}
-                                style={{ width: '75px' }}
-                              />
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleUpdateExercise(ex.id, 'has_weight', false);
-                                }}
-                                className="field-remove-badge"
-                                disabled={isLinkedWeek}
-                                title="Cross out weight"
-                              >
-                                ✕
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="field-cell">
-                            <span className="cell-label">Weight</span>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleUpdateExercise(ex.id, 'has_weight', true);
-                              }}
-                              className="field-restore-chip"
-                              disabled={isLinkedWeek}
-                            >
-                              + Weight
-                            </button>
-                          </div>
-                        )}
-                        {ex.has_duration ? (
-                          <div className="field-cell" onClick={(e) => e.stopPropagation()}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                              <span className="cell-label">Duration</span>
-                              <span title="Target time to sustain this exercise (e.g. treadmill, plank) — not how long the set took." style={{ cursor: 'help', display: 'flex', alignItems: 'center' }}>
-                                <InfoIcon style={{ width: '14px', height: '14px' }} />
-                              </span>
-                            </div>
-                            <DurationInput
-                              value={ex.target_duration_seconds || null}
-                              onChange={(value) => {
-                                const newValue = value || null;
-                                handleUpdateSet(ex.id, 1, 'duration', newValue);
-                              }}
-                              onRemove={() => handleUpdateExercise(ex.id, 'has_duration', false)}
+                        <div style={{ position: 'relative', flexShrink: 0 }}>
+                          {getYoutubeThumbnailUrl(ex.video_url) ? (
+                            <img
+                              src={getYoutubeThumbnailUrl(ex.video_url)!}
+                              alt={ex.exercise_name || `Exercise ${ex.exercise_id}`}
+                              style={{ width: '52px', height: '52px', borderRadius: '8px', objectFit: 'cover' }}
                             />
-                          </div>
-                        ) : (
-                          <div className="field-cell">
-                            <span className="cell-label">Duration</span>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleUpdateExercise(ex.id, 'has_duration', true);
-                              }}
-                              className="field-restore-chip"
-                              disabled={isLinkedWeek}
-                            >
-                              + Duration
-                            </button>
-                          </div>
-                        )}
-                        <div className="field-cell field-cell-notes">
-                          <span className="cell-label">Notes</span>
-                          <input
-                            type="text"
-                            value={ex.notes || ''}
-                            onChange={(e) => handleUpdateExercise(ex.id, 'notes', e.target.value)}
-                            onClick={(e) => e.stopPropagation()}
-                            placeholder="Notes"
-                            className="input-field"
-                            disabled={isLinkedWeek}
-                          />
-                        </div>
-                        <div className="row-actions">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setDeleteConfirm({ isOpen: true, type: 'exercise', dayId: currentDay.id, exerciseId: ex.id });
-                            }}
-                            className="row-delete-btn"
-                            disabled={isLinkedWeek}
-                            title="Remove exercise"
-                            aria-label="Remove exercise"
-                          >
-                            <TrashIcon size={15} />
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Collapsible Set List */}
-                      <div style={{ marginLeft: '20px', borderLeft: '2px solid var(--border)', paddingLeft: '12px' }}>
-                        {sets.map((set) => (
-                          <div key={set.set_number} style={{ marginBottom: '8px' }}>
-                            {/* Set Header (collapsed) */}
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setExpandedSetByExerciseId((prev) => {
-                                  const expanded = prev.get(ex.id);
-                                  return new Map(prev).set(ex.id, expanded === set.set_number ? null : set.set_number);
-                                });
-                              }}
+                          ) : (
+                            <div
                               style={{
-                                width: '100%',
-                                background: 'transparent',
-                                border: 'none',
-                                padding: '8px',
+                                width: '52px',
+                                height: '52px',
+                                borderRadius: '8px',
+                                backgroundColor: 'var(--border)',
                                 display: 'flex',
                                 alignItems: 'center',
-                                justifyContent: 'space-between',
-                                cursor: 'pointer',
-                                borderRadius: '4px',
+                                justifyContent: 'center',
+                                color: 'var(--text-h)',
+                                fontSize: '20px',
                               }}
-                              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-hover)')}
-                              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-                              disabled={isLinkedWeek}
                             >
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, textAlign: 'left' }}>
-                                <span style={{ fontSize: '12px', color: 'var(--text-h)', minWidth: '50px' }}>
-                                  Set {set.set_number}
-                                </span>
-                                <span style={{ fontSize: '12px', color: 'var(--text-h)' }}>
-                                  {[
-                                    set.target_weight && `${set.target_weight} lbs`,
-                                    set.target_reps && `× ${set.target_reps} reps`,
-                                    set.target_duration_seconds && `· ${Math.floor(set.target_duration_seconds / 60)}:${String(set.target_duration_seconds % 60).padStart(2, '0')}`,
-                                  ]
-                                    .filter(Boolean)
-                                    .join(' ') || 'not set'}
-                                </span>
-                              </div>
-                              <span style={{ fontSize: '16px', color: 'var(--text-h)', transition: 'transform 0.2s' }}>
-                                {expandedSetNumber === set.set_number ? '▼' : '▶'}
-                              </span>
-                            </button>
+                              🏋️
+                            </div>
+                          )}
+                          <span
+                            style={{
+                              position: 'absolute',
+                              bottom: '-4px',
+                              left: '-4px',
+                              backgroundColor: 'var(--accent)',
+                              color: '#fff',
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              width: '18px',
+                              height: '18px',
+                              borderRadius: '50%',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            {idx + 1}
+                          </span>
+                        </div>
 
-                            {/* Set Expanded (editable fields) */}
-                            {expandedSetNumber === set.set_number && (
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div
+                            style={{
+                              fontWeight: 600,
+                              fontSize: '14px',
+                              color: 'var(--text-h)',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {ex.exercise_name || `Exercise ${ex.exercise_id}`}
+                          </div>
+                          {!isExpanded && (
+                            <div style={{ fontSize: '12px', color: 'var(--text)', marginTop: '2px' }}>
+                              {summaryText}
+                            </div>
+                          )}
+                        </div>
+
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleteConfirm({ isOpen: true, type: 'exercise', dayId: currentDay.id, exerciseId: ex.id });
+                          }}
+                          className="row-delete-btn"
+                          disabled={isLinkedWeek}
+                          title="Remove exercise"
+                          aria-label="Remove exercise"
+                        >
+                          <TrashIcon size={15} />
+                        </button>
+
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setExpandedExerciseIds((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(ex.id)) {
+                                next.delete(ex.id);
+                              } else {
+                                next.add(ex.id);
+                              }
+                              return next;
+                            });
+                          }}
+                          disabled={isLinkedWeek}
+                          aria-label={isExpanded ? `Collapse ${ex.exercise_name || 'exercise'}` : `Expand ${ex.exercise_name || 'exercise'}`}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: 'var(--text-h)',
+                            padding: '4px',
+                            display: 'flex',
+                            flexShrink: 0,
+                            transition: 'transform 0.15s',
+                            transform: isExpanded ? 'rotate(180deg)' : 'none',
+                          }}
+                        >
+                          <ChevronDownIcon size={18} />
+                        </button>
+                      </div>
+
+                      {/* Expanded body */}
+                      {isExpanded && (
+                        <div style={{ borderTop: '1px solid var(--border)', padding: '12px' }}>
+                          {/* Exercise-level field toggles */}
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
+                            {ex.has_reps ? (
+                              <button
+                                onClick={() => handleUpdateExercise(ex.id, 'has_reps', false)}
+                                disabled={isLinkedWeek}
+                                title="Remove reps tracking"
+                                style={toggleChipStyle}
+                              >
+                                Reps ✕
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleUpdateExercise(ex.id, 'has_reps', true)}
+                                className="field-restore-chip"
+                                disabled={isLinkedWeek}
+                              >
+                                + Reps
+                              </button>
+                            )}
+                            {ex.has_weight ? (
+                              <button
+                                onClick={() => handleUpdateExercise(ex.id, 'has_weight', false)}
+                                disabled={isLinkedWeek}
+                                title="Remove weight tracking"
+                                style={toggleChipStyle}
+                              >
+                                Weight ✕
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleUpdateExercise(ex.id, 'has_weight', true)}
+                                className="field-restore-chip"
+                                disabled={isLinkedWeek}
+                              >
+                                + Weight
+                              </button>
+                            )}
+                            {ex.has_duration ? (
+                              <button
+                                onClick={() => handleUpdateExercise(ex.id, 'has_duration', false)}
+                                disabled={isLinkedWeek}
+                                title="Remove duration tracking"
+                                style={toggleChipStyle}
+                              >
+                                Duration ✕
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleUpdateExercise(ex.id, 'has_duration', true)}
+                                className="field-restore-chip"
+                                disabled={isLinkedWeek}
+                              >
+                                + Duration
+                              </button>
+                            )}
+                            <span
+                              title="Target time to sustain this exercise (e.g. treadmill, plank) — not how long the set took."
+                              style={{ cursor: 'help', display: 'flex', alignItems: 'center', color: 'var(--text-h)' }}
+                            >
+                              <InfoIcon style={{ width: '14px', height: '14px' }} />
+                            </span>
+                          </div>
+
+                          {/* Notes (exercise-level, not per-set) */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-h)', marginBottom: '12px' }}>
+                            <NoteIcon size={14} style={{ flexShrink: 0 }} />
+                            <input
+                              type="text"
+                              value={ex.notes || ''}
+                              onChange={(e) => handleUpdateExercise(ex.id, 'notes', e.target.value)}
+                              placeholder="Notes"
+                              className="input-field"
+                              disabled={isLinkedWeek}
+                              style={{ flex: 1 }}
+                            />
+                          </div>
+
+                          {/* Sets — all shown fully, no per-set collapse */}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            {sets.map((set) => (
                               <div
+                                key={set.set_number}
                                 style={{
                                   display: 'flex',
-                                  gap: '8px',
                                   alignItems: 'center',
-                                  padding: '8px',
-                                  backgroundColor: 'var(--bg-hover)',
-                                  borderRadius: '4px',
-                                  marginBottom: '8px',
+                                  gap: '10px',
+                                  padding: '10px',
+                                  border: '1px solid var(--border)',
+                                  borderRadius: '8px',
+                                  backgroundColor: 'var(--surface)',
                                   flexWrap: 'wrap',
                                 }}
-                                onClick={(e) => e.stopPropagation()}
                               >
+                                <span
+                                  style={{
+                                    backgroundColor: 'var(--accent-soft)',
+                                    color: 'var(--accent)',
+                                    fontWeight: 700,
+                                    fontSize: '12px',
+                                    width: '22px',
+                                    height: '22px',
+                                    borderRadius: '50%',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  {set.set_number}
+                                </span>
                                 {ex.has_reps && (
-                                  <input
-                                    type="text"
-                                    value={set.target_reps || ''}
-                                    onChange={(e) => handleUpdateSet(ex.id, set.set_number, 'reps', e.target.value)}
-                                    placeholder="Reps (e.g. 10-12)"
-                                    className="input-field"
-                                    disabled={isLinkedWeek}
-                                    style={{ width: '120px', fontSize: '12px' }}
-                                  />
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                    <span style={{ fontSize: '10.5px', fontWeight: 600, color: 'var(--text)', letterSpacing: '0.02em' }}>
+                                      Reps
+                                    </span>
+                                    <input
+                                      type="text"
+                                      value={set.target_reps || ''}
+                                      onChange={(e) => handleUpdateSet(ex.id, set.set_number, 'reps', e.target.value)}
+                                      placeholder="e.g. 10 or 10-12"
+                                      className="input-field"
+                                      disabled={isLinkedWeek}
+                                      style={{ width: '130px', fontSize: '13px' }}
+                                    />
+                                  </div>
                                 )}
                                 {ex.has_weight && (
-                                  <input
-                                    type="number"
-                                    step="0.5"
-                                    value={set.target_weight || ''}
-                                    onChange={(e) => handleUpdateSet(ex.id, set.set_number, 'weight', e.target.value ? Number(e.target.value) : null)}
-                                    placeholder="Weight"
-                                    className="input-field"
-                                    disabled={isLinkedWeek}
-                                    style={{ width: '80px', fontSize: '12px' }}
-                                  />
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                    <span style={{ fontSize: '10.5px', fontWeight: 600, color: 'var(--text)', letterSpacing: '0.02em' }}>
+                                      Weight
+                                    </span>
+                                    <input
+                                      type="number"
+                                      step="0.5"
+                                      value={set.target_weight || ''}
+                                      onChange={(e) => handleUpdateSet(ex.id, set.set_number, 'weight', e.target.value ? Number(e.target.value) : null)}
+                                      placeholder="Weight"
+                                      className="input-field"
+                                      disabled={isLinkedWeek}
+                                      style={{ width: '90px', fontSize: '13px' }}
+                                    />
+                                  </div>
                                 )}
                                 {ex.has_duration && (
-                                  <div style={{ flexGrow: 1, minWidth: '120px' }}>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                    <span style={{ fontSize: '10.5px', fontWeight: 600, color: 'var(--text)', letterSpacing: '0.02em' }}>
+                                      Duration
+                                    </span>
                                     <DurationInput
                                       value={set.target_duration_seconds || null}
                                       onChange={(value) => handleUpdateSet(ex.id, set.set_number, 'duration', value)}
                                     />
                                   </div>
                                 )}
+                                {sets.length > 1 && (
+                                  <button
+                                    onClick={() => handleRemoveSet(ex.id, set.set_number)}
+                                    className="row-delete-btn"
+                                    disabled={isLinkedWeek}
+                                    title={`Remove Set ${set.set_number}`}
+                                    aria-label={`Remove Set ${set.set_number}`}
+                                    style={{ marginLeft: 'auto', flexShrink: 0 }}
+                                  >
+                                    <TrashIcon size={14} />
+                                  </button>
+                                )}
                               </div>
-                            )}
+                            ))}
                           </div>
-                        ))}
 
-                        {/* Add Set Button */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleAddSet(ex.id);
-                          }}
-                          className="btn btn-secondary"
-                          disabled={isLinkedWeek}
-                          style={{ fontSize: '12px', padding: '6px 10px', marginTop: '8px', width: '100%' }}
-                        >
-                          + Add Set
-                        </button>
-
-                        {/* Remove Set Buttons (shown when expanded) */}
-                        {expandedSetNumber && sets.length > 1 && (
+                          {/* Add Set Button */}
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleRemoveSet(ex.id, expandedSetNumber);
-                            }}
-                            className="row-delete-btn"
+                            onClick={() => handleAddSet(ex.id)}
                             disabled={isLinkedWeek}
-                            title="Remove this set"
-                            style={{ marginTop: '4px', fontSize: '12px', padding: '4px 8px' }}
+                            style={{
+                              fontSize: '13px',
+                              fontWeight: 500,
+                              padding: '10px',
+                              marginTop: '8px',
+                              width: '100%',
+                              background: 'transparent',
+                              border: '1px dashed var(--border)',
+                              borderRadius: '8px',
+                              color: 'var(--accent)',
+                              cursor: 'pointer',
+                            }}
                           >
-                            ✕ Remove Set {expandedSetNumber}
+                            + Add Set
                           </button>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
