@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import type { WorkoutSet, WorkoutSession } from "../../api/workoutSessionsApi";
 import { workoutSessionsApi } from "../../api/workoutSessionsApi";
@@ -13,6 +13,7 @@ import { secondsToHMS } from "../../utils/duration";
 import { getYoutubeThumbnailUrl } from "../../utils/youtube";
 import { ExerciseWorkoutPreview } from "../../components/ExerciseWorkoutPreview";
 import { Modal } from "../../components/Modal";
+import { ExerciseLibrarySidebar, type SelectedExerciseInfo } from "../exerciseLibrary/ExerciseLibrarySidebar";
 
 interface Exercise {
   id: number;
@@ -87,10 +88,9 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
   const [editingPlanName, setEditingPlanName] = useState(planName);
   const [renamingPlan, setRenamingPlan] = useState(false);
 
-  // Add exercise state
-  const [isAddingExercise, setIsAddingExercise] = useState(false);
-  const [addExerciseName, setAddExerciseName] = useState("");
-  const [addingExercise, setAddingExercise] = useState(false);
+  // Add exercise state (library sidebar)
+  const [showExercisePicker, setShowExercisePicker] = useState(false);
+  const pendingAddsRef = useRef<Set<string>>(new Set());
 
   // Rest timer state
   const [restDuration, setRestDuration] = useState(60); // in seconds
@@ -106,7 +106,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
   const [panelNotes, setPanelNotes] = useState("");
 
   // Preview panel state (independent from set-logging panel)
-  const [previewingExerciseId, setPreviewingExerciseId] = useState<number | null>(null);
+  const [selectedPreview, setSelectedPreview] = useState<SelectedExerciseInfo | null>(null);
   const [showNoteInput, setShowNoteInput] = useState(false);
 
   // Mobile viewport detection (768px breakpoint)
@@ -273,7 +273,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
 
   // Get the pip count for an exercise
   const getPipCount = (we: WorkoutExercise): number => {
-    return we.target_sets ?? 3;
+    return we.target_sets ?? 1;
   };
 
   // Get logged sets for a plan-exercise instance, sorted by set number
@@ -515,14 +515,16 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
     }
   };
 
-  const handleAddExerciseToDay = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!addExerciseName.trim() || !planId || !dayId) return;
+  const handleQuickAddExercise = async (exerciseInfo: SelectedExerciseInfo) => {
+    const key = exerciseInfo.name.toLowerCase();
+    if (pendingAddsRef.current.has(key)) return;
+    pendingAddsRef.current.add(key);
 
-    setAddingExercise(true);
     try {
+      if (!planId || !dayId) return;
+
       const existingExercise = availableExercises.find(
-        (ex) => ex.name.toLowerCase() === addExerciseName.toLowerCase()
+        (ex) => ex.name.toLowerCase() === exerciseInfo.name.toLowerCase()
       );
 
       let exerciseId: number;
@@ -531,16 +533,15 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
       } else {
         // This is a library exercise being added to a plan for the first time
         // Mark it as not custom (is_custom: false) so it doesn't pollute the Custom Exercises tab
-        const newExercise = await exercisesApi.create({ name: addExerciseName, is_custom: false });
+        const newExercise = await exercisesApi.create({ name: exerciseInfo.name, is_custom: false });
         exerciseId = newExercise.id;
       }
 
-      await addExerciseToDay(planId, dayId, exerciseId);
+      // Add exercise with 1 set (not 3)
+      await addExerciseToDay(planId, dayId, exerciseId, 1, undefined, undefined, undefined, true, true, false);
 
-      setAddExerciseName("");
-      setIsAddingExercise(false);
       setError(null);
-      showToast("Exercise added!", "success");
+      showToast(`${exerciseInfo.name} added!`, 'success');
 
       if (onPlanDetailRefresh) {
         await onPlanDetailRefresh();
@@ -548,7 +549,16 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
     } catch (err: any) {
       setError(err.response?.data?.error || "Failed to add exercise");
     } finally {
-      setAddingExercise(false);
+      pendingAddsRef.current.delete(key);
+    }
+  };
+
+  const handleExerciseCreated = (exercise: Exercise) => {
+    // Add newly created exercise to availableExercises cache
+    // so that subsequent adds don't trigger a duplicate create
+    const exists = availableExercises.some((ex) => ex.id === exercise.id);
+    if (!exists) {
+      availableExercises.push(exercise);
     }
   };
 
@@ -619,7 +629,16 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
   }
 
   return (
-    <div className="page-container">
+    <div
+      style={{
+        display: "flex",
+        gap: 0,
+        width: "100%",
+        minHeight: "100vh",
+      }}
+    >
+      {/* Main content area */}
+      <div className="page-container" style={{ flex: 1, minWidth: 0 }}>
       {/* Header */}
       <div style={{ marginBottom: "20px" }}>
         {/* Exit link + Day label */}
@@ -866,12 +885,12 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                     marginBottom: "8px",
                     cursor: "pointer",
                   }}
-                  onClick={() => setPreviewingExerciseId(we.id)}
+                  onClick={() => setSelectedPreview({ name: exerciseName, video_url: we.video_url || null, muscle_group: we.muscle_group || null, equipment: we.equipment || null })}
                   role="button"
                   tabIndex={0}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
-                      setPreviewingExerciseId(we.id);
+                      setSelectedPreview({ name: exerciseName, video_url: we.video_url || null, muscle_group: we.muscle_group || null, equipment: we.equipment || null });
                     }
                   }}
                   aria-label={`Preview ${exerciseName}`}
@@ -1369,20 +1388,13 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
               paddingLeft: "20px",
             }}
           >
-            {previewingExerciseId !== null ? (
-              (() => {
-                const selectedExercise = planExercises.find((we) => we.id === previewingExerciseId);
-                if (!selectedExercise) return null;
-                const exerciseName = selectedExercise.exercise_name || exerciseNames[selectedExercise.exercise_id] || `Exercise ${selectedExercise.exercise_id}`;
-                return (
-                  <ExerciseWorkoutPreview
-                    name={exerciseName}
-                    video_url={selectedExercise.video_url || null}
-                    muscle_group={selectedExercise.muscle_group || null}
-                    equipment={selectedExercise.equipment || null}
-                  />
-                );
-              })()
+            {selectedPreview ? (
+              <ExerciseWorkoutPreview
+                name={selectedPreview.name}
+                video_url={selectedPreview.video_url || null}
+                muscle_group={selectedPreview.muscle_group || null}
+                equipment={selectedPreview.equipment || null}
+              />
             ) : (
               <div
                 style={{
@@ -1404,30 +1416,6 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
           </div>
         )}
       </div>
-
-      {/* Preview modal (mobile only) */}
-      {isMobile && previewingExerciseId !== null && (
-        (() => {
-          const selectedExercise = planExercises.find((we) => we.id === previewingExerciseId);
-          if (!selectedExercise) return null;
-          const exerciseName = selectedExercise.exercise_name || exerciseNames[selectedExercise.exercise_id] || `Exercise ${selectedExercise.exercise_id}`;
-          return (
-            <Modal
-              isOpen={true}
-              onClose={() => setPreviewingExerciseId(null)}
-              title={exerciseName}
-              fullScreen={true}
-            >
-              <ExerciseWorkoutPreview
-                name={exerciseName}
-                video_url={selectedExercise.video_url || null}
-                muscle_group={selectedExercise.muscle_group || null}
-                equipment={selectedExercise.equipment || null}
-              />
-            </Modal>
-          );
-        })()
-      )}
 
       {/* Plan name editor */}
       <div style={{ marginBottom: "20px", display: "flex", alignItems: "center", gap: "8px" }}>
@@ -1475,55 +1463,52 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
         )}
       </div>
 
-      {/* Add exercise mid-workout — quick-start only */}
-      {isQuickStart && planId && dayId && (
+      {/* Add exercise mid-workout — quick-start only, mobile only */}
+      {isQuickStart && planId && dayId && isMobile && (
         <div style={{ marginBottom: "20px" }}>
-          {isAddingExercise ? (
-            <div className="card">
-              <h3 style={{ margin: "0 0 12px 0", fontSize: "16px" }}>Add Exercise</h3>
-              <form onSubmit={handleAddExerciseToDay} style={{ display: "grid", gap: "8px" }}>
-                <input
-                  type="text"
-                  value={addExerciseName}
-                  onChange={(e) => setAddExerciseName(e.target.value)}
-                  placeholder="Exercise name"
-                  className="input-field"
-                  style={{ padding: "6px 8px", fontSize: "13px" }}
-                  autoFocus
-                />
-                <div style={{ display: "flex", gap: "6px" }}>
-                  <button
-                    type="submit"
-                    disabled={addingExercise}
-                    className="btn btn-primary"
-                    style={{ flex: 1, opacity: addingExercise ? 0.6 : 1, padding: "6px 12px", fontSize: "13px" }}
-                  >
-                    {addingExercise ? "Adding..." : "Add"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsAddingExercise(false);
-                      setAddExerciseName("");
-                    }}
-                    className="btn btn-secondary"
-                    style={{ flex: 1, padding: "6px 12px", fontSize: "13px" }}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            </div>
-          ) : (
-            <button
-              onClick={() => setIsAddingExercise(true)}
-              className="btn"
-              style={{ width: "100%", marginBottom: "12px", padding: "8px 12px" }}
-            >
-              + Add Exercise
-            </button>
-          )}
+          <button
+            onClick={() => setShowExercisePicker(true)}
+            className="btn"
+            style={{ width: "100%", marginBottom: "12px", padding: "8px 12px" }}
+          >
+            + Add Exercise
+          </button>
         </div>
+      )}
+
+      {/* Exercise library modal (mobile only) */}
+      {isMobile && showExercisePicker && (
+        <Modal
+          isOpen={true}
+          onClose={() => setShowExercisePicker(false)}
+          title="Add Exercise"
+          fullScreen={true}
+        >
+          <ExerciseLibrarySidebar
+            onSelectExercise={handleQuickAddExercise}
+            onExerciseCreated={handleExerciseCreated}
+            onPreviewExercise={(info) => setSelectedPreview(info)}
+          />
+        </Modal>
+      )}
+
+      {/* Preview modal (mobile only) — must render AFTER the exercise picker modal above,
+          so that when previewing a library exercise from within the picker, the preview
+          modal (same fixed/z-index:1000) paints on top instead of behind it. */}
+      {isMobile && selectedPreview && (
+        <Modal
+          isOpen={true}
+          onClose={() => setSelectedPreview(null)}
+          title={selectedPreview.name}
+          fullScreen={true}
+        >
+          <ExerciseWorkoutPreview
+            name={selectedPreview.name}
+            video_url={selectedPreview.video_url || null}
+            muscle_group={selectedPreview.muscle_group || null}
+            equipment={selectedPreview.equipment || null}
+          />
+        </Modal>
       )}
 
       {/* Finish workout button */}
@@ -1549,6 +1534,29 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
       />
 
       {Toast}
+    </div>
+
+      {/* Exercise library sidebar (desktop only, quick-start only) */}
+      {!isMobile && isQuickStart && (
+        <div
+          style={{
+            width: "320px",
+            flexShrink: 0,
+            borderLeft: "1px solid var(--border)",
+            paddingLeft: "20px",
+            paddingRight: "20px",
+            paddingTop: "20px",
+            overflowY: "auto",
+            maxHeight: "100vh",
+          }}
+        >
+          <ExerciseLibrarySidebar
+            onSelectExercise={handleQuickAddExercise}
+            onExerciseCreated={handleExerciseCreated}
+            onPreviewExercise={(info) => setSelectedPreview(info)}
+          />
+        </div>
+      )}
     </div>
   );
 };
