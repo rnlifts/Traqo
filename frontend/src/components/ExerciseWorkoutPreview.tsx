@@ -104,6 +104,7 @@ export const ExerciseWorkoutPreview: React.FC<ExerciseWorkoutPreviewProps> = ({
           src={embedUrl}
           title={name}
           style={iframeStyle}
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
           allowFullScreen
         />
       </div>

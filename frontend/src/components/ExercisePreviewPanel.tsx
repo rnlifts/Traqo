@@ -102,6 +102,7 @@ export const ExercisePreviewPanel: React.FC<ExercisePreviewPanelProps> = ({
               src={embedUrl}
               title={selected.name}
               style={iframeStyle}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
               allowFullScreen
             />
           </div>

@@ -50,6 +50,11 @@ describe("ExercisePreviewPanel", () => {
         "src",
         "https://www.youtube.com/embed/dQw4w9WgXcQ"
       );
+      // Regression check: without this Permissions Policy string, YouTube's player can
+      // load but silently fail to actually play (most notably encrypted-media, which
+      // most videos require).
+      expect(iframe.getAttribute("allow")).toContain("encrypted-media");
+      expect(iframe.getAttribute("allow")).toContain("autoplay");
     });
 
     it("iframe has allowFullScreen attribute", () => {
