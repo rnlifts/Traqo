@@ -1416,6 +1416,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
               isOpen={true}
               onClose={() => setPreviewingExerciseId(null)}
               title={exerciseName}
+              fullScreen={true}
             >
               <ExerciseWorkoutPreview
                 name={exerciseName}

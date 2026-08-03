@@ -202,4 +202,34 @@ describe('ActiveWorkout', () => {
       });
     });
   });
+
+  describe('mobile exercise preview modal', () => {
+    it('opens full-screen (not the small default dialog) on mobile', async () => {
+      const user = userEvent.setup();
+      // Force mobile detection (matchMedia("(max-width: 768px)").matches = true)
+      vi.spyOn(window, 'matchMedia').mockImplementation((query: string) => ({
+        matches: true,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      }) as any);
+
+      const { container } = renderComponent();
+
+      const previewTrigger = await screen.findByRole('button', { name: /Preview Bench Press/i });
+      await user.click(previewTrigger);
+
+      // Regression check for the "modal is tiny on mobile" bug: the mobile preview modal
+      // must use Modal's fullScreen variant (100vw/100vh, no border radius), not the
+      // default small centered dialog (maxWidth: 90vw).
+      await waitFor(() => {
+        expect(container.innerHTML).toContain('100vw');
+        expect(container.innerHTML).not.toContain('90vw');
+      });
+    });
+  });
 });
