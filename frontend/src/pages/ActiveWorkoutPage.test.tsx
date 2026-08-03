@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
-import { BrowserRouter, useParams } from 'react-router-dom';
+import { BrowserRouter, useParams, useLocation } from 'react-router-dom';
 import ActiveWorkoutPage from './ActiveWorkoutPage';
 
 vi.mock('../components/Layout', () => ({
@@ -24,12 +24,14 @@ vi.mock('react-router-dom', async () => {
     ...actual,
     useParams: vi.fn(),
     useNavigate: () => vi.fn(),
+    useLocation: vi.fn(),
   };
 });
 
 vi.mock('../api/workoutSessionsApi', () => ({
   workoutSessionsApi: {
     getActiveWorkoutBootstrap: vi.fn(),
+    getSessionDetail: vi.fn(),
   },
 }));
 
@@ -77,6 +79,7 @@ describe('ActiveWorkoutPage (Task 83 bootstrap)', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     (useParams as any).mockReturnValue({ sessionId: '5' });
+    (useLocation as any).mockReturnValue({ state: null });
   });
 
   const renderPage = () =>
@@ -140,5 +143,67 @@ describe('ActiveWorkoutPage (Task 83 bootstrap)', () => {
     // Page stays on the workout UI, not the error screen
     expect(screen.queryByText(/Back to Plans/i)).not.toBeInTheDocument();
     expect(screen.getByTestId('previous-performance')).toHaveTextContent('no previous performance yet');
+  });
+});
+
+describe('ActiveWorkoutPage (Task 84 prefetch from Session Setup)', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    (useParams as any).mockReturnValue({ sessionId: '5' });
+    const { getPreviousPerformance } = await import('../api/workoutPlansApi');
+    (getPreviousPerformance as any).mockResolvedValue(null);
+  });
+
+  const renderPage = () =>
+    render(
+      <BrowserRouter>
+        <ActiveWorkoutPage />
+      </BrowserRouter>
+    );
+
+  const sessionDetailFixture = {
+    session: bootstrapFixture.session.session,
+    sets: [],
+  };
+
+  it('uses prefetched plan/exercises and only fetches session detail when navigation state is present', async () => {
+    (useLocation as any).mockReturnValue({
+      state: { prefetchedPlanDetail: planDetail, prefetchedExercises: [{ id: 1, name: 'Bench', logging_type: 'weight_reps' }] },
+    });
+    const { workoutSessionsApi } = await import('../api/workoutSessionsApi');
+    (workoutSessionsApi.getSessionDetail as any).mockResolvedValue(sessionDetailFixture);
+
+    renderPage();
+
+    await screen.findByTestId('active-workout');
+    expect(workoutSessionsApi.getSessionDetail).toHaveBeenCalledWith(5);
+    // The core regression check: prefetched path never calls the bootstrap endpoint
+    expect(workoutSessionsApi.getActiveWorkoutBootstrap).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the bootstrap endpoint when navigation state is absent (refresh/direct URL/resume)', async () => {
+    (useLocation as any).mockReturnValue({ state: null });
+    const { workoutSessionsApi } = await import('../api/workoutSessionsApi');
+    (workoutSessionsApi.getActiveWorkoutBootstrap as any).mockResolvedValue(bootstrapFixture);
+
+    renderPage();
+
+    await screen.findByTestId('active-workout');
+    expect(workoutSessionsApi.getActiveWorkoutBootstrap).toHaveBeenCalledWith(5);
+    expect(workoutSessionsApi.getSessionDetail).not.toHaveBeenCalled();
+  });
+
+  it('falls back to bootstrap when navigation state is only partially present', async () => {
+    // Only prefetchedPlanDetail, no prefetchedExercises — e.g. a future caller that forgot
+    // one of the two. Must not silently render with an empty/undefined exercises list.
+    (useLocation as any).mockReturnValue({ state: { prefetchedPlanDetail: planDetail } });
+    const { workoutSessionsApi } = await import('../api/workoutSessionsApi');
+    (workoutSessionsApi.getActiveWorkoutBootstrap as any).mockResolvedValue(bootstrapFixture);
+
+    renderPage();
+
+    await screen.findByTestId('active-workout');
+    expect(workoutSessionsApi.getActiveWorkoutBootstrap).toHaveBeenCalledWith(5);
+    expect(workoutSessionsApi.getSessionDetail).not.toHaveBeenCalled();
   });
 });

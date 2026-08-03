@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { workoutPlansApi, type WorkoutPlanDetail, type PlanDay } from '../api/workoutPlansApi';
 import { workoutSessionsApi } from '../api/workoutSessionsApi';
+import { exercisesApi, type Exercise } from '../api/exercisesApi';
 import { useToast } from '../components/Toast';
 
 export default function SessionSetupPage() {
@@ -12,6 +13,7 @@ export default function SessionSetupPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [planDetail, setPlanDetail] = useState<WorkoutPlanDetail | null>(null);
+  const [availableExercises, setAvailableExercises] = useState<Exercise[]>([]);
 
   const [selectedWeekIndex, setSelectedWeekIndex] = useState(0);
   const [selectedDayIndex, setSelectedDayIndex] = useState(0);
@@ -29,8 +31,13 @@ export default function SessionSetupPage() {
         setError('Plan ID is required');
         return;
       }
-      const detail = await workoutPlansApi.getDetail(Number(planId));
+      // Fetch plan detail and exercises in parallel
+      const [detail, exercises] = await Promise.all([
+        workoutPlansApi.getDetail(Number(planId)),
+        exercisesApi.list(),
+      ]);
       setPlanDetail(detail);
+      setAvailableExercises(exercises);
       setError('');
     } catch (err: any) {
       const errorMsg = err.response?.data?.error || (err as Error).message || 'Failed to load plan';
@@ -103,7 +110,10 @@ export default function SessionSetupPage() {
       const weekNumber = planDetail.plan.unit_type === 'weeks' ? selectedWeekIndex + 1 : undefined;
       const response = await workoutSessionsApi.startWorkout(Number(planId), selectedDay.id, weekNumber);
       showToast('Workout started!', 'success');
-      navigate(`/workout-sessions/${response.session_id}`);
+      // Pass prefetched plan and exercises to ActiveWorkoutPage to avoid refetching
+      navigate(`/workout-sessions/${response.session_id}`, {
+        state: { prefetchedPlanDetail: planDetail, prefetchedExercises: availableExercises },
+      });
     } catch (err: any) {
       if (err.response?.status === 409) {
         showToast("Finish or discard your unresolved workout before starting a new one", "error");

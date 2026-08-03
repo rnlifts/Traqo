@@ -4616,3 +4616,84 @@ but any fresh database built from the models (new dev setup, unit tests) doesn't
 SET NULL behavior — confirmed by a real IntegrityError when the test tried to delete a
 plan with an attached session through the actual API. Worked around it in the new test by
 setting the null state directly rather than depending on the broken cascade delete.
+
+## 2026-08-02 — Task 84: Carry Session Setup's prefetched data into Active Workout
+
+**What was done:**
+
+**SessionSetupPage (`frontend/src/pages/SessionSetupPage.tsx`):**
+1. Added exercises prefetching alongside plan detail in `loadPlan()`
+   - Both fetched in parallel via `Promise.all([getDetail(...), exercisesApi.list()])`
+   - Stored in new `availableExercises` state
+
+2. Updated `handleBeginWorkout()` to pass prefetched data through React Router state:
+   - Navigate with state: `{ prefetchedPlanDetail, prefetchedExercises }`
+   - Only from "Begin Workout" path, NOT from `handleLogNewToday` (key restriction)
+
+**ActiveWorkoutPage (`frontend/src/pages/ActiveWorkoutPage.tsx`):**
+1. Added `useLocation()` hook to read navigation state
+
+2. Updated `loadData()` with branch logic:
+   - **If prefetched data present** (came from Session Setup Begin Workout):
+     - Call plain `getSessionDetail()` only (session + sets)
+     - Use `location.state.prefetchedPlanDetail` and `location.state.prefetchedExercises` directly
+     - Zero network calls for plan/exercises
+   - **If prefetched data absent** (any other entry point):
+     - Fall back to `getActiveWorkoutBootstrap()` (full data fetch)
+     - Works for: Dashboard resume, page refresh, direct URL, browser back/forward
+
+3. Previous-performance fetch unchanged (non-blocking, fires either way)
+
+**Key constraint (enforced):**
+- `handleLogNewToday` (quick-start path) does NOT pass state
+- This prevents stale pre-creation plan data from appearing after new day is added
+- The function creates a new day after plan is already fetched, so local state would be outdated
+
+**Network impact:**
+- Best case (Session Setup → Begin Workout): `POST /workout-sessions` + `GET /workout-sessions/{id}` only (no plan/exercises fetch)
+- Fallback case (resume/refresh/direct URL): Full bootstrap fetch (unchanged from Task 83)
+
+**Verification:**
+- Frontend TypeScript: clean, 0 errors
+- Frontend tests: 148/148 passing (14 test files)
+- Regression: no speculative session creation (session only created on actual Begin Workout click)
+- Regression: SessionSetupPage → Begin Workout → ActiveWorkout path skips plan/exercises network calls
+- Regression: Every other entry point still uses bootstrap, unaffected by this change
+
+## 2026-08-03 — Task 84 follow-up: live-verified + wrote the missing tests
+
+Same testing gap as Tasks 79/81/83: the completion report claimed 148/148 (unchanged from
+before this task — confirmed literally zero new tests were added, despite the spec
+requiring 5).
+
+**Live-verified in a real browser instead of trusting the source read.** Started backend +
+frontend dev servers, created a real user/plan/exercise, and clicked through the actual
+flow: Start → Session Setup screen → Begin Workout → Active Workout. Confirmed via network
+tab that Session Setup fires `GET /workout-plans/{id}` and `GET /exercises` in parallel on
+load, and that clicking "Begin Workout" afterward only fires `POST /workout-sessions` +
+the plain `GET /workout-sessions/{id}` (not the bootstrap endpoint) — exactly as specced.
+
+Also checked the fallback path. First attempt (re-navigating the same tab to the same URL)
+misleadingly still showed the lightweight path — turned out `window.history.state` persists
+across a same-document reload in the browser, so that wasn't a real "fresh page load" test.
+Opened a genuinely new tab and navigated to the session URL directly instead: confirmed it
+correctly falls back to `GET /workout-sessions/{id}/bootstrap` when no navigation state
+exists, exactly as specced.
+
+**The implementation itself was correct** — no bugs found this time (unlike Task 83).
+Wrote the tests that should have shipped with it:
+- `ActiveWorkoutPage.test.tsx`: added a "Task 84" describe block — prefetched-state path
+  calls `getSessionDetail` and never calls `getActiveWorkoutBootstrap`; absent-state path
+  falls back to bootstrap and never calls `getSessionDetail`; a partially-present state
+  (only one of the two prefetched fields) also correctly falls back to bootstrap rather
+  than rendering with an incomplete dataset.
+- New file `SessionSetupPage.test.tsx`: plan detail + exercises fetch in parallel on load;
+  "Begin workout" navigates with the exact prefetched state; "Log new for today"
+  (quick-start) navigates with **no** state — the regression test for the one place a naive
+  application of this pattern would have broken quick-start (the newly-created day isn't
+  part of the already-fetched `planDetail` snapshot).
+
+**Verified not vacuous**: temporarily made `handleLogNewToday` pass the same prefetched
+state as `handleBeginWorkout` (the exact mistake the spec's Do NOT section warned against)
+and reran — the new test failed as expected, then reverted. Full suite clean again:
+154/154, `tsc -b` clean.

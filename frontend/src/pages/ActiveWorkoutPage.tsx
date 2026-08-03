@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { ActiveWorkout } from "../features/sessions/ActiveWorkout";
 import { workoutSessionsApi, type WorkoutSet } from "../api/workoutSessionsApi";
 import { getWorkoutPlanDetail, getPreviousPerformance, type PreviousPerformanceResponse, type WorkoutPlanDetail } from "../api/workoutPlansApi";
@@ -15,6 +15,7 @@ interface Exercise {
 export default function ActiveWorkoutPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const [session, setSession] = useState<any>(null);
   const [planDetail, setPlanDetail] = useState<WorkoutPlanDetail | null>(null);
   const [availableExercises, setAvailableExercises] = useState<Exercise[]>([]);
@@ -35,26 +36,56 @@ export default function ActiveWorkoutPage() {
     }
 
     try {
-      // Bootstrap: fetch session + plan + exercises in one call
-      const bootstrap = await workoutSessionsApi.getActiveWorkoutBootstrap(Number(sessionId));
-      setSession(bootstrap.session.session);
-      setSets(bootstrap.session.sets);
-      setPlanDetail(bootstrap.plan);
-      setAvailableExercises(bootstrap.exercises);
-      setLoading(false);
+      // Check if we have prefetched data from SessionSetupPage
+      const prefetchedPlanDetail = (location.state as any)?.prefetchedPlanDetail;
+      const prefetchedExercises = (location.state as any)?.prefetchedExercises;
 
-      // Fetch previous performance in the background (non-blocking)
-      if (bootstrap.session.session.workout_plan_id && bootstrap.session.session.plan_day_id) {
-        getPreviousPerformance(
-          bootstrap.session.session.workout_plan_id,
-          bootstrap.session.session.plan_day_id,
-          Number(sessionId)
-        )
-          .then((previous) => setPreviousPerformance(previous))
-          .catch((err) => {
-            // Fail silently for non-critical previous performance data
-            console.error("Failed to load previous performance:", err);
-          });
+      if (prefetchedPlanDetail && prefetchedExercises) {
+        // Prefetched path: came from "Begin Workout" on SessionSetupPage
+        // Only need to fetch session detail; plan and exercises are already loaded
+        const sessionDetail = await workoutSessionsApi.getSessionDetail(Number(sessionId));
+        setSession(sessionDetail.session);
+        setSets(sessionDetail.sets);
+        setPlanDetail(prefetchedPlanDetail);
+        setAvailableExercises(prefetchedExercises);
+        setLoading(false);
+
+        // Fetch previous performance in the background (non-blocking)
+        if (sessionDetail.session.workout_plan_id && sessionDetail.session.plan_day_id) {
+          getPreviousPerformance(
+            sessionDetail.session.workout_plan_id,
+            sessionDetail.session.plan_day_id,
+            Number(sessionId)
+          )
+            .then((previous) => setPreviousPerformance(previous))
+            .catch((err) => {
+              // Fail silently for non-critical previous performance data
+              console.error("Failed to load previous performance:", err);
+            });
+        }
+      } else {
+        // Fallback path: no prefetched data (refresh, direct URL, resume from dashboard, etc.)
+        // Use bootstrap to get everything
+        const bootstrap = await workoutSessionsApi.getActiveWorkoutBootstrap(Number(sessionId));
+        setSession(bootstrap.session.session);
+        setSets(bootstrap.session.sets);
+        setPlanDetail(bootstrap.plan);
+        setAvailableExercises(bootstrap.exercises);
+        setLoading(false);
+
+        // Fetch previous performance in the background (non-blocking)
+        if (bootstrap.session.session.workout_plan_id && bootstrap.session.session.plan_day_id) {
+          getPreviousPerformance(
+            bootstrap.session.session.workout_plan_id,
+            bootstrap.session.session.plan_day_id,
+            Number(sessionId)
+          )
+            .then((previous) => setPreviousPerformance(previous))
+            .catch((err) => {
+              // Fail silently for non-critical previous performance data
+              console.error("Failed to load previous performance:", err);
+            });
+        }
       }
     } catch (err: any) {
       setError(err.response?.data?.error || "Failed to load workout session");
