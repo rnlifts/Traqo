@@ -92,10 +92,12 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
   const [showExercisePicker, setShowExercisePicker] = useState(false);
   const pendingAddsRef = useRef<Set<string>>(new Set());
 
-  // Rest timer state
-  const [restDuration, setRestDuration] = useState(60); // in seconds
-  const [restTimeRemaining, setRestTimeRemaining] = useState(0); // 0 = not running
-  const [restStartTime, setRestStartTime] = useState<number | null>(null);
+  // Standalone manual timer (not tied to any exercise/set — a general-purpose timer for
+  // rest, holds, planks, etc.). Collapsed behind a "Use Timer" toggle so it doesn't clutter
+  // the screen for users who don't want it.
+  const [timerExpanded, setTimerExpanded] = useState(false);
+  const [timerSeconds, setTimerSeconds] = useState(0);
+  const [timerRunning, setTimerRunning] = useState(false);
 
   // Set logging panel state
   const [activePanelExerciseId, setActivePanelExerciseId] = useState<number | null>(null);
@@ -152,47 +154,59 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
     exerciseNames[ex.id] = ex.name;
   });
 
-  // Rest timer effect
+  // Manual timer countdown — ticks once per second while running, self-correcting each
+  // render off the current timerSeconds value rather than accumulating drift.
   useEffect(() => {
-    if (restTimeRemaining <= 0) {
-      setRestStartTime(null);
+    if (!timerRunning) return;
+    if (timerSeconds <= 0) {
+      setTimerRunning(false);
+      playTimerAlarm();
       return;
     }
+    const id = setTimeout(() => setTimerSeconds((s) => Math.max(0, s - 1)), 1000);
+    return () => clearTimeout(id);
+  }, [timerRunning, timerSeconds]);
 
-    const interval = setInterval(() => {
-      setRestTimeRemaining((_) => {
-        const elapsed = restStartTime ? Math.floor((Date.now() - restStartTime) / 1000) : 0;
-        const remaining = restDuration - elapsed;
-        return remaining > 0 ? remaining : 0;
+  function playTimerAlarm() {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      const ctx = new AudioCtx();
+      // Two short beeps so it's noticeable without being jarring.
+      [0, 0.35].forEach((offset) => {
+        const oscillator = ctx.createOscillator();
+        const gain = ctx.createGain();
+        oscillator.connect(gain);
+        gain.connect(ctx.destination);
+        oscillator.type = "sine";
+        oscillator.frequency.value = 880;
+        gain.gain.setValueAtTime(0.3, ctx.currentTime + offset);
+        oscillator.start(ctx.currentTime + offset);
+        oscillator.stop(ctx.currentTime + offset + 0.25);
       });
-    }, 100);
-
-    return () => clearInterval(interval);
-  }, [restTimeRemaining, restDuration, restStartTime]);
-
-  // Start rest timer automatically after logging a set
-  const startRestTimer = () => {
-    setRestTimeRemaining(restDuration);
-    setRestStartTime(Date.now());
-  };
-
-  const skipRest = () => {
-    setRestTimeRemaining(0);
-    setRestStartTime(null);
-  };
-
-  const addTimeToRest = () => {
-    if (restTimeRemaining > 0) {
-      // Increase the total duration by 15 seconds
-      // The effect will recalculate remaining as restDuration - elapsed
-      setRestDuration(restDuration + 15);
+    } catch {
+      // Web Audio not available in this environment (e.g. tests) — fail silently.
     }
+  }
+
+  const addTimerTime = (deltaSeconds: number) => {
+    setTimerSeconds((s) => s + deltaSeconds);
   };
 
-  const formatTime = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  const toggleTimerRunning = () => {
+    if (!timerRunning && timerSeconds <= 0) return;
+    setTimerRunning((running) => !running);
+  };
+
+  const resetTimer = () => {
+    setTimerRunning(false);
+    setTimerSeconds(0);
+  };
+
+  const formatTimerDisplay = (totalSeconds: number): string => {
+    const h = Math.floor(totalSeconds / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
+    const s = totalSeconds % 60;
+    return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   };
 
   const getPreviousPerformanceForExercise = (workoutExerciseId: number) => {
@@ -421,7 +435,6 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
       });
 
       closeSetPanel();
-      startRestTimer();
       setError(null);
     } catch (err: any) {
       setError(err.response?.data?.error || "Failed to log set");
@@ -757,73 +770,98 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
         onCancel={() => setDiscardConfirm(false)}
       />
 
-      {/* Rest timer widget */}
-      {restTimeRemaining > 0 && (
-        <div
+      {/* Standalone manual timer — collapsed by default so it doesn't clutter the screen */}
+      {!timerExpanded ? (
+        <button
+          onClick={() => setTimerExpanded(true)}
+          className="btn btn-secondary"
           style={{
+            marginBottom: "16px",
             display: "flex",
             alignItems: "center",
-            justifyContent: "center",
-            gap: "16px",
-            backgroundColor: "var(--success-bg)",
-            border: "1px solid var(--success-border)",
-            borderRadius: "4px",
-            padding: "12px 16px",
-            marginBottom: "16px",
+            gap: "8px",
+            padding: "10px 16px",
           }}
         >
-          <div style={{ fontSize: "28px", fontWeight: "bold", color: "var(--success)" }}>
-            {formatTime(restTimeRemaining)}
-          </div>
-          <button
-            onClick={addTimeToRest}
-            className="btn"
-            style={{
-              padding: "8px 12px",
-              fontSize: "13px",
-              backgroundColor: "var(--success)",
-              color: "white",
-            }}
-          >
-            +15s
-          </button>
-          <button
-            onClick={skipRest}
-            className="btn btn-secondary"
-            style={{ padding: "8px 12px", fontSize: "13px" }}
-          >
-            Skip rest
-          </button>
-        </div>
-      )}
-
-      {/* Rest timer idle state */}
-      {restTimeRemaining === 0 && (
+          <span aria-hidden="true">⏱</span> Use Timer
+        </button>
+      ) : (
         <div
+          className="card"
           style={{
-            backgroundColor: "var(--code-bg)",
-            borderRadius: "4px",
-            padding: "12px 16px",
             marginBottom: "16px",
-            fontSize: "13px",
-            color: "var(--text)",
+            padding: "16px",
           }}
         >
-          <p style={{ margin: 0, marginBottom: "8px" }}>Rest timer starts automatically after each set</p>
-          <div style={{ display: "flex", gap: "8px" }}>
-            {[30, 60, 90, 120].map((duration) => (
-              <button
-                key={duration}
-                onClick={() => setRestDuration(duration)}
-                className={`btn ${restDuration === duration ? "btn-primary" : "btn-secondary"}`}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span aria-hidden="true" style={{ fontSize: "18px" }}>⏱</span>
+              <strong style={{ fontSize: "15px" }}>Timer</strong>
+              <span
                 style={{
-                  padding: "6px 12px",
-                  fontSize: "12px",
+                  fontSize: "10px",
+                  fontWeight: 700,
+                  padding: "2px 8px",
+                  borderRadius: "10px",
+                  backgroundColor: "var(--accent-soft, #dbeafe)",
+                  color: "var(--accent)",
+                  textTransform: "uppercase",
                 }}
               >
-                {duration}s
-              </button>
-            ))}
+                Manual
+              </span>
+            </div>
+            <button
+              onClick={() => {
+                setTimerExpanded(false);
+                resetTimer();
+              }}
+              aria-label="Close timer"
+              style={{ background: "none", border: "none", cursor: "pointer", fontSize: "18px", color: "var(--text-h)" }}
+            >
+              ×
+            </button>
+          </div>
+          <p style={{ margin: "0 0 12px 0", fontSize: "13px", color: "var(--text)" }}>
+            Set your time and start for each set
+          </p>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px", flexWrap: "wrap" }}>
+            <div style={{ fontSize: "32px", fontWeight: "bold", fontVariantNumeric: "tabular-nums" }}>
+              {formatTimerDisplay(timerSeconds)}
+            </div>
+            <button
+              onClick={toggleTimerRunning}
+              disabled={!timerRunning && timerSeconds <= 0}
+              aria-label={timerRunning ? "Pause timer" : "Start timer"}
+              className="btn btn-primary"
+              style={{
+                width: "48px",
+                height: "48px",
+                borderRadius: "8px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "18px",
+                opacity: !timerRunning && timerSeconds <= 0 ? 0.5 : 1,
+                cursor: !timerRunning && timerSeconds <= 0 ? "not-allowed" : "pointer",
+              }}
+            >
+              {timerRunning ? "⏸" : "▶"}
+            </button>
+          </div>
+          <div style={{ display: "flex", gap: "8px", marginTop: "12px", flexWrap: "wrap" }}>
+            <button onClick={() => addTimerTime(30)} className="btn btn-secondary" style={{ padding: "6px 12px", fontSize: "13px" }}>
+              +0:30
+            </button>
+            <button onClick={() => addTimerTime(60)} className="btn btn-secondary" style={{ padding: "6px 12px", fontSize: "13px" }}>
+              +1:00
+            </button>
+            <button onClick={() => addTimerTime(300)} className="btn btn-secondary" style={{ padding: "6px 12px", fontSize: "13px" }}>
+              +5:00
+            </button>
+            <button onClick={resetTimer} className="btn btn-secondary" style={{ padding: "6px 12px", fontSize: "13px" }}>
+              <span aria-hidden="true">↺</span> Reset
+            </button>
           </div>
         </div>
       )}
@@ -938,27 +976,27 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                     )}
                   </div>
 
-                  {/* Exercise name */}
-                  <h3 style={{ margin: 0, fontSize: "18px", flex: 1 }}>{exerciseName}</h3>
-
-                  {/* Preview affordance — signals the row is clickable to preview,
-                      not just a static label. Not a separate interactive element
-                      (avoids nesting a button inside this row's own role="button"). */}
-                  <span
-                    aria-hidden="true"
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "4px",
-                      flexShrink: 0,
-                      fontSize: "12px",
-                      color: "var(--accent)",
-                      fontWeight: 600,
-                      alignSelf: "center",
-                    }}
-                  >
-                    👁️ Preview
-                  </span>
+                  {/* Exercise name + "Watch demo" preview affordance. Both are inside the
+                      row's own onClick/role="button" (not separate interactive elements —
+                      avoids nesting a button inside this row's own role="button"), so
+                      clicking anywhere on the row — including "Watch demo" — opens the
+                      same preview. */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "2px", flex: 1, minWidth: 0 }}>
+                    <h3 style={{ margin: 0, fontSize: "18px" }}>{exerciseName}</h3>
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "4px",
+                        fontSize: "13px",
+                        color: "var(--accent)",
+                        fontWeight: 600,
+                      }}
+                    >
+                      Watch demo ▶
+                    </span>
+                  </div>
                 </div>
 
                 {/* Target line */}
@@ -1037,15 +1075,16 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                         onMouseEnter={() => setHoveredPip(`pip-${setNumber}`)}
                         onMouseLeave={() => setHoveredPip(null)}
                         style={{
-                          minWidth: "70px",
+                          width: "auto",
                           height: "44px",
-                          padding: "0 12px",
+                          padding: "0 14px",
                           borderRadius: "22px",
                           border: isLogged ? `2px solid var(--success)` : "2px solid var(--border)",
                           backgroundColor: isLogged ? "var(--success)" : "var(--surface)",
                           color: isLogged ? "var(--surface)" : "var(--ink-primary)",
                           fontSize: "14px",
                           fontWeight: "bold",
+                          whiteSpace: "nowrap",
                           cursor: "pointer",
                           display: "flex",
                           alignItems: "center",
@@ -1056,7 +1095,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                           transform: hoveredPip === `pip-${setNumber}` ? "translateY(-2px)" : "translateY(0)",
                         }}
                       >
-                        <span>Set {setNumber}</span>
+                        <span>{isLogged ? `Set ${setNumber}` : `Log Set ${setNumber}`}</span>
                         {isLogged && <span>✓</span>}
                       </button>
                     );

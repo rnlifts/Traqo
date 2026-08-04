@@ -155,9 +155,9 @@ describe('ActiveWorkout', () => {
   };
 
   describe('Preview affordance and scroll-to-top', () => {
-    it('shows a visible "Preview" indicator on each exercise row', () => {
+    it('shows a "Watch demo" link on each exercise row', () => {
       renderComponent();
-      expect(screen.getByText(/👁️ Preview/)).toBeInTheDocument();
+      expect(screen.getByText(/Watch demo/)).toBeInTheDocument();
     });
 
     it('scrolls to top when previewing on desktop', async () => {
@@ -186,6 +186,95 @@ describe('ActiveWorkout', () => {
       await user.click(previewTrigger);
 
       expect(scrollToSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Set button labels', () => {
+    it('shows "Log Set N" for an unlogged set', () => {
+      renderComponent();
+      expect(screen.getByText('Log Set 1')).toBeInTheDocument();
+    });
+  });
+
+  describe('Standalone manual timer', () => {
+    it('is collapsed behind a "Use Timer" button by default', () => {
+      renderComponent();
+      expect(screen.getByRole('button', { name: /Use Timer/i })).toBeInTheDocument();
+      expect(screen.queryByText('00:00:00')).not.toBeInTheDocument();
+    });
+
+    it('expands to show the timer card when "Use Timer" is clicked', async () => {
+      const user = userEvent.setup();
+      renderComponent();
+
+      await user.click(screen.getByRole('button', { name: /Use Timer/i }));
+
+      expect(screen.getByText('00:00:00')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Start timer' })).toBeDisabled();
+    });
+
+    it('adding time updates the display and enables Start', async () => {
+      const user = userEvent.setup();
+      renderComponent();
+
+      await user.click(screen.getByRole('button', { name: /Use Timer/i }));
+      await user.click(screen.getByRole('button', { name: '+1:00' }));
+
+      expect(screen.getByText('00:01:00')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Start timer' })).not.toBeDisabled();
+    });
+
+    it('clicking Start begins the countdown (button becomes Pause)', async () => {
+      const user = userEvent.setup();
+      renderComponent();
+
+      await user.click(screen.getByRole('button', { name: /Use Timer/i }));
+      await user.click(screen.getByRole('button', { name: '+1:00' }));
+      await user.click(screen.getByRole('button', { name: 'Start timer' }));
+
+      expect(screen.getByRole('button', { name: 'Pause timer' })).toBeInTheDocument();
+    });
+
+    it('Reset stops the timer and zeroes the display', async () => {
+      const user = userEvent.setup();
+      renderComponent();
+
+      await user.click(screen.getByRole('button', { name: /Use Timer/i }));
+      await user.click(screen.getByRole('button', { name: '+1:00' }));
+      await user.click(screen.getByRole('button', { name: 'Start timer' }));
+      await user.click(screen.getByRole('button', { name: /Reset/i }));
+
+      expect(screen.getByText('00:00:00')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Start timer' })).toBeInTheDocument();
+    });
+
+    it('logging a set does not auto-open the timer (no more auto-start-after-set)', async () => {
+      const user = userEvent.setup();
+      const { workoutSessionsApi } = await import('../../api/workoutSessionsApi');
+      (workoutSessionsApi.addWorkoutSet as any).mockResolvedValue({
+        id: 1,
+        workout_exercise_id: 1,
+        exercise_id: 1,
+        set_number: 1,
+        weight: null,
+        reps: null,
+        duration_seconds: null,
+        notes: null,
+      });
+
+      renderComponent();
+
+      await user.click(screen.getByText('Log Set 1'));
+      const logSetButton = await screen.findByRole('button', { name: /Log set/i });
+      await user.click(logSetButton);
+
+      await waitFor(() => expect(workoutSessionsApi.addWorkoutSet).toHaveBeenCalled());
+
+      // The timer must stay collapsed regardless of set-logging activity — it's now a
+      // fully standalone, opt-in tool, not triggered by anything else in the workout
+      // (the old auto-start-after-logging-a-set behavior was removed).
+      expect(screen.getByRole('button', { name: /Use Timer/i })).toBeInTheDocument();
+      expect(screen.queryByText('00:00:00')).not.toBeInTheDocument();
     });
   });
 

@@ -4767,3 +4767,43 @@ Small direct fix (no agent handoff — implemented and verified myself):
   while `behavior:'auto'` scrolls instantly and correctly) — a tooling limitation, not a
   real bug; the mocked-`scrollTo` unit test is the more reliable proof of correctness here.
 - Full suite: 166/166 passing, `tsc -b` clean.
+
+## 2026-08-03 — Active Workout: manual standalone timer, "Watch demo", "Log Set N" labels
+
+Direct implementation (no agent handoff), per a UI/UX redesign request with a reference
+screenshot. Confirmed scope via clarifying questions before starting:
+
+1. **Removed the old auto-start-after-logging-a-set rest timer entirely** (state, effect,
+   the 30/60/90/120s preset picker, and the `startRestTimer()` call after `handleLogSet`).
+   Replaced with a standalone manual timer — not tied to any exercise/set, general-purpose
+   (rest, holds, planks, etc.), matching the user's own description: "just a timer sitting
+   there... like in phone."
+2. Timer is **collapsed by default** behind a "⏱ Use Timer" button; expands to a card with
+   a MANUAL badge, HH:MM:SS countdown display, +0:30/+1:00/+5:00 buttons (add time whether
+   idle or running), Start/Pause toggle, and Reset. Countdown uses a self-correcting
+   `setTimeout` re-armed each render off the current `timerSeconds` value (not a raw
+   `setInterval`, to avoid drift). On reaching zero, plays a short double-beep via the Web
+   Audio API (wrapped in try/catch — safely no-ops in environments without it, e.g. tests).
+3. **"Watch demo ▶"** link added under the exercise name (matching the screenshot). Per the
+   user's explicit answer, the rest of the row stays clickable too — both trigger the same
+   preview, no separate/nested interactive element (would be invalid to nest a real
+   `<button>` inside the row's own `role="button"`).
+4. **Set buttons**: every unlogged set now reads "Log Set N" (was just "Set N"); logged
+   sets are unchanged (green "Set N ✓"). Per explicit instruction, did NOT widen these into
+   the screenshot's full rectangular buttons — kept the existing compact pill sizing, just
+   let width follow content (`width: "auto"` + padding) instead of a fixed `minWidth`.
+
+**Verified:**
+- New/updated tests: set label, timer collapsed-by-default, expand behavior, adding time,
+  starting (button becomes Pause), Reset, and — most importantly — a regression test
+  proving logging a set no longer auto-opens/starts the timer.
+- Negative-control checked two of these: reverted the label change and reintroduced an
+  auto-open-timer call after logging a set; both new tests failed as expected, then
+  reverted.
+- Live-verified in the browser (desktop + mobile): collapsed/expanded timer UI matches the
+  screenshot, +1:00 correctly set the display to 00:01:00, Start correctly began a real
+  countdown (confirmed elapsed wall-clock time via a follow-up read: 00:01:00 → 00:00:52)
+  and the button toggled to "Pause timer", preview panel still updates correctly on click,
+  and the mobile layout matches (collapsed timer, Watch demo link, Log Set buttons, no
+  desktop-only preview panel).
+- Full suite: 173/173 passing, `tsc -b` clean.
