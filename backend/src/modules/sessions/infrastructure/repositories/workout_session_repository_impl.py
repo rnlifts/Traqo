@@ -21,6 +21,8 @@ class WorkoutSessionRepositoryImpl(WorkoutSessionRepository):
             plan_week_id=session.plan_week_id,
             started_at=session.started_at,
             completed_at=session.completed_at,
+            share_id=session.share_id,
+            logged_by_user_id=session.logged_by_user_id,
         )
         self.session.add(model)
         self.session.commit()

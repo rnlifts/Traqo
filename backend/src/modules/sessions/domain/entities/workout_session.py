@@ -12,6 +12,8 @@ class WorkoutSession:
         plan_day_id: int | None = None,
         plan_week_id: int | None = None,
         completed_at: datetime | None = None,
+        share_id: int | None = None,
+        logged_by_user_id: int | None = None,
         id: int | None = None,
     ):
         self.id = id
@@ -21,6 +23,10 @@ class WorkoutSession:
         self.plan_week_id = plan_week_id
         self.started_at = started_at
         self.completed_at = completed_at
+        # Share attribution — set at the moment the session is logged via a share,
+        # never retroactively changed. NULL for the owner's own ordinary sessions.
+        self.share_id = share_id
+        self.logged_by_user_id = logged_by_user_id
 
     def is_finished(self) -> bool:
         """Check if this session has been marked complete."""

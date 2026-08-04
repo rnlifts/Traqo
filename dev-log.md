@@ -4807,3 +4807,38 @@ screenshot. Confirmed scope via clarifying questions before starting:
   and the mobile layout matches (collapsed timer, Watch demo link, Log Set buttons, no
   desktop-only preview panel).
 - Full suite: 173/173 passing, `tsc -b` clean.
+
+## 2026-08-04 — Sharing feature, Step 1: data layer (plan_shares, grants, session attribution)
+
+First implementation step of the long-parked sharing feature (design in project memory:
+public link + username shares, View < Log < Edit tiers, ACL not RBAC, trainer-logs-for-
+client attribution). Implemented directly per owner request, step-by-step with
+verification between steps.
+
+**What was built:**
+- Migration `plan_shares_001` (down_revision `change_fks_to_set_null_001`): creates
+  `plan_shares` (one per plan: unique CASCADE FK to workout_plans, unique opaque `token`,
+  `mode` restricted|anyone, `link_permission` view|log|edit, `revoked_at` nullable — soft
+  revocation so a logged session's share_id never dangles/changes) and `plan_share_grants`
+  (the ACL: share+user unique, per-user tier). Adds nullable `share_id` (FK plan_shares,
+  SET NULL) and `logged_by_user_id` (FK users, SET NULL) to `workout_sessions`.
+- New `sharing` module mirroring existing structure: `PlanShare`/`PlanShareGrant` entities
+  (+ `permission_at_least` tier ordering helper), repository interface,
+  `PlanShareRepositoryImpl` (create, get_by_plan/token, update, grant add/list/get/remove
+  with upsert-on-duplicate-user semantics).
+- `share_token_service.generate_share_token()` — `secrets.token_urlsafe(32)`.
+- `WorkoutSession` entity/model/repo extended with the two attribution fields (nullable,
+  default None — zero behavior change for existing paths).
+- Applied the model/migration-drift lesson from Task 74: `ondelete` declared in the
+  SQLAlchemy models too, and `workout_session_model.py` explicitly imports the sharing
+  model so the new FK resolves in fresh `create_all()` test databases.
+
+**Verified:** 9 new integration tests (token lookup, soft revoke keeps row, mode/tier
+update, grant CRUD + upsert, attribution round-trip, NULL defaults, token uniqueness);
+negative-control on the upsert test (neutered the branch → failed → restored). Migration
+run against the dev Postgres DB and schema verified via inspector (both tables, both
+columns, SET NULL confirmed). Full backend suite 197 passed / 2 skipped.
+
+**NOT pushed yet** — the session model now declares columns that don't exist in the
+production DB until `plan_shares_001` runs there; pushing auto-deploys the backend, so the
+push and the manual prod migration must happen together (same pattern as Task 74).
