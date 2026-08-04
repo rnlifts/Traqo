@@ -874,6 +874,20 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
             const previousLine = buildPreviousPerformanceLine(we.id);
             const pipCount = getPipCount(we);
 
+            const handlePreviewClick = () => {
+              setSelectedPreview({ name: exerciseName, video_url: we.video_url || null, muscle_group: we.muscle_group || null, equipment: we.equipment || null });
+              if (!isMobile) {
+                // Desktop preview renders in a side panel near the top of the page —
+                // scroll there so the user actually sees it update, matching the
+                // scroll-to-top behavior Plan Builder already has for the same reason.
+                try {
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                } catch {
+                  // scrollTo may not be available in test environments
+                }
+              }
+            };
+
             return (
               <div key={we.id} className="card" style={{ padding: "12px" }}>
                 {/* Exercise header with thumbnail and name */}
@@ -885,12 +899,12 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                     marginBottom: "8px",
                     cursor: "pointer",
                   }}
-                  onClick={() => setSelectedPreview({ name: exerciseName, video_url: we.video_url || null, muscle_group: we.muscle_group || null, equipment: we.equipment || null })}
+                  onClick={handlePreviewClick}
                   role="button"
                   tabIndex={0}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
-                      setSelectedPreview({ name: exerciseName, video_url: we.video_url || null, muscle_group: we.muscle_group || null, equipment: we.equipment || null });
+                      handlePreviewClick();
                     }
                   }}
                   aria-label={`Preview ${exerciseName}`}
@@ -926,6 +940,25 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
 
                   {/* Exercise name */}
                   <h3 style={{ margin: 0, fontSize: "18px", flex: 1 }}>{exerciseName}</h3>
+
+                  {/* Preview affordance — signals the row is clickable to preview,
+                      not just a static label. Not a separate interactive element
+                      (avoids nesting a button inside this row's own role="button"). */}
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      flexShrink: 0,
+                      fontSize: "12px",
+                      color: "var(--accent)",
+                      fontWeight: 600,
+                      alignSelf: "center",
+                    }}
+                  >
+                    👁️ Preview
+                  </span>
                 </div>
 
                 {/* Target line */}

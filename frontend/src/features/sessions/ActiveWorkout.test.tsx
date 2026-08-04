@@ -154,6 +154,41 @@ describe('ActiveWorkout', () => {
     );
   };
 
+  describe('Preview affordance and scroll-to-top', () => {
+    it('shows a visible "Preview" indicator on each exercise row', () => {
+      renderComponent();
+      expect(screen.getByText(/👁️ Preview/)).toBeInTheDocument();
+    });
+
+    it('scrolls to top when previewing on desktop', async () => {
+      const user = userEvent.setup();
+      const scrollToSpy = vi.fn();
+      window.scrollTo = scrollToSpy as any;
+      mockViewport(false);
+
+      renderComponent();
+
+      const previewTrigger = await screen.findByRole('button', { name: /Preview Bench Press/i });
+      await user.click(previewTrigger);
+
+      expect(scrollToSpy).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
+    });
+
+    it('does not call scrollTo when previewing on mobile (the modal is already in view)', async () => {
+      const user = userEvent.setup();
+      const scrollToSpy = vi.fn();
+      window.scrollTo = scrollToSpy as any;
+      mockViewport(true);
+
+      renderComponent();
+
+      const previewTrigger = await screen.findByRole('button', { name: /Preview Bench Press/i });
+      await user.click(previewTrigger);
+
+      expect(scrollToSpy).not.toHaveBeenCalled();
+    });
+  });
+
   describe('Exit button', () => {
     it('shows Exit button', () => {
       renderComponent();

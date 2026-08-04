@@ -4733,3 +4733,37 @@ Root-caused it by comparing against how Plan Builder handles the identical scena
 Also found, but did not fix (flagging only — out of scope for this task): `handleExerciseCreated` mutates the `availableExercises` prop array in place (`availableExercises.push(exercise)`) instead of going through a state setter. It works for its narrow purpose (the array mutation is visible to the same-tick `.find()` lookup in `handleQuickAddExercise`), but it's a React anti-pattern — mutating a prop — worth cleaning up in a future pass if this component is touched again.
 
 Final state: full frontend suite 163/163 passing, `npx tsc -b` clean.
+
+## 2026-08-03 — Active Workout: scroll-to-preview + visible preview indicator
+
+Small direct fix (no agent handoff — implemented and verified myself):
+
+1. **Scroll-to-top on preview, desktop only.** Plan Builder already scrolls its page
+   container to the top when previewing an exercise, so the preview panel (near the top
+   of the page) is actually visible without the user manually scrolling. Active Workout
+   was missing this — clicking an exercise during a workout updated the preview panel but
+   left the scroll position wherever it was.
+   - Checked Plan Builder's approach before copying it: Plan Builder's root layout uses a
+     *fixed* `height: '100vh'` with `overflowY: 'auto'` on its inner container, so it
+     scrolls internally via a ref (`pageContainerRef.current.scrollTo(...)`). Active
+     Workout's root layout uses `minHeight: '100vh'` (unbounded, grows with content) with
+     no internal scroll container — the actual page/window scrolls. Copying Plan Builder's
+     ref-based approach verbatim would have silently done nothing. Used `window.scrollTo({
+     top: 0, behavior: 'smooth' })` instead, gated on `!isMobile` (mobile already opens a
+     full-screen preview modal, which needs no scroll).
+2. **Visible "👁️ Preview" indicator** added to each exercise row so it's clear the row is
+   clickable for a preview, not just a static label — a non-interactive `aria-hidden` span
+   (the row itself is already the real button/aria-label; a nested real `<button>` would
+   have been invalid HTML/ARIA — two interactive elements nested inside each other).
+
+**Verified:**
+- New tests: preview indicator renders; `window.scrollTo` called with the right args on
+  desktop; not called on mobile. Negative-control checked the scroll test by disabling the
+  scroll call and re-running — failed as expected, then reverted.
+- Live-verified in the browser: clicking preview does update the panel correctly (confirmed
+  via duplicated exercise name in the DOM — the preview panel's own heading). The `smooth`
+  scroll animation itself isn't observable in this automated browser tool (confirmed via a
+  manual `scrollTo({behavior:'smooth'})` call doing nothing at all in this environment,
+  while `behavior:'auto'` scrolls instantly and correctly) — a tooling limitation, not a
+  real bug; the mocked-`scrollTo` unit test is the more reliable proof of correctness here.
+- Full suite: 166/166 passing, `tsc -b` clean.
