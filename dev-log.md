@@ -4872,3 +4872,41 @@ grant) → non-owner 403 → no-auth 401, all correct. No migration created (con
 step 1's `plan_shares_001.py` exists). Nothing pushed.
 
 Ready for Phase 3 (access resolution / `GET /api/shared/{token}`).
+
+## 2026-08-05 — Sharing feature Phase 3: access resolution (GET /api/shared/{token})
+
+Implemented by the `coder` subagent per task_86 Phase 3, independently verified.
+
+**What shipped:** public `GET /api/shared/{token}` (auth optional via new
+`get_optional_user_id` dependency — added as a genuinely separate `HTTPBearer(auto_error=
+False)` scheme object, correctly left the existing `get_current_user_id`/`security`
+untouched this time, unlike the previous agent). `ResolveShareAccess` use case implements
+the full algorithm: owner→edit, anyone-mode→link tier (stronger of link vs. grant if
+authenticated), restricted-mode→grant required (403 if none/anonymous), missing/revoked
+token→404. Reuses `build_plan_detail_response`. 14 new integration tests.
+
+**Discrepancy caught**: the agent's report claimed "4 failed, 233 passed" on the full
+suite and called the 4 failures "pre-existing... unrelated to Phase 3." Ran the full suite
+myself 3 times in a row immediately after: **237 passed, 2 skipped, 0 failures**, every
+time. Could not reproduce the claimed failures at all. Treated my repeated clean result as
+authoritative and proceeded — but this is now the second Phase in a row where the agent's
+own report didn't match independent re-verification (Phase 2: false justification for an
+out-of-scope change; Phase 3: a failure count that doesn't reproduce). Continue verifying
+everything firsthand, do not trust agent-reported numbers even when the code itself turns
+out fine.
+
+**Verified:** all 14 new tests pass; full suite 237/237 (+2 skipped) stable across 3 runs.
+Negative-control on the 403-vs-404 branch (the one guarding against the frontend's
+401-redirect interceptor) — broke it, confirmed 2 tests correctly fail, restored, confirmed
+clean again. Live end-to-end: anonymous on restricted share → 403 (not 401); garbage token
+→ 404; owner via own link → 200/edit; switched mode to anyone+edit and confirmed a fully
+anonymous request gets 200/edit with no login — the deliberately-approved design decision
+works as specified. No migration created. Nothing pushed.
+
+Code-quality note (not blocking, not fixed): the route decides 403-vs-404 by substring-
+matching the use case's exception message text rather than using two distinct exception
+classes. Works correctly and is tested, but is fragile — a future message-wording change
+could silently break the status-code mapping. Worth cleaning up if this file is touched
+again.
+
+Ready for Phase 4 (logging attribution through a share).

@@ -36,3 +36,20 @@ class ShareResponse(BaseModel):
     created_at: datetime
     revoked_at: datetime | None
     grants: list[ShareGrantResponse] = Field(default_factory=list)
+
+
+class SharedPlanShare(BaseModel):
+    """Minimal share info in a shared plan response."""
+    mode: str
+
+
+class SharedPlanResponse(BaseModel):
+    """Response for GET /api/shared/{token} — the shared plan detail with access info."""
+    # Embed the full WorkoutPlanDetailResponse structure
+    plan: dict  # Will be populated from WorkoutPlanDetailResponse.plan
+    days: list[dict] | None = None  # For 'days' type plans
+    weeks: list[dict] | None = None  # For 'weeks' type plans
+    # Additional sharing info
+    permission: str  # 'view', 'log', or 'edit'
+    plan_owner_username: str
+    share: SharedPlanShare

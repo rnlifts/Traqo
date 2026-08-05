@@ -299,13 +299,14 @@ from src.modules.sessions.presentation.schemas import (
     ExerciseProgressResponse,
 )
 from src.modules.workouts.presentation.routes import workouts_router
-from src.modules.sharing.presentation.routes import sharing_router
+from src.modules.sharing.presentation.routes import sharing_router, shared_plan_router
 
 app.include_router(auth_router)
 app.include_router(exercises_router)
 app.include_router(exercise_library_router)
 app.include_router(workouts_router)
 app.include_router(sharing_router)
+app.include_router(shared_plan_router)
 app.include_router(sessions_router)
 
 # Register workout history endpoint directly to get correct path
