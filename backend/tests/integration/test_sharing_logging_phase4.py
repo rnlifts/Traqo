@@ -747,6 +747,109 @@ class TestStatsExclusionRule:
         assert history[0]["session_id"] == session_id
 
 
+class TestNormalEndpointSetLoggingAfterShareStart:
+    """Tests for POST /api/workout-sessions/{session_id}/sets with share-started sessions.
+
+    Regression tests for Task 92: an authenticated recipient starts a session via share, then
+    navigates to the normal Active Workout screen and logs sets through the normal endpoint
+    (POST /api/workout-sessions/{session_id}/sets, NOT the share-token-scoped endpoint).
+    Before the fix, this returned 403 "You do not own this exercise" because the normal
+    endpoint's AddWorkoutSet use case had no awareness that the session came from a share.
+    After the fix, it succeeds because the use case automatically bypasses exercise ownership
+    checks for any session where share_id is not None.
+    """
+
+    def test_authenticated_recipient_logs_set_via_normal_endpoint_after_share_start(
+        self, client, owner_plan_with_exercise, share_log_permission_anyone, recipient_auth_headers, recipient_user
+    ):
+        """Authenticated recipient logs a set through the normal endpoint after starting via share.
+
+        This is the exact regression scenario from Task 92: recipient starts a workout via share,
+        then navigates to the normal Active Workout screen which uses the normal
+        POST /api/workout-sessions/{session_id}/sets endpoint (not the share-token-scoped one).
+        The exercise belongs to the plan owner, not the recipient, so without the fix the
+        exercise ownership check would reject it.
+        """
+        # Start a session as authenticated recipient via share
+        start_resp = client.post(
+            f"/api/shared/{share_log_permission_anyone['token']}/start",
+            headers=recipient_auth_headers,
+            json={
+                "plan_day_id": owner_plan_with_exercise["day_id"],
+            },
+        )
+        assert start_resp.status_code == 201
+        session_id = start_resp.json()["session_id"]
+
+        # Now log a set through the NORMAL endpoint (not the share-token endpoint)
+        set_resp = client.post(
+            f"/api/workout-sessions/{session_id}/sets",
+            headers=recipient_auth_headers,
+            json={
+                "workout_exercise_id": owner_plan_with_exercise["wo_exercise_id"],
+                "set_number": 1,
+                "weight": 225.0,
+                "reps": 5,
+                "notes": "Logged via normal endpoint",
+            },
+        )
+
+        # Before the fix, this would return 403 "You do not own this exercise"
+        # After the fix, it should return 201
+        assert set_resp.status_code == 201, f"Expected 201, got {set_resp.status_code}: {set_resp.json()}"
+        set_data = set_resp.json()
+        assert "id" in set_data  # Normal endpoint returns 'id', not 'set_id'
+        assert set_data["set_number"] == 1
+        assert set_data["exercise_id"] == owner_plan_with_exercise["exercise_id"]
+
+    def test_authenticated_recipient_multiple_sets_via_normal_endpoint_after_share_start(
+        self, client, owner_plan_with_exercise, share_log_permission_anyone, recipient_auth_headers
+    ):
+        """Authenticated recipient logs multiple sets through the normal endpoint after share start.
+
+        Verify that set_number increments correctly when logging multiple sets via the normal
+        endpoint for a share-originated session.
+        """
+        # Start a session as authenticated recipient via share
+        start_resp = client.post(
+            f"/api/shared/{share_log_permission_anyone['token']}/start",
+            headers=recipient_auth_headers,
+            json={
+                "plan_day_id": owner_plan_with_exercise["day_id"],
+            },
+        )
+        assert start_resp.status_code == 201
+        session_id = start_resp.json()["session_id"]
+
+        # Log first set through normal endpoint
+        set_resp1 = client.post(
+            f"/api/workout-sessions/{session_id}/sets",
+            headers=recipient_auth_headers,
+            json={
+                "workout_exercise_id": owner_plan_with_exercise["wo_exercise_id"],
+                "set_number": 1,
+                "weight": 225.0,
+                "reps": 5,
+            },
+        )
+        assert set_resp1.status_code == 201
+        assert set_resp1.json()["set_number"] == 1
+
+        # Log second set through normal endpoint
+        set_resp2 = client.post(
+            f"/api/workout-sessions/{session_id}/sets",
+            headers=recipient_auth_headers,
+            json={
+                "workout_exercise_id": owner_plan_with_exercise["wo_exercise_id"],
+                "set_number": 2,
+                "weight": 225.0,
+                "reps": 3,
+            },
+        )
+        assert set_resp2.status_code == 201
+        assert set_resp2.json()["set_number"] == 2
+
+
 class TestBootstrapViaShare:
     """Tests for GET /api/workout-sessions/{session_id}/bootstrap with share-started sessions.
 

@@ -5269,3 +5269,43 @@ one already always passes `skip_exercise_ownership_check=True`, redundantly but 
 once this lands) with a single-file change, and needs no route-level changes anywhere.
 Session/test data from this walkthrough cleaned up, both dev servers stopped. Scoping the
 fix as Task 92.
+
+## 2026-08-05 — Task 92: fix normal-endpoint exercise-ownership bug — verified, committed. Full recipient flow now works end to end.
+
+Fix delegated to and returned by the `coder` agent per
+`task_specs/task_92_sharing_phase5b_normal_endpoint_exercise_ownership_fix.md` — exactly
+the preferred minimal fix: `AddWorkoutSet.execute()` now bypasses the exercise-ownership
+check automatically whenever `session.share_id is not None`, reusing the `session` object
+the function already loads as its first step. No route file touched, on either side
+(normal or share-scoped).
+
+**Verified independently:**
+- `git status`: only the two allowlisted files changed. No route file touched, confirmed.
+- Diff matches the spec's preferred fix exactly — one boolean added, condition updated,
+  docstring updated to match.
+- 2 new tests (`TestNormalEndpointSetLoggingAfterShareStart`): the exact regression
+  scenario (recipient logs a set via the **normal** endpoint after starting via share —
+  201, not 403) and a multi-set increment check. Confirmed the pre-existing
+  `test_normal_endpoint_enforces_exercise_ownership` (negative control from Task 87) still
+  passes unmodified, proving non-share sessions are unaffected.
+- Ran the full suite myself twice: **256 passed, 4 pre-existing/unrelated failures, 2
+  skipped** — identical both runs, matches the agent's claim exactly.
+- Negative-control: reverted the fix, reran the new test class — both regression tests
+  failed as expected. Restored, reran both the new tests and the existing share-scoped
+  `TestAddSetViaShare` suite together — all 9 passed, confirming the share-scoped route's
+  redundant explicit flag and the new automatic bypass don't conflict.
+- **Live re-verification in the browser, completing the full end-to-end flow this time**:
+  fresh trainer+client accounts, real plan+share, logged in as the client, opened the
+  share, started a workout — Active Workout screen loaded correctly (Task 91), logged a
+  real set against the trainer's "Pull-ups" exercise via the actual UI (12 reps — no error
+  this time), confirmed "Set 1, logged: 12 reps" rendered, clicked Finish Workout,
+  confirmed the dialog, and got: **"Workout complete! Exercises completed 1/1, Sets logged
+  1/1."** The entire trainer→client sharing-and-logging use case — the core reason this
+  whole feature was built — now works completely through the real UI, no errors anywhere
+  in the chain. Test data cleaned up, both dev servers stopped.
+
+**Verdict: accepted, committed.** Task 86 Phase 5b (start/log via share, both anonymous
+and authenticated-recipient paths) is now fully verified end to end. Nothing pushed,
+production untouched.
+
+Remaining for Task 86: Phase 5c (edit a plan via an edit-tier share). Not started.

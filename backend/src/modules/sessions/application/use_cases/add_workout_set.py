@@ -55,7 +55,7 @@ class AddWorkoutSet:
         1. Session ownership (404/403)
         2. Session not already finished (409)
         3. Workout exercise exists (404)
-        4. Exercise ownership (403, unless skip_exercise_ownership_check=True)
+        4. Exercise ownership (403, unless skip_exercise_ownership_check=True or session originated from a share)
         5. Logged data is valid (at least one of weight, reps, duration_seconds is non-null) (400)
 
         Args:
@@ -70,7 +70,8 @@ class AddWorkoutSet:
             skip_exercise_ownership_check: If True, bypass the exercise ownership check (e.g., when
                 logging through a share endpoint where permission was already verified at the share
                 level). Defaults to False to preserve existing behavior. Exercise existence is always
-                verified regardless of this flag.
+                verified regardless of this flag. The check is also automatically bypassed if the
+                session originated from a share (session.share_id is not None).
 
         Returns:
             The created or updated WorkoutSet.
@@ -79,7 +80,7 @@ class AddWorkoutSet:
             WorkoutSessionNotFoundError: If the session doesn't exist.
             UnauthorizedWorkoutSessionAccessError: If user doesn't own the session.
             SessionAlreadyFinishedError: If the session is already finished.
-            UnauthorizedExerciseAccessError: If the user doesn't own the exercise (unless skip_exercise_ownership_check=True).
+            UnauthorizedExerciseAccessError: If the user doesn't own the exercise (unless skip_exercise_ownership_check=True or session.share_id is not None).
             InvalidSetDataError: If no values provided (all weight, reps, duration_seconds are null).
         """
         # 1. Load session and check ownership
@@ -103,9 +104,10 @@ class AddWorkoutSet:
         if not workout_exercise:
             raise ValueError(f"Workout exercise {workout_exercise_id} not found")
 
-        # 4. Validate exercise ownership (skip if requested, but always load exercise)
+        # 4. Validate exercise ownership (skip if requested or if session originated from a share, but always load exercise)
         exercise = self.exercise_repository.get_by_id(workout_exercise.exercise_id)
-        if not skip_exercise_ownership_check:
+        bypass_ownership_check = skip_exercise_ownership_check or session.share_id is not None
+        if not bypass_ownership_check:
             if not exercise or exercise.user_id != user_id:
                 raise UnauthorizedExerciseAccessError(
                     f"User {user_id} does not own exercise {workout_exercise.exercise_id}"
