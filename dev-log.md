@@ -5029,3 +5029,42 @@ Phase 4 was never committed standalone). Nothing pushed; production untouched.
 
 Remaining for Task 86: Phase 5 (frontend — share dialog, `/shared/:token` page, log/edit
 flows via share). Not started.
+
+## 2026-08-05 — Task 88 found: viewing a shared plan with real content crashes (500)
+
+Found via a live demo walkthrough for the owner (not an automated test) — the exact kind
+of check the automated suite was missing. Registered a fresh trainer+client pair, built a
+real plan (one day, one exercise on it — i.e. any normal plan), shared it `anyone`/`log`,
+then had the client call `GET /api/shared/{token}` just to *view* the plan before logging
+anything. Got a 500. Reproduced identically on a completely fresh server restart (ruled
+out stale-process artifacts), so this is a real bug, not a fluke.
+
+Traceback: `SharedPlanResponse` construction in
+`sharing/presentation/routes.py::resolve_and_access_shared_plan` throws a Pydantic
+`ValidationError` on `days.0` — "Input should be a valid dictionary". Root cause:
+`SharedPlanResponse.days`/`.weeks` in `schemas.py` are typed `list[dict] | None`, but the
+route hands them `plan_detail_response.days`/`.weeks` straight from
+`WorkoutPlanDetailResponse`, which are real `PlanDayDetailResponse`/`PlanWeekDetailResponse`
+Pydantic model instances, not dicts. Only `plan` was correctly `.model_dump()`'d;
+`days`/`weeks` were not.
+
+This is a **Phase 3 defect** (`GET /api/shared/{token}` was Phase 3's own endpoint), not a
+regression from Phase 4/4b — confirmed why it was invisible: every test in
+`test_sharing_access_routes.py` uses the `owner_plan` fixture, which never adds any days.
+An empty list has nothing to type-check, so `days=[]` passed validation trivially
+regardless of the wrong declared item type. The existing assertions
+(`assert "days" in data or "weeks" in data`) only checked the key existed, never real
+content — so this would have looked identical to a working response in every test that ran.
+Also means the `weeks`-type-plan path has never been exercised with content by any test
+either, and may have the identical defect (untested, flagged in the Task 88 spec).
+
+This blocks the single most basic action in the whole sharing feature — viewing a shared
+plan — for every plan with any real content. Wrote a strict fix spec:
+`task_specs/task_88_sharing_view_response_serialization_fix.md`. Preferred fix: type
+`SharedPlanResponse.days`/`.weeks` correctly (`list[PlanDayDetailResponse] | None` /
+`list[PlanWeekDetailResponse] | None`, imported from the workouts module, matching an
+already-established cross-module import pattern in this file) instead of loosely typing as
+`dict`. Required tests: the exact regression scenario for both `days`- and `weeks`-type
+plans, asserting real response content, not just key presence. Test data from the demo
+cleaned up from the dev DB; dev server stopped. Nothing committed for the fix yet —
+delegating to the coder agent next.
