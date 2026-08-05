@@ -1,10 +1,6 @@
 """Use case: remove a grant from a plan's share."""
 from ...domain.interfaces.plan_share_repository import PlanShareRepository
-
-
-class ShareNotFoundError(Exception):
-    """Raised when a plan has no share yet."""
-    pass
+from ...domain.exceptions import ShareNotFoundError
 
 
 class RemoveShareGrant:

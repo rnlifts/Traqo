@@ -6,11 +6,7 @@ from ...domain.entities.plan_share import (
     SHARE_MODE_RESTRICTED,
 )
 from ...domain.interfaces.plan_share_repository import PlanShareRepository
-
-
-class ShareNotFoundError(Exception):
-    """Raised when a share token is missing or revoked, or access is denied."""
-    pass
+from ...domain.exceptions import ShareNotFoundError, ShareAccessDeniedError
 
 
 class ResolveShareAccess:
@@ -75,13 +71,13 @@ class ResolveShareAccess:
         elif share.mode == SHARE_MODE_RESTRICTED:
             # Restricted mode: must be authenticated and have a grant
             if caller_user_id is None:
-                # Anonymous caller on restricted share → access denied
-                raise ShareNotFoundError(f"Share token {token}: anonymous access not allowed")
+                # Anonymous caller on restricted share → access denied (403)
+                raise ShareAccessDeniedError(f"Share token {token}: anonymous access not allowed")
 
             grant = self.share_repo.get_grant_for_user(share.id, caller_user_id)
             if not grant:
-                # Authenticated but no grant → access denied
-                raise ShareNotFoundError(f"Share token {token}: no grant for user")
+                # Authenticated but no grant → access denied (403)
+                raise ShareAccessDeniedError(f"Share token {token}: no grant for user")
 
             return share, grant.permission
 

@@ -3,11 +3,7 @@ from datetime import datetime
 
 from ...domain.entities.plan_share import PlanShare
 from ...domain.interfaces.plan_share_repository import PlanShareRepository
-
-
-class ShareNotFoundError(Exception):
-    """Raised when a plan has no share yet."""
-    pass
+from ...domain.exceptions import ShareNotFoundError
 
 
 class RevokeShare:

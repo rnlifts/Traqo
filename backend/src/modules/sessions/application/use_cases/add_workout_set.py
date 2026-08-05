@@ -39,6 +39,7 @@ class AddWorkoutSet:
         reps: int | None = None,
         duration_seconds: int | None = None,
         notes: str = "",
+        skip_exercise_ownership_check: bool = False,
     ) -> WorkoutSet:
         """Log or update a set for the given plan-exercise in an active workout session (upsert).
 
@@ -54,7 +55,7 @@ class AddWorkoutSet:
         1. Session ownership (404/403)
         2. Session not already finished (409)
         3. Workout exercise exists (404)
-        4. Exercise ownership (403)
+        4. Exercise ownership (403, unless skip_exercise_ownership_check=True)
         5. Logged data is valid (at least one of weight, reps, duration_seconds is non-null) (400)
 
         Args:
@@ -66,6 +67,10 @@ class AddWorkoutSet:
             reps: Reps completed in this set (optional).
             duration_seconds: Duration in seconds (optional).
             notes: Optional notes about the set.
+            skip_exercise_ownership_check: If True, bypass the exercise ownership check (e.g., when
+                logging through a share endpoint where permission was already verified at the share
+                level). Defaults to False to preserve existing behavior. Exercise existence is always
+                verified regardless of this flag.
 
         Returns:
             The created or updated WorkoutSet.
@@ -74,7 +79,7 @@ class AddWorkoutSet:
             WorkoutSessionNotFoundError: If the session doesn't exist.
             UnauthorizedWorkoutSessionAccessError: If user doesn't own the session.
             SessionAlreadyFinishedError: If the session is already finished.
-            UnauthorizedExerciseAccessError: If the user doesn't own the exercise.
+            UnauthorizedExerciseAccessError: If the user doesn't own the exercise (unless skip_exercise_ownership_check=True).
             InvalidSetDataError: If no values provided (all weight, reps, duration_seconds are null).
         """
         # 1. Load session and check ownership
@@ -98,12 +103,16 @@ class AddWorkoutSet:
         if not workout_exercise:
             raise ValueError(f"Workout exercise {workout_exercise_id} not found")
 
-        # 4. Validate exercise ownership
+        # 4. Validate exercise ownership (skip if requested, but always load exercise)
         exercise = self.exercise_repository.get_by_id(workout_exercise.exercise_id)
-        if not exercise or exercise.user_id != user_id:
-            raise UnauthorizedExerciseAccessError(
-                f"User {user_id} does not own exercise {workout_exercise.exercise_id}"
-            )
+        if not skip_exercise_ownership_check:
+            if not exercise or exercise.user_id != user_id:
+                raise UnauthorizedExerciseAccessError(
+                    f"User {user_id} does not own exercise {workout_exercise.exercise_id}"
+                )
+        else:
+            if not exercise:
+                raise ValueError(f"Exercise {workout_exercise.exercise_id} not found")
 
         # 5. Permissive validation: a set needs at least one value (weight, reps, or duration)
         if weight is None and reps is None and duration_seconds is None:

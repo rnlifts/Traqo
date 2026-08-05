@@ -43,11 +43,28 @@ class WorkoutSessionRepositoryImpl(WorkoutSessionRepository):
         return model.to_domain()
 
     def list_finished_by_user(self, user_id: int) -> list[WorkoutSession]:
-        """Retrieve all finished sessions for a user, ordered by started_at descending."""
+        """Retrieve all finished sessions for a user, ordered by started_at descending.
+
+        Excludes sessions where share_id IS NOT NULL AND (logged_by_user_id IS NULL OR logged_by_user_id != user_id).
+        This implements the stats-exclusion rule: anonymous-logger sessions attached to the owner
+        do NOT pollute their stats, but recipient's own share-logged sessions DO count.
+        """
+        from sqlalchemy import or_, and_
+
         models = (
             self.session.query(WorkoutSessionModel)
             .filter_by(user_id=user_id)
             .filter(WorkoutSessionModel.completed_at.isnot(None))
+            # Exclude sessions where share_id IS NOT NULL AND (logged_by_user_id IS NULL OR logged_by_user_id != user_id)
+            .filter(
+                ~and_(
+                    WorkoutSessionModel.share_id.isnot(None),
+                    or_(
+                        WorkoutSessionModel.logged_by_user_id.is_(None),
+                        WorkoutSessionModel.logged_by_user_id != user_id,
+                    ),
+                )
+            )
             .order_by(WorkoutSessionModel.started_at.desc())
             .all()
         )

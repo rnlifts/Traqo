@@ -38,32 +38,40 @@ class StartWorkout:
         workout_plan_id: int,
         plan_day_id: int | None = None,
         week_number: int | None = None,
+        share_id: int | None = None,
+        logged_by_user_id: int | None = None,
+        skip_ownership_check: bool = False,
     ) -> WorkoutSession:
         """Start a new workout session.
 
         Args:
-            user_id: The user starting the workout.
+            user_id: The user starting the workout (or the plan owner if anonymous via share).
             workout_plan_id: The plan the session is based on.
             plan_day_id: The specific day within the plan to run (optional for backwards compatibility).
             week_number: For weeks-type plans: the week number the user selected (1-indexed, e.g. 1, 2, 3...).
                          Server will resolve this to the actual backing week, validate that plan_day_id belongs to it,
                          and store the resolved PlanWeek's actual database .id into the session's plan_week_id.
+            share_id: Optional share ID (set when starting via a share token).
+            logged_by_user_id: Optional user ID of who logged the session (NULL for anonymous share logging).
+            skip_ownership_check: If True, skip the ownership check (used for share-authorized paths).
 
         Returns:
-            The created WorkoutSession with plan_week_id set to the PlanWeek.id (if provided).
+            The created WorkoutSession with plan_week_id set to the PlanWeek.id (if provided),
+            share_id and logged_by_user_id set (if provided).
 
         Raises:
             WorkoutPlanNotFoundError: If the plan doesn't exist.
-            UnauthorizedWorkoutPlanAccessError: If the user doesn't own the plan.
+            UnauthorizedWorkoutPlanAccessError: If the user doesn't own the plan (and not skip_ownership_check).
             PlanDayNotFoundError: If week_number is provided but doesn't exist,
                                   or if plan_day_id doesn't belong to the resolved week.
         """
-        # Validate plan exists and is owned by user
+        # Validate plan exists
         plan = self.plan_repository.get_by_id(workout_plan_id)
         if not plan:
             raise WorkoutPlanNotFoundError(f"Plan {workout_plan_id} not found")
 
-        if plan.user_id != user_id:
+        # Check ownership (unless skipped for share path)
+        if not skip_ownership_check and plan.user_id != user_id:
             raise UnauthorizedWorkoutPlanAccessError(
                 f"User {user_id} does not own plan {workout_plan_id}"
             )
@@ -137,5 +145,7 @@ class StartWorkout:
             plan_week_id=resolved_plan_week_id,  # Store the actual PlanWeek.id (database foreign key)
             started_at=datetime.utcnow(),
             completed_at=None,
+            share_id=share_id,
+            logged_by_user_id=logged_by_user_id,
         )
         return self.session_repository.create(session)

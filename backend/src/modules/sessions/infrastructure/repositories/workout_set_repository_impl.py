@@ -91,9 +91,14 @@ class WorkoutSetRepositoryImpl(WorkoutSetRepository):
     def list_finished_by_user_and_exercise(
         self, user_id: int, exercise_id: int
     ) -> list[WorkoutSet]:
-        """Retrieve all finished sets for a user and exercise, ordered chronologically."""
+        """Retrieve all finished sets for a user and exercise, ordered chronologically.
+
+        Excludes sets from sessions where share_id IS NOT NULL AND (logged_by_user_id IS NULL OR logged_by_user_id != user_id).
+        This implements the stats-exclusion rule: anonymous-logger sessions attached to the owner
+        do NOT pollute their stats, but recipient's own share-logged sessions DO count.
+        """
         from ..models.workout_session_model import WorkoutSessionModel
-        from sqlalchemy import and_
+        from sqlalchemy import and_, or_
 
         models = (
             self.session.query(WorkoutSetModel)
@@ -106,6 +111,16 @@ class WorkoutSetRepositoryImpl(WorkoutSetRepository):
                     WorkoutSessionModel.user_id == user_id,
                     WorkoutSessionModel.completed_at.isnot(None),
                     WorkoutSetModel.exercise_id == exercise_id,
+                )
+            )
+            # Exclude sessions where share_id IS NOT NULL AND (logged_by_user_id IS NULL OR logged_by_user_id != user_id)
+            .filter(
+                ~and_(
+                    WorkoutSessionModel.share_id.isnot(None),
+                    or_(
+                        WorkoutSessionModel.logged_by_user_id.is_(None),
+                        WorkoutSessionModel.logged_by_user_id != user_id,
+                    ),
                 )
             )
             .order_by(WorkoutSessionModel.started_at.asc(), WorkoutSetModel.set_number.asc())

@@ -4987,3 +4987,45 @@ a fix for the exercise-ownership check in the shared-logging path (needs to allo
 session owner's *effective* permission via the share to substitute for/bypass the strict
 `exercise.user_id == user_id` check when logging through a share). Local dev DB test data
 cleaned up; dev server stopped; nothing committed, nothing pushed.
+
+## 2026-08-05 — Task 87: fix exercise-ownership check (Task 86 Phase 4b) — verified, committed
+
+Delegated to the `coder` agent per the strict spec in
+`task_specs/task_87_sharing_phase4b_exercise_ownership_fix.md`. Fix: `add_workout_set.py`
+gained an opt-in `skip_exercise_ownership_check: bool = False` param, mirroring the
+`skip_ownership_check` pattern from `start_workout.py`; `add_set_via_share` in
+`sharing/presentation/routes.py` now passes `skip_exercise_ownership_check=True` (safe
+because permission was already verified via `ResolveShareAccess` earlier in the same
+handler). Default stays `False` everywhere else, so the normal
+`/api/workout-sessions/{id}/sets` endpoint is unweakened.
+
+**Verified independently, not just trusted:**
+- `git status` confirmed only the 3 allowlisted files changed (plus everything already
+  pending from Phase 4).
+- Read both diffs in full — the fix is minimal, additive, and exactly matches the spec's
+  required pattern. Confirmed via grep that the only other caller of `AddWorkoutSet`
+  (the normal session-logging route) does not pass the new flag, so it still defaults to
+  strict ownership enforcement.
+- 3 new tests added to `TestAddSetViaShare`: the exact regression scenario (authenticated
+  recipient logs a set against the owner's exercise via share), a multi-set increment
+  check, and a negative-control confirming the *normal* endpoint still rejects
+  cross-ownership logging. Read all three in full — real, no placeholders.
+- Ran the full suite myself twice: **249 passed, 4 failed (the same pre-existing,
+  unrelated failures from the Phase 4 entry above), 2 skipped** — identical both runs,
+  matches the agent's reported numbers exactly this time.
+- Negative-control: flipped `skip_exercise_ownership_check=True` back to `False` in the
+  route, reran the new tests — both regression tests failed as expected (proving they
+  actually exercise the fix), then restored and confirmed clean again.
+- Live end-to-end re-verification against the running dev server: registered a fresh
+  owner+recipient pair, recreated the exact scenario that failed before ("You do not own
+  this exercise") — recipient start → add set → finish all succeeded, and the session
+  correctly appeared in the recipient's own `/api/workout-history`. Test data cleaned up,
+  server stopped afterward.
+
+**Verdict: accepted.** Task 86 Phase 4 (including this fix) is now genuinely complete and
+correct — attribution, stats-exclusion, code quality, and the exercise-ownership bug are
+all independently confirmed. Committed locally (Phase 4 + Phase 4b fix together, since
+Phase 4 was never committed standalone). Nothing pushed; production untouched.
+
+Remaining for Task 86: Phase 5 (frontend — share dialog, `/shared/:token` page, log/edit
+flows via share). Not started.

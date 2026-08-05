@@ -1,11 +1,7 @@
 """Use case: add or update a grant on a plan's share."""
 from ...domain.entities.plan_share import PlanShare, PlanShareGrant
 from ...domain.interfaces.plan_share_repository import PlanShareRepository
-
-
-class ShareNotFoundError(Exception):
-    """Raised when a plan has no share yet."""
-    pass
+from ...domain.exceptions import ShareNotFoundError
 
 
 class UserNotFoundError(Exception):

@@ -31,7 +31,7 @@ from src.modules.sharing.infrastructure.repositories.plan_share_repository_impl 
 from src.modules.sharing.application.use_cases.create_or_unrevoke_share import (
     CreateOrUnrevokeShare,
 )
-from src.modules.sharing.application.use_cases.get_share import GetShare, ShareNotFoundError
+from src.modules.sharing.application.use_cases.get_share import GetShare
 from src.modules.sharing.application.use_cases.update_share import UpdateShare
 from src.modules.sharing.application.use_cases.revoke_share import RevokeShare
 from src.modules.sharing.application.use_cases.add_share_grant import (
@@ -39,10 +39,9 @@ from src.modules.sharing.application.use_cases.add_share_grant import (
     CannotGrantToSelfError,
 )
 from src.modules.sharing.application.use_cases.remove_share_grant import RemoveShareGrant
-from src.modules.sharing.application.use_cases.resolve_share_access import (
-    ResolveShareAccess,
-    ShareNotFoundError as AccessResolveNotFoundError,
-)
+from src.modules.sharing.application.use_cases.resolve_share_access import ResolveShareAccess
+from src.modules.sharing.domain.exceptions import ShareNotFoundError, ShareAccessDeniedError
+from . import schemas
 from .schemas import (
     CreateShareRequest,
     ShareResponse,
@@ -51,6 +50,11 @@ from .schemas import (
     UpdateShareRequest,
     SharedPlanResponse,
     SharedPlanShare,
+    StartWorkoutViaShareRequest,
+    StartWorkoutViaShareResponse,
+    AddSetViaShareRequest,
+    AddSetViaShareResponse,
+    FinishWorkoutViaShareResponse,
 )
 
 sharing_router = APIRouter(prefix="/api/workout-plans/{plan_id}/share", tags=["sharing"])
@@ -388,21 +392,18 @@ async def resolve_and_access_shared_plan(
         share, effective_permission = access_resolver.execute(
             token, caller_user_id, plan_owner_user_id=plan.user_id
         )
-    except AccessResolveNotFoundError as e:
-        # Permission denied (e.g., restricted share with no grant, or anonymous access)
-        # Check if the share is for a restricted mode without grant (should be 403)
-        # vs. other errors (should be 404)
-        if "anonymous access not allowed" in str(e) or "no grant for user" in str(e):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You do not have permission to access this share",
-            )
-        else:
-            # Shouldn't reach here, but catch other errors as 404
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Share not found",
-            )
+    except ShareAccessDeniedError:
+        # Access denied: restricted share with no grant, or anonymous on restricted
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to access this share",
+        )
+    except ShareNotFoundError:
+        # Share is missing or revoked
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Share not found",
+        )
 
     # Build the plan detail response
     day_repo = PlanDayRepositoryImpl(db)
@@ -426,4 +427,334 @@ async def resolve_and_access_shared_plan(
         permission=effective_permission,
         plan_owner_username=plan_owner_username,
         share=SharedPlanShare(mode=share.mode),
+    )
+
+
+# Phase 4: Logging through a share (attribution)
+@shared_plan_router.post("/{token}/start", response_model=schemas.StartWorkoutViaShareResponse, status_code=status.HTTP_201_CREATED)
+async def start_workout_via_share(
+    token: str,
+    req: schemas.StartWorkoutViaShareRequest,
+    caller_user_id: int | None = Depends(get_optional_user_id),
+    db: Session = Depends(get_db),
+):
+    """Start a workout session via a shared plan (auth optional).
+
+    Attribution rules:
+    - Authenticated caller: session.user_id = caller, share_id = share.id, logged_by_user_id = caller
+    - Anonymous caller (anyone mode only): session.user_id = plan_owner, share_id = share.id, logged_by_user_id = NULL
+
+    Requires effective permission >= 'log' (403 otherwise).
+    """
+    from src.modules.sessions.application.use_cases.start_workout import StartWorkout
+    from src.modules.sessions.infrastructure.repositories.workout_session_repository_impl import WorkoutSessionRepositoryImpl as SessionRepoImpl
+    from src.modules.workouts.infrastructure.repositories.workout_plan_repository_impl import WorkoutPlanRepositoryImpl
+
+    # Initialize repositories
+    share_repo = PlanShareRepositoryImpl(db)
+    plan_repo = WorkoutPlanRepositoryImpl(db)
+
+    # Resolve access
+    access_resolver = ResolveShareAccess(share_repo)
+    try:
+        share, effective_permission = access_resolver.execute(
+            token, caller_user_id, plan_owner_user_id=None  # Will be set after plan fetch
+        )
+    except ShareAccessDeniedError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to access this share",
+        )
+    except ShareNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Share not found",
+        )
+
+    # Get the plan
+    plan = plan_repo.get_by_id(share.workout_plan_id)
+    if not plan:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Plan not found",
+        )
+
+    # Re-resolve with correct plan owner to verify permission
+    try:
+        share, effective_permission = access_resolver.execute(
+            token, caller_user_id, plan_owner_user_id=plan.user_id
+        )
+    except ShareAccessDeniedError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to access this share",
+        )
+    except ShareNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Share not found",
+        )
+
+    # Check permission >= 'log'
+    if effective_permission not in ("log", "edit"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to log workouts through this share",
+        )
+
+    # Determine session ownership and attribution based on authentication
+    if caller_user_id is not None:
+        # Authenticated: session belongs to caller, logged_by = caller
+        session_user_id = caller_user_id
+        logged_by_user_id = caller_user_id
+    else:
+        # Anonymous: session belongs to plan owner, logged_by = NULL
+        session_user_id = plan.user_id
+        logged_by_user_id = None
+
+    # Start the session via share
+    session_repo = SessionRepoImpl(db)
+    week_repo = PlanWeekRepositoryImpl(db)
+    day_repo = PlanDayRepositoryImpl(db)
+    use_case = StartWorkout(plan_repo, session_repo, week_repo, day_repo)
+
+    session = use_case.execute(
+        user_id=session_user_id,
+        workout_plan_id=share.workout_plan_id,
+        plan_day_id=req.plan_day_id,
+        week_number=req.week_number,
+        share_id=share.id,
+        logged_by_user_id=logged_by_user_id,
+        skip_ownership_check=True,
+    )
+
+    return schemas.StartWorkoutViaShareResponse(
+        session_id=session.id,
+        message="Workout started via share",
+    )
+
+
+@shared_plan_router.post("/{token}/sessions/{session_id}/sets", response_model=schemas.AddSetViaShareResponse, status_code=status.HTTP_201_CREATED)
+async def add_set_via_share(
+    token: str,
+    session_id: int,
+    req: schemas.AddSetViaShareRequest,
+    caller_user_id: int | None = Depends(get_optional_user_id),
+    db: Session = Depends(get_db),
+):
+    """Add a set to a session via a shared plan token (auth optional).
+
+    Token-scoped endpoint for anonymous logging. Authenticated callers should use
+    the normal /api/workout-sessions/{session_id}/sets endpoint.
+
+    Verifies the session's share_id matches the resolved share's id and permission >= 'log'.
+    """
+    from src.modules.sessions.infrastructure.repositories.workout_session_repository_impl import WorkoutSessionRepositoryImpl as SessionRepoImpl
+    from src.modules.sessions.infrastructure.repositories.workout_set_repository_impl import WorkoutSetRepositoryImpl
+    from src.modules.workouts.infrastructure.repositories.workout_exercise_repository_impl import WorkoutExerciseRepositoryImpl
+    from src.modules.exercises.infrastructure.repositories.exercise_repository_impl import ExerciseRepositoryImpl
+    from src.modules.sessions.application.use_cases.add_workout_set import AddWorkoutSet
+
+    # Resolve share and access
+    share_repo = PlanShareRepositoryImpl(db)
+    access_resolver = ResolveShareAccess(share_repo)
+
+    try:
+        share, effective_permission = access_resolver.execute(
+            token, caller_user_id, plan_owner_user_id=None
+        )
+    except ShareAccessDeniedError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to access this share",
+        )
+    except ShareNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Share not found",
+        )
+
+    # Get the plan and re-resolve with correct plan owner
+    plan_repo = WorkoutPlanRepositoryImpl(db)
+    plan = plan_repo.get_by_id(share.workout_plan_id)
+    if not plan:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Plan not found",
+        )
+
+    try:
+        share, effective_permission = access_resolver.execute(
+            token, caller_user_id, plan_owner_user_id=plan.user_id
+        )
+    except ShareAccessDeniedError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to access this share",
+        )
+    except ShareNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Share not found",
+        )
+
+    # Check permission >= 'log'
+    if effective_permission not in ("log", "edit"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to log workouts through this share",
+        )
+
+    # Get the session and verify it belongs to this share
+    session_repo = SessionRepoImpl(db)
+    session = session_repo.get_by_id(session_id)
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session not found",
+        )
+
+    if session.share_id != share.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Session does not belong to this share",
+        )
+
+    # Get the workout_exercise by finding the exercise in the session's plan day
+    exercise_repo = ExerciseRepositoryImpl(db)
+    exercise = exercise_repo.get_by_id(req.exercise_id)
+    if not exercise:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Exercise not found",
+        )
+
+    # Find the workout_exercise for this exercise in the session's plan day
+    workout_exercise_repo = WorkoutExerciseRepositoryImpl(db)
+    workout_exercises = workout_exercise_repo.list_by_day(session.plan_day_id)
+    workout_exercise = None
+    for we in workout_exercises:
+        if we.exercise_id == req.exercise_id:
+            workout_exercise = we
+            break
+
+    if not workout_exercise:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Exercise not found in this workout day",
+        )
+
+    # Add the set using the normal use case (but with the session owner, not caller)
+    set_repo = WorkoutSetRepositoryImpl(db)
+    use_case = AddWorkoutSet(session_repo, set_repo, exercise_repo, workout_exercise_repo)
+
+    # Calculate next set number for this exercise in this session
+    next_set_number = set_repo.count_by_session_and_exercise(session_id, workout_exercise.id) + 1
+
+    workout_set = use_case.execute(
+        user_id=session.user_id,  # Use session owner, not caller
+        session_id=session_id,
+        workout_exercise_id=workout_exercise.id,
+        set_number=next_set_number,
+        weight=req.weight,
+        reps=req.reps,
+        duration_seconds=req.duration_seconds,
+        notes=req.notes,
+        skip_exercise_ownership_check=True,  # Permission was already verified via share resolution
+    )
+
+    return schemas.AddSetViaShareResponse(
+        set_id=workout_set.id,
+        set_number=workout_set.set_number,
+    )
+
+
+@shared_plan_router.post("/{token}/sessions/{session_id}/finish", response_model=schemas.FinishWorkoutViaShareResponse)
+async def finish_workout_via_share(
+    token: str,
+    session_id: int,
+    caller_user_id: int | None = Depends(get_optional_user_id),
+    db: Session = Depends(get_db),
+):
+    """Finish a workout session via a shared plan token (auth optional).
+
+    Token-scoped endpoint for anonymous logging. Authenticated callers should use
+    the normal /api/workout-sessions/{session_id}/finish endpoint.
+
+    Verifies the session's share_id matches the resolved share's id and permission >= 'log'.
+    """
+    from src.modules.sessions.infrastructure.repositories.workout_session_repository_impl import WorkoutSessionRepositoryImpl as SessionRepoImpl
+    from src.modules.sessions.application.use_cases.finish_workout import FinishWorkout
+
+    # Resolve share and access
+    share_repo = PlanShareRepositoryImpl(db)
+    access_resolver = ResolveShareAccess(share_repo)
+
+    try:
+        share, effective_permission = access_resolver.execute(
+            token, caller_user_id, plan_owner_user_id=None
+        )
+    except ShareAccessDeniedError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to access this share",
+        )
+    except ShareNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Share not found",
+        )
+
+    # Get the plan and re-resolve with correct plan owner
+    plan_repo = WorkoutPlanRepositoryImpl(db)
+    plan = plan_repo.get_by_id(share.workout_plan_id)
+    if not plan:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Plan not found",
+        )
+
+    try:
+        share, effective_permission = access_resolver.execute(
+            token, caller_user_id, plan_owner_user_id=plan.user_id
+        )
+    except ShareAccessDeniedError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to access this share",
+        )
+    except ShareNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Share not found",
+        )
+
+    # Check permission >= 'log'
+    if effective_permission not in ("log", "edit"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to log workouts through this share",
+        )
+
+    # Get the session and verify it belongs to this share
+    session_repo = SessionRepoImpl(db)
+    session = session_repo.get_by_id(session_id)
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session not found",
+        )
+
+    if session.share_id != share.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Session does not belong to this share",
+        )
+
+    # Finish the session using the normal use case (but with the session owner, not caller)
+    use_case = FinishWorkout(session_repo)
+    use_case.execute(user_id=session.user_id, session_id=session_id)
+
+    return schemas.FinishWorkoutViaShareResponse(
+        message="Workout completed",
     )

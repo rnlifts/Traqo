@@ -53,3 +53,35 @@ class SharedPlanResponse(BaseModel):
     permission: str  # 'view', 'log', or 'edit'
     plan_owner_username: str
     share: SharedPlanShare
+
+
+class StartWorkoutViaShareRequest(BaseModel):
+    """Request to start a workout via a shared plan (POST /api/shared/{token}/start)."""
+    plan_day_id: int
+    week_number: int | None = None  # For weeks-type plans
+
+
+class StartWorkoutViaShareResponse(BaseModel):
+    """Response for starting a workout via share."""
+    session_id: int
+    message: str
+
+
+class AddSetViaShareRequest(BaseModel):
+    """Request to add a set to a session via share (POST /api/shared/{token}/sessions/{session_id}/sets)."""
+    exercise_id: int
+    weight: float | None = None
+    reps: int | None = None
+    duration_seconds: int | None = None
+    notes: str = ""
+
+
+class AddSetViaShareResponse(BaseModel):
+    """Response for adding a set via share."""
+    set_id: int
+    set_number: int
+
+
+class FinishWorkoutViaShareResponse(BaseModel):
+    """Response for finishing a workout via share."""
+    message: str
