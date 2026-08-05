@@ -5391,3 +5391,50 @@ fix the newly-found `AddExerciseToDay` exercise-ownership gap (bypass it the sam
 under `skip_ownership_check`, plus a regression test). All test data from this
 verification session cleaned up, dev server stopped. Reporting both findings to the owner
 before scoping the follow-up work.
+
+## 2026-08-05 — Task 93 completed directly (not delegated) after the coder agent's carelessness with the dev DB
+
+Owner's explicit instruction: finish this myself, not via the `coder` agent, given the
+schema-drop incident. Did both remaining pieces by hand.
+
+**Fixed `AddExerciseToDay`'s exercise-ownership bug**: added `and not skip_ownership_check`
+to its Step 3 exercise-ownership check (`add_exercise_to_day.py`), mirroring the same
+`skip_ownership_check` flag already gating its Step 1 plan-ownership check — an edit-tier
+grantee can now add the plan owner's own exercises to the plan, exactly like the plan
+owner could. Non-share callers are unaffected (flag defaults `False`).
+
+**Completed test coverage**: extended `test_plan_edit_via_share.py` from 11 to 41 tests —
+full 4-scenario coverage (owner succeeds / edit-tier grantee succeeds / view-tier grantee
+rejected / stranger rejected) across all 10 endpoints from the Task 93 spec's table,
+including the `AddExerciseToDay` regression test for the bug above, a revoked-share
+regression test (grantee loses access the moment the share is revoked, even with their
+grant row still in the DB), and a new weeks-type-plan fixture for `CustomizeWeek` /
+`MatchPreviousWeek` (the two endpoints that only apply to weeks-type plans). Added the
+missing "stranger rejected on create day" case the agent's own report had flagged as
+incomplete.
+
+**Verified thoroughly, same discipline as every other phase:**
+- Ran the new/expanded test file: **41/41 passed.**
+- Negative-control on the `AddExerciseToDay` fix: reverted it, confirmed the regression
+  test fails as expected, restored, confirmed clean again.
+- Re-ran Task 91's `TestBootstrapViaShare` explicitly — still passes, confirming this
+  change didn't interfere with `GetWorkoutPlanDetail`'s other caller.
+- Full backend suite run twice: **297 passed** (256 baseline + 41 new), same 4
+  pre-existing/unrelated failures, 2 skipped — identical both runs.
+- Live end-to-end re-verification against a freshly started dev server: registered a real
+  owner + edit-tier grantee, granted access, had the grantee add the owner's real exercise
+  to the shared plan through the actual API — `201 Created`, the exact scenario that
+  failed with "You do not own this exercise" before the fix. Test data cleaned up, server
+  stopped.
+
+**Verdict: Task 93 now fully accepted.** All 10 plan-builder endpoints correctly allow
+edit-tier share grantees while still rejecting view-tier grantees, strangers, and revoked
+shares — both the plan-ownership layer (from the coder agent's implementation, verified
+correct) and the exercise-ownership layer (the bug found and fixed directly). Committing
+the full Task 93 diff (agent's original 10-file implementation + this session's
+completion: the `add_exercise_to_day.py` fix and the expanded test file) as one commit.
+Nothing pushed, production untouched.
+
+Task 86 Phase 5c backend is done. Remaining for Task 86: Phase 5c frontend (an "Edit"
+button on the shared-plan page, linking edit-tier grantees into the existing plan-builder
+UI) — not started, not yet scoped.

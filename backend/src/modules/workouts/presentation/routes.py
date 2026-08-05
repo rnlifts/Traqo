@@ -106,6 +106,40 @@ from .schemas import (
 workouts_router = APIRouter(prefix="/api/workout-plans", tags=["workouts"])
 
 
+def _caller_can_edit_plan(plan, user_id: int, db: Session) -> bool:
+    """Return True if user_id owns the plan, or holds an edit-tier share grant on it.
+
+    Used by plan-builder endpoints to let an authenticated share recipient with
+    edit-tier permission edit a plan they don't own, alongside the plan's actual owner.
+    """
+    if plan.user_id == user_id:
+        return True
+
+    from src.modules.sharing.infrastructure.repositories.plan_share_repository_impl import (
+        PlanShareRepositoryImpl,
+    )
+    from src.modules.sharing.application.use_cases.resolve_share_access import (
+        ResolveShareAccess,
+    )
+    from src.modules.sharing.domain.exceptions import (
+        ShareNotFoundError,
+        ShareAccessDeniedError,
+    )
+
+    share_repo = PlanShareRepositoryImpl(db)
+    share = share_repo.get_by_plan(plan.id)
+    if not share or not share.is_active:
+        return False
+
+    resolver = ResolveShareAccess(share_repo)
+    try:
+        _, effective_permission = resolver.execute(share.token, user_id, plan.user_id)
+    except (ShareNotFoundError, ShareAccessDeniedError):
+        return False
+
+    return effective_permission == "edit"
+
+
 def build_plan_detail_response(
     plan, plan_id: int, use_case, exercise_repo, day_repo, week_repo, db: Session
 ) -> WorkoutPlanDetailResponse:
@@ -536,8 +570,13 @@ async def get_workout_plan_detail(
     exercise_repo = WorkoutExerciseRepositoryImpl(db)
     week_repo = PlanWeekRepositoryImpl(db)
 
+    plan = plan_repo.get_by_id(plan_id)
+    if not plan:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workout plan not found")
+    can_edit = _caller_can_edit_plan(plan, user_id, db)
+
     use_case = GetWorkoutPlanDetail(plan_repo, exercise_repo, day_repo, week_repo)
-    plan, _ = use_case.execute(plan_id, user_id)
+    plan, _ = use_case.execute(plan_id, user_id, skip_ownership_check=can_edit)
 
     return build_plan_detail_response(plan, plan_id, use_case, exercise_repo, day_repo, week_repo, db)
 
@@ -550,8 +589,13 @@ async def update_workout_plan(
     db: Session = Depends(get_db),
 ):
     plan_repo = WorkoutPlanRepositoryImpl(db)
+    plan = plan_repo.get_by_id(plan_id)
+    if not plan:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workout plan not found")
+    can_edit = _caller_can_edit_plan(plan, user_id, db)
+
     use_case = UpdateWorkoutPlan(plan_repo)
-    updated = use_case.execute(plan_id, req.name, user_id)
+    updated = use_case.execute(plan_id, req.name, user_id, skip_ownership_check=can_edit)
     return updated
 
 
@@ -577,8 +621,13 @@ async def create_day(
 ):
     plan_repo = WorkoutPlanRepositoryImpl(db)
     day_repo = PlanDayRepositoryImpl(db)
+    plan = plan_repo.get_by_id(plan_id)
+    if not plan:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workout plan not found")
+    can_edit = _caller_can_edit_plan(plan, user_id, db)
+
     use_case = CreateDay(plan_repo, day_repo)
-    day = use_case.execute(plan_id, user_id, req.label)
+    day = use_case.execute(plan_id, user_id, req.label, skip_ownership_check=can_edit)
 
     return PlanDayResponse(
         id=day.id,
@@ -624,8 +673,13 @@ async def update_day(
 ):
     plan_repo = WorkoutPlanRepositoryImpl(db)
     day_repo = PlanDayRepositoryImpl(db)
+    plan = plan_repo.get_by_id(plan_id)
+    if not plan:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workout plan not found")
+    can_edit = _caller_can_edit_plan(plan, user_id, db)
+
     use_case = UpdateDay(plan_repo, day_repo)
-    day_data = use_case.execute(plan_id, day_id, user_id, req.label, req.is_rest)
+    day_data = use_case.execute(plan_id, day_id, user_id, req.label, req.is_rest, skip_ownership_check=can_edit)
 
     return PlanDayResponse(
         id=day_data["id"],
@@ -736,6 +790,11 @@ async def add_exercise_to_day(
     day_repo = PlanDayRepositoryImpl(db)
     exercise_repo = WorkoutExerciseRepositoryImpl(db)
     exercise_domain_repo = ExerciseRepositoryImpl(db)
+    plan = plan_repo.get_by_id(plan_id)
+    if not plan:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workout plan not found")
+    can_edit = _caller_can_edit_plan(plan, user_id, db)
+
     use_case = AddExerciseToDay(plan_repo, day_repo, exercise_repo, exercise_domain_repo)
     workout_exercise = use_case.execute(
         plan_id,
@@ -749,6 +808,7 @@ async def add_exercise_to_day(
         has_reps=req.has_reps,
         has_weight=req.has_weight,
         has_duration=req.has_duration,
+        skip_ownership_check=can_edit,
     )
     return _build_workout_exercise_response(workout_exercise, db, include_exercise_name=False)
 
@@ -764,8 +824,13 @@ async def remove_exercise_from_day(
     plan_repo = WorkoutPlanRepositoryImpl(db)
     day_repo = PlanDayRepositoryImpl(db)
     exercise_repo = WorkoutExerciseRepositoryImpl(db)
+    plan = plan_repo.get_by_id(plan_id)
+    if not plan:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workout plan not found")
+    can_edit = _caller_can_edit_plan(plan, user_id, db)
+
     use_case = RemoveExerciseFromDay(plan_repo, day_repo, exercise_repo)
-    use_case.execute(plan_id, day_id, workout_exercise_id, user_id)
+    use_case.execute(plan_id, day_id, workout_exercise_id, user_id, skip_ownership_check=can_edit)
 
 
 @workouts_router.put("/{plan_id}/days/{day_id}/exercises/{workout_exercise_id}/move", response_model=WorkoutExerciseResponse)
@@ -819,6 +884,11 @@ async def update_exercise_in_day(
     plan_repo = WorkoutPlanRepositoryImpl(db)
     day_repo = PlanDayRepositoryImpl(db)
     exercise_repo = WorkoutExerciseRepositoryImpl(db)
+    plan = plan_repo.get_by_id(plan_id)
+    if not plan:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workout plan not found")
+    can_edit = _caller_can_edit_plan(plan, user_id, db)
+
     use_case = UpdateExerciseInDay(plan_repo, day_repo, exercise_repo)
     exercise_data = use_case.execute(
         plan_id,
@@ -833,6 +903,7 @@ async def update_exercise_in_day(
         has_reps=req.has_reps,
         has_weight=req.has_weight,
         has_duration=req.has_duration,
+        skip_ownership_check=can_edit,
     )
 
     # Fetch the updated exercise and return full response with set_targets
@@ -872,7 +943,7 @@ async def update_exercise_set_targets(
     plan = plan_repo.get_by_id(plan_id)
     if not plan:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workout plan not found")
-    if plan.user_id != user_id:
+    if not _caller_can_edit_plan(plan, user_id, db):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Unauthorized")
 
     # Verify day exists and belongs to plan
@@ -937,8 +1008,13 @@ async def customize_week(
     week_repo = PlanWeekRepositoryImpl(db)
     day_repo = PlanDayRepositoryImpl(db)
     exercise_repo = WorkoutExerciseRepositoryImpl(db)
+    plan = plan_repo.get_by_id(plan_id)
+    if not plan:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workout plan not found")
+    can_edit = _caller_can_edit_plan(plan, user_id, db)
+
     use_case = CustomizeWeek(plan_repo, week_repo, day_repo, exercise_repo)
-    use_case.execute(plan_id, week_number, user_id)
+    use_case.execute(plan_id, week_number, user_id, skip_ownership_check=can_edit)
 
 
 @workouts_router.post("/{plan_id}/weeks/{week_number}/match-previous", status_code=status.HTTP_204_NO_CONTENT)
@@ -964,5 +1040,10 @@ async def match_previous_week(
     week_repo = PlanWeekRepositoryImpl(db)
     day_repo = PlanDayRepositoryImpl(db)
     session_repo = WorkoutSessionRepositoryImpl(db)
+    plan = plan_repo.get_by_id(plan_id)
+    if not plan:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workout plan not found")
+    can_edit = _caller_can_edit_plan(plan, user_id, db)
+
     use_case = MatchPreviousWeek(plan_repo, week_repo, day_repo, session_repo)
-    use_case.execute(plan_id, week_number, user_id)
+    use_case.execute(plan_id, week_number, user_id, skip_ownership_check=can_edit)

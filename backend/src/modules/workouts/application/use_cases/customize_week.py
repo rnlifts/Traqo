@@ -29,7 +29,7 @@ class CustomizeWeek:
         self.day_repository = day_repository
         self.exercise_repository = exercise_repository
 
-    def execute(self, plan_id: int, week_number: int, user_id: int) -> None:
+    def execute(self, plan_id: int, week_number: int, user_id: int, skip_ownership_check: bool = False) -> None:
         """
         Customize a week by deep-copying its effective days.
 
@@ -37,12 +37,24 @@ class CustomizeWeek:
         2. Resolve the week's effective days (via walk-backward algorithm)
         3. Deep-copy those days and their exercises, parenting to this week
         4. Flip the week's mode to 'custom'
+
+        Args:
+            plan_id: The workout plan id.
+            week_number: The week number (1-indexed).
+            user_id: The authenticated user id.
+            skip_ownership_check: If True, skip the ownership check (used for share-authorized paths).
+                Defaults to False to preserve existing behavior.
+
+        Raises:
+            WorkoutPlanNotFoundError: If the plan doesn't exist.
+            UnauthorizedWorkoutPlanAccessError: If the user doesn't own the plan (and not skip_ownership_check).
+            PlanDayNotFoundError: If the week doesn't exist in the plan.
         """
         # Ownership check
         plan = self.plan_repository.get_by_id(plan_id)
         if not plan:
             raise WorkoutPlanNotFoundError(f"Plan {plan_id} not found")
-        if plan.user_id != user_id:
+        if not skip_ownership_check and plan.user_id != user_id:
             raise UnauthorizedWorkoutPlanAccessError(
                 f"User {user_id} does not own plan {plan_id}"
             )

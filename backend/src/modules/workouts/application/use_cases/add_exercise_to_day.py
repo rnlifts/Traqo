@@ -39,6 +39,7 @@ class AddExerciseToDay:
         has_reps: bool = True,
         has_weight: bool = True,
         has_duration: bool = False,
+        skip_ownership_check: bool = False,
     ) -> WorkoutExercise:
         """Add an exercise to a plan day.
 
@@ -47,13 +48,40 @@ class AddExerciseToDay:
         2. Verify day exists and belongs to this plan
         3. Verify exercise exists and is owned by user (cross-module check)
         4. Add to day with next order_number
+
+        Args:
+            plan_id: The workout plan id.
+            day_id: The plan day id.
+            exercise_id: The exercise id to add.
+            requesting_user_id: The authenticated user id.
+            target_sets: Target sets for this exercise (optional).
+            target_reps: Target reps (optional).
+            target_weight: Target weight (optional).
+            target_duration_seconds: Target duration in seconds (optional).
+            has_reps: Whether this exercise has reps field (default True).
+            has_weight: Whether this exercise has weight field (default True).
+            has_duration: Whether this exercise has duration field (default False).
+            skip_ownership_check: If True, skip both the plan-ownership check and the
+                exercise-ownership check (used for share-authorized paths, e.g. an
+                edit-tier share grantee adding the plan owner's own exercise to the
+                plan). Defaults to False to preserve existing behavior.
+
+        Returns:
+            WorkoutExercise: The created exercise.
+
+        Raises:
+            WorkoutPlanNotFoundError: If the plan doesn't exist.
+            UnauthorizedWorkoutPlanAccessError: If the user doesn't own the plan (and not skip_ownership_check).
+            PlanDayNotFoundError: If the day doesn't exist or doesn't belong to the plan.
+            ExerciseNotOwnedError: If the exercise doesn't exist, or isn't owned by user
+                (and not skip_ownership_check).
         """
         # Step 1: Load and validate plan ownership
         plan = self.plan_repository.get_by_id(plan_id)
         if not plan:
             raise WorkoutPlanNotFoundError(f"Plan {plan_id} not found")
 
-        if plan.user_id != requesting_user_id:
+        if not skip_ownership_check and plan.user_id != requesting_user_id:
             raise UnauthorizedWorkoutPlanAccessError(
                 f"User {requesting_user_id} does not own plan {plan_id}"
             )
@@ -66,12 +94,14 @@ class AddExerciseToDay:
         if day.workout_plan_id != plan_id:
             raise PlanDayNotFoundError(f"Day {day_id} does not belong to plan {plan_id}")
 
-        # Step 3: Load and validate exercise ownership (cross-module check via domain interface)
+        # Step 3: Load and validate exercise ownership (cross-module check via domain interface).
+        # Skipped for share-authorized paths: an edit-tier share grantee must be able to add
+        # the plan owner's own exercises to the plan, same as the plan owner themselves could.
         exercise = self.exercise_repository_domain.get_by_id(exercise_id)
         if not exercise:
             raise ExerciseNotOwnedError(f"Exercise {exercise_id} not found")
 
-        if exercise.user_id != requesting_user_id:
+        if not skip_ownership_check and exercise.user_id != requesting_user_id:
             raise ExerciseNotOwnedError(
                 f"User {requesting_user_id} does not own exercise {exercise_id}"
             )

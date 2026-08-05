@@ -41,6 +41,7 @@ class UpdateExerciseInDay:
         has_reps: bool | None = None,
         has_weight: bool | None = None,
         has_duration: bool | None = None,
+        skip_ownership_check: bool = False,
     ) -> dict:
         """Update an exercise's prescription and notes.
 
@@ -55,14 +56,20 @@ class UpdateExerciseInDay:
             target_sets: New target sets count (or None to leave unchanged).
             target_reps: New target reps (or None to leave unchanged).
             target_weight: New target weight (or None to leave unchanged).
+            target_duration_seconds: New target duration in seconds (or None to leave unchanged).
             notes: New notes (or None to leave unchanged).
+            has_reps: New has_reps flag (or None to leave unchanged).
+            has_weight: New has_weight flag (or None to leave unchanged).
+            has_duration: New has_duration flag (or None to leave unchanged).
+            skip_ownership_check: If True, skip the ownership check (used for share-authorized paths).
+                Defaults to False to preserve existing behavior.
 
         Returns:
             dict with the updated exercise data.
 
         Raises:
             WorkoutPlanNotFoundError: If the plan doesn't exist.
-            UnauthorizedWorkoutPlanAccessError: If the user doesn't own the plan.
+            UnauthorizedWorkoutPlanAccessError: If the user doesn't own the plan (and not skip_ownership_check).
             PlanDayNotFoundError: If the day doesn't exist or doesn't belong to the plan.
             PlanDayNotFoundError: If the exercise doesn't exist or doesn't belong to the day.
         """
@@ -71,7 +78,7 @@ class UpdateExerciseInDay:
         if not plan:
             raise WorkoutPlanNotFoundError(f"Plan {plan_id} not found")
 
-        if plan.user_id != requesting_user_id:
+        if not skip_ownership_check and plan.user_id != requesting_user_id:
             raise UnauthorizedWorkoutPlanAccessError(
                 f"User {requesting_user_id} does not own plan {plan_id}"
             )

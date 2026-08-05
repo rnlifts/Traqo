@@ -27,6 +27,7 @@ class RemoveExerciseFromDay:
         day_id: int,
         workout_exercise_id: int,
         requesting_user_id: int,
+        skip_ownership_check: bool = False,
     ) -> None:
         """Remove an exercise from a plan day.
 
@@ -35,13 +36,27 @@ class RemoveExerciseFromDay:
         2. Verify day exists and belongs to this plan
         3. Verify exercise exists and belongs to this day
         4. Remove the exercise
+
+        Args:
+            plan_id: The workout plan id.
+            day_id: The plan day id.
+            workout_exercise_id: The workout exercise id to remove.
+            requesting_user_id: The authenticated user id.
+            skip_ownership_check: If True, skip the ownership check (used for share-authorized paths).
+                Defaults to False to preserve existing behavior.
+
+        Raises:
+            WorkoutPlanNotFoundError: If the plan doesn't exist.
+            UnauthorizedWorkoutPlanAccessError: If the user doesn't own the plan (and not skip_ownership_check).
+            PlanDayNotFoundError: If the day doesn't exist or doesn't belong to the plan.
+            ValueError: If the exercise doesn't exist or doesn't belong to the day.
         """
         # Step 1: Load and validate plan ownership
         plan = self.plan_repository.get_by_id(plan_id)
         if not plan:
             raise WorkoutPlanNotFoundError(f"Plan {plan_id} not found")
 
-        if plan.user_id != requesting_user_id:
+        if not skip_ownership_check and plan.user_id != requesting_user_id:
             raise UnauthorizedWorkoutPlanAccessError(
                 f"User {requesting_user_id} does not own plan {plan_id}"
             )
