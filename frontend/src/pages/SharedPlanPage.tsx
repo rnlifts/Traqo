@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { sharingApi } from '../api/sharingApi';
 import type { SharedPlanResponse } from '../api/sharingApi';
+import { ShareWorkoutStarter } from '../features/sharing/ShareWorkoutStarter';
 
 export const SharedPlanPage: React.FC = () => {
   const { token } = useParams<{ token: string }>();
@@ -112,6 +113,11 @@ export const SharedPlanPage: React.FC = () => {
             : `${plan.total_units} WEEK${plan.total_units === 1 ? '' : 'S'}`}
         </p>
       </div>
+
+      {/* Workout Starter — only if permission allows */}
+      {(data.permission === 'log' || data.permission === 'edit') && token && (
+        <ShareWorkoutStarter data={data} token={token} />
+      )}
 
       {/* Days Plan */}
       {days && days.length > 0 && (

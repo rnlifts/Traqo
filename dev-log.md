@@ -5156,3 +5156,58 @@ for a future small fix, not blocking Phase 5a acceptance.
 
 Remaining for Task 86: Phase 5b (start/log a workout via a share) and Phase 5c (edit a
 plan via an edit-tier share). Not started.
+
+## 2026-08-05 — Task 90: sharing Phase 5b (start/log via share) — frontend correct, but exposed a blocking backend bug
+
+Delegated to the `coder` agent per `task_specs/task_90_sharing_phase5b_log_via_share.md`:
+a "Start workout" flow from the shared-plan page, branching on authentication — logged-in
+recipients navigate to the normal Active Workout screen; anonymous visitors get a new
+minimal in-page logger.
+
+**Verified independently, frontend side — all correct:**
+- `git status`: only allowlisted files touched, no backend file touched.
+- Ran the full suite myself: **209/209 passed** (190 baseline + 19 new), matches the
+  agent's claim exactly this time. `tsc -b` clean.
+- Read `sharingApi.ts`'s three new functions (`startWorkoutViaShare`, `addSetViaShare`,
+  `finishWorkoutViaShare`) in full — all correctly use `publicClient` with manual
+  `Authorization` header attachment, same pattern as Phase 5a.
+- Read `ShareWorkoutStarter.tsx` and `AnonymousWorkoutLogger.tsx` in full — day/week
+  picker mirrors `SessionSetupPage.tsx`'s pattern as instructed, branches correctly on
+  `localStorage.getItem('auth_token')` presence, anonymous logger validates
+  weight/reps-required before submitting, finish shows a completion message, no
+  navigation anywhere in the anonymous path.
+- Live browser verification of the **anonymous path**, end to end, against real running
+  dev servers: opened a real share link with no login, started a workout, logged a real
+  set (185lbs × 8 reps — appeared correctly in the UI), finished — "Workout complete"
+  message shown, confirmed via `window.location.pathname` that the URL never changed
+  (no redirect).
+
+**Live browser verification of the authenticated-recipient path found a real, blocking
+bug — NOT a Phase 5b frontend defect.** Registered a trainer + client, trainer built a
+real plan and shared it `anyone`/`log`, logged in as the client in the browser, opened the
+share link, started a workout — the frontend correctly navigated to
+`/workout-sessions/{id}` exactly as spec'd. But that screen then showed **"You do not own
+this plan"** instead of the workout. Network inspection showed
+`GET /api/workout-sessions/{id}/bootstrap` returning `403 Forbidden`.
+
+Root cause, confirmed by reading the code: the bootstrap endpoint
+(`sessions/presentation/routes.py::get_active_workout_bootstrap`) calls
+`GetWorkoutPlanDetail.execute(session.workout_plan_id, user_id)` to fetch the plan detail
+needed to render the screen. That use case
+(`workouts/application/use_cases/get_workout_plan_detail.py`) hard-requires
+`plan.user_id == requesting_user_id` and raises `UnauthorizedWorkoutPlanAccessError`
+otherwise — mapped to 403 by a global exception handler in `app.py`. The session itself
+correctly belongs to the recipient (Task 87 attribution is unaffected and still correct),
+but the *plan* still belongs to the trainer — and this check was never taught about
+sharing. The original Task 86 spec's Phase 5 assumption ("authenticated users navigate to
+the normal Active Workout... standard endpoints... just works") turns out to be wrong:
+it doesn't just work, because loading the plan detail needed to render that screen is
+gated on plan ownership, not session ownership.
+
+This blocks the single most important use case the whole feature was built for — a
+trainer's client actually being able to do the workout through their own account. The
+anonymous path is unaffected and fully working. Frontend Phase 5b code is correct as
+written and is being committed as-is; the fix belongs on the backend (a follow-up task,
+same pattern as Task 87/88: let a caller through when they don't own the plan but do own
+the session tied to it). Test data cleaned up, both dev servers stopped. Reporting to the
+owner before scoping the fix.

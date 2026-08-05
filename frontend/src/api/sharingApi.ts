@@ -63,6 +63,29 @@ export interface SharedPlanResponse {
   share: { mode: 'restricted' | 'anyone' };
 }
 
+export interface StartWorkoutViaShareRequest {
+  plan_day_id: number;
+  week_number?: number;
+}
+
+export interface StartWorkoutViaShareResponse {
+  session_id: number;
+  message: string;
+}
+
+export interface AddSetViaShareRequest {
+  exercise_id: number;
+  weight?: number;
+  reps?: number;
+  duration_seconds?: number;
+  notes?: string;
+}
+
+export interface AddSetViaShareResponse {
+  set_id: number;
+  set_number: number;
+}
+
 /**
  * Sharing API module.
  * Note: Functions that work with unauthenticated users (getSharedPlan) use publicClient
@@ -129,6 +152,59 @@ export const sharingApi = {
     }
     const response = await publicClient.get<SharedPlanResponse>(
       `/shared/${token}`,
+      { headers }
+    );
+    return response.data;
+  },
+
+  // Workout start/log endpoints: anonymous-capable, uses publicClient without interceptor
+  async startWorkoutViaShare(
+    token: string,
+    req: StartWorkoutViaShareRequest
+  ): Promise<StartWorkoutViaShareResponse> {
+    const headers: any = {};
+    const authToken = localStorage.getItem('auth_token');
+    if (authToken) {
+      headers.Authorization = `Bearer ${authToken}`;
+    }
+    const response = await publicClient.post<StartWorkoutViaShareResponse>(
+      `/shared/${token}/start`,
+      req,
+      { headers }
+    );
+    return response.data;
+  },
+
+  async addSetViaShare(
+    token: string,
+    sessionId: number,
+    req: AddSetViaShareRequest
+  ): Promise<AddSetViaShareResponse> {
+    const headers: any = {};
+    const authToken = localStorage.getItem('auth_token');
+    if (authToken) {
+      headers.Authorization = `Bearer ${authToken}`;
+    }
+    const response = await publicClient.post<AddSetViaShareResponse>(
+      `/shared/${token}/sessions/${sessionId}/sets`,
+      req,
+      { headers }
+    );
+    return response.data;
+  },
+
+  async finishWorkoutViaShare(
+    token: string,
+    sessionId: number
+  ): Promise<{ message: string }> {
+    const headers: any = {};
+    const authToken = localStorage.getItem('auth_token');
+    if (authToken) {
+      headers.Authorization = `Bearer ${authToken}`;
+    }
+    const response = await publicClient.post<{ message: string }>(
+      `/shared/${token}/sessions/${sessionId}/finish`,
+      {},
       { headers }
     );
     return response.data;

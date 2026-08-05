@@ -240,4 +240,69 @@ describe('SharedPlanPage', () => {
     // verifying it successfully calls sharingApi.getSharedPlan (which uses publicClient)
     expect(sharingApi.sharingApi.getSharedPlan).toBeDefined();
   });
+
+  it('renders ShareWorkoutStarter when permission is log', async () => {
+    const logData = { ...mockDaysPlan, permission: 'log' as const };
+    vi.mocked(sharingApi.sharingApi.getSharedPlan).mockResolvedValue(
+      logData as any
+    );
+
+    render(
+      <MemoryRouter initialEntries={['/shared/test-token']}>
+        <Routes>
+          <Route path="/shared/:token" element={<SharedPlanPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Test Plan')).toBeInTheDocument();
+    });
+
+    // ShareWorkoutStarter should render the Start workout button
+    expect(screen.getByText('Start workout')).toBeInTheDocument();
+  });
+
+  it('renders ShareWorkoutStarter when permission is edit', async () => {
+    const editData = { ...mockWeeksPlan, permission: 'edit' as const };
+    vi.mocked(sharingApi.sharingApi.getSharedPlan).mockResolvedValue(
+      editData as any
+    );
+
+    render(
+      <MemoryRouter initialEntries={['/shared/test-token']}>
+        <Routes>
+          <Route path="/shared/:token" element={<SharedPlanPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Weekly Plan')).toBeInTheDocument();
+    });
+
+    // ShareWorkoutStarter should render the Start workout button
+    expect(screen.getByText('Start workout')).toBeInTheDocument();
+  });
+
+  it('does not render ShareWorkoutStarter when permission is view', async () => {
+    vi.mocked(sharingApi.sharingApi.getSharedPlan).mockResolvedValue(
+      mockDaysPlan as any
+    );
+
+    render(
+      <MemoryRouter initialEntries={['/shared/test-token']}>
+        <Routes>
+          <Route path="/shared/:token" element={<SharedPlanPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Test Plan')).toBeInTheDocument();
+    });
+
+    // Start workout button should not be visible for view-only permission
+    expect(screen.queryByText('Start workout')).not.toBeInTheDocument();
+  });
 });
