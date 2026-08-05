@@ -5101,3 +5101,58 @@ real model instances; the schema was just declared wrong.
 
 Task 86 backend (Phases 1-4 + both follow-up fixes) is now fully verified and correct.
 Remaining: Phase 5 (frontend). Not started.
+
+## 2026-08-05 — Task 89: sharing Phase 5a (share dialog + shared-plan view page) — verified, committed
+
+Split Phase 5 into 3 smaller pieces (5a/5b/5c) rather than delegating the whole frontend
+in one pass, given how much the strict/narrow-scope + independent-verification pattern
+paid off on the backend phases. Phase 5a: `ShareDialog` (owner-side share management) and
+the public `/shared/:token` viewing page. Delegated to the `coder` agent per
+`task_specs/task_89_sharing_phase5a_share_dialog_and_view.md`.
+
+**Verified independently:**
+- `git status`: only allowlisted files touched (`sharingApi.ts`, `publicClient.ts`,
+  `ShareDialog.tsx`+test, `SharedPlanPage.tsx`+test, `PlanList.tsx`+test, `App.tsx`,
+  `App.css`). No backend file touched.
+- The agent's self-reported "before: 184 tests" was wrong (actual pre-existing count was
+  173, confirmed via `git show HEAD:...PlanList.test.tsx` — it had 3 tests before, not
+  enough to reach 184 given the rest of the diff). Minor self-report inaccuracy, not a
+  functional issue — the important number, the current real state, checks out: ran
+  `npx vitest run` myself, **190/190 tests passed across 17/17 files**, and `npx tsc -b`
+  clean.
+- Read `sharingApi.ts`, `publicClient.ts`, `SharedPlanPage.tsx`, `ShareDialog.tsx` in full.
+  Rule 7 (the 401-redirect hazard) is genuinely respected: `publicClient.ts` is a bare
+  axios instance with no interceptor; `getSharedPlan()` uses it exclusively and manually
+  attaches `Authorization` only when `localStorage.getItem('auth_token')` exists;
+  `SharedPlanPage.tsx` renders the 403 case with a static message and a manual `<a
+  href="/login">` link — no `useNavigate`/`window.location` redirect anywhere in the
+  component. Owner-only functions (`createShare`, `updateShare`, etc.) correctly use the
+  interceptor-bearing `client`, which is fine since those already require the user to be
+  logged in.
+- **Live browser verification** (not just tests) via the Browser pane, against real
+  running dev servers (backend :5000, frontend :5173) with a real registered account and a
+  real plan+day+exercise created through the API: logged in through the actual login form,
+  clicked "Share" on a real plan card, watched the dialog progress from "Create share
+  link" through to the full management UI (copy-link box, mode radio, permission radios,
+  grant form, grants list, "Stop sharing"). Copied the real token, opened
+  `/shared/{token}` in a second tab, cleared that tab's `localStorage` to force a genuinely
+  anonymous request (tabs in the same browser share localStorage by default, so this step
+  was necessary to actually test anonymity) — anonymous view rendered correctly ("you can
+  view", full plan content). Switched the share to `restricted` mode from the owner tab,
+  reloaded the anonymous tab: got the friendly "Access Denied" message, confirmed via
+  `window.location.pathname` that it stayed on `/shared/{token}` and was never bounced to
+  `/login` — Rule 7 holds in practice, not just in code. Tried a garbage token: got the
+  "Invalid Link" 404 message. Tried granting a nonexistent username: "User not found"
+  rendered inline next to the input, not as a toast. Test data cleaned up from the dev DB,
+  both dev servers stopped afterward.
+
+**Minor cosmetic bug found (not blocking, noted for later):** when a plan's `total_units`
+is `null` (e.g. a days-type plan created without ever setting a day count), the shared-plan
+page renders the literal text "NULL WEEKS"/"NULL DAYS" instead of a sensible unit count or
+omitting the line. Low priority, purely cosmetic, does not affect functionality — flagged
+for a future small fix, not blocking Phase 5a acceptance.
+
+**Verdict: accepted.** Committed locally. Nothing pushed, production untouched.
+
+Remaining for Task 86: Phase 5b (start/log a workout via a share) and Phase 5c (edit a
+plan via an edit-tier share). Not started.

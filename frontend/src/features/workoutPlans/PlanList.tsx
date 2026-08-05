@@ -8,6 +8,7 @@ import type { WorkoutPlan } from "../../api/workoutPlansApi";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { useToast } from "../../components/Toast";
 import { PlanActionCards } from "../../components/PlanActionCards";
+import { ShareDialog } from "../../features/sharing/ShareDialog";
 
 function planSummary(plan: WorkoutPlan): string {
   if (!plan.total_units) return "";
@@ -23,6 +24,8 @@ export default function PlanList() {
     isOpen: boolean;
     planId: number | null;
   }>({ isOpen: false, planId: null });
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
   const navigate = useNavigate();
   const { Toast, showToast } = useToast();
 
@@ -125,6 +128,15 @@ export default function PlanList() {
                 >
                   Edit
                 </button>
+                <button
+                  className="btn-share"
+                  onClick={() => {
+                    setSelectedPlanId(plan.id);
+                    setShareDialogOpen(true);
+                  }}
+                >
+                  Share
+                </button>
               </div>
             </div>
           ))}
@@ -143,6 +155,17 @@ export default function PlanList() {
         onConfirm={confirmDelete}
         onCancel={() => setDeleteConfirm({ isOpen: false, planId: null })}
       />
+
+      {selectedPlanId !== null && (
+        <ShareDialog
+          isOpen={shareDialogOpen}
+          onClose={() => {
+            setShareDialogOpen(false);
+            setSelectedPlanId(null);
+          }}
+          planId={selectedPlanId}
+        />
+      )}
 
       {Toast}
     </div>

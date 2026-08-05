@@ -11,6 +11,7 @@ import ActiveWorkoutPage from './pages/ActiveWorkoutPage';
 import { WorkoutHistoryPage } from './pages/WorkoutHistoryPage';
 import SessionDetailPage from './pages/SessionDetailPage';
 import ExerciseProgressPage from './pages/ExerciseProgressPage';
+import SharedPlanPage from './pages/SharedPlanPage';
 import { AuthProvider } from './features/auth/AuthContext';
 import { UnsavedChangesProvider } from './contexts/UnsavedChangesContext';
 import { ProtectedRoute } from './routes/ProtectedRoute';
@@ -25,6 +26,7 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/shared/:token" element={<SharedPlanPage />} />
           <Route
             path="/dashboard"
             element={

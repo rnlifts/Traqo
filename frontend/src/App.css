@@ -600,6 +600,19 @@
   border-color: var(--ink-soft);
   color: var(--ink);
 }
+.btn-share {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  color: var(--ink);
+  padding: 9px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.btn-share:hover {
+  border-color: var(--ink-soft);
+  color: var(--ink);
+}
 
 /* ---------- History rows ---------- */
 .history-list {

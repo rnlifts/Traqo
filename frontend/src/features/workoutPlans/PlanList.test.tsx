@@ -1,10 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import PlanList from './PlanList';
 import * as workoutPlansApi from '../../api/workoutPlansApi';
 
 vi.mock('../../api/workoutPlansApi');
+vi.mock('../../features/sharing/ShareDialog', () => ({
+  ShareDialog: ({ isOpen, onClose, planId }: any) =>
+    isOpen ? (
+      <div data-testid="share-dialog" data-plan-id={planId}>
+        Share Dialog for Plan {planId}
+        <button onClick={onClose}>Close</button>
+      </div>
+    ) : null,
+}));
 
 const mockPlans = [
   { id: 1, name: 'Workout A', unit_type: 'days' as const, total_units: 5, user_id: 1, created_at: '2026-08-01T00:00:00Z', updated_at: '2026-08-01T00:00:00Z' },
@@ -80,5 +89,34 @@ describe('PlanList', () => {
     // Assert page shell is still visible
     expect(screen.getByText('Your ledger')).toBeInTheDocument();
     expect(screen.getByText('Workout Plans')).toBeInTheDocument();
+  });
+
+  it('renders Share button on each plan card and opens ShareDialog when clicked', async () => {
+    vi.mocked(workoutPlansApi.listWorkoutPlans).mockResolvedValue(mockPlans);
+
+    render(
+      <BrowserRouter>
+        <PlanList />
+      </BrowserRouter>
+    );
+
+    // Wait for plans to load
+    await waitFor(() => {
+      expect(screen.queryByText('Loading workout plans...')).not.toBeInTheDocument();
+    });
+
+    // Assert Share buttons are rendered
+    const shareButtons = screen.getAllByRole('button', { name: /Share/ });
+    expect(shareButtons).toHaveLength(2); // One for each plan
+
+    // Click the first Share button
+    fireEvent.click(shareButtons[0]);
+
+    // Assert ShareDialog opens with correct plan ID
+    await waitFor(() => {
+      const dialog = screen.getByTestId('share-dialog');
+      expect(dialog).toBeInTheDocument();
+      expect(dialog).toHaveAttribute('data-plan-id', '1');
+    });
   });
 });
