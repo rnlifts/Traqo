@@ -5309,3 +5309,85 @@ and authenticated-recipient paths) is now fully verified end to end. Nothing pus
 production untouched.
 
 Remaining for Task 86: Phase 5c (edit a plan via an edit-tier share). Not started.
+
+## 2026-08-05 — Task 93: sharing Phase 5c backend (edit-tier authorization) — implementation correct, task NOT fully accepted, plus two separate serious findings
+
+Scoped carefully before delegating: traced the actual frontend (`PlanBuilder.tsx`) to find
+exactly which of ~13 places in the workouts module check plan ownership are reachable from
+the real edit UI, rather than assuming all matches from a grep needed to change. Landed on
+10 confirmed endpoints (including one easy-to-miss one, `GET /workout-plans/{id}`, needed
+just to load the plan into the editor) and explicitly excluded 5 similar-looking ones
+(delete plan, delete day, list days, previous-performance, the create-new-plan `/build`
+endpoint) that the edit UI never calls. Wrote
+`task_specs/task_93_sharing_phase5c_edit_via_share_backend.md` with a full endpoint table,
+an exact shared-helper design (`_caller_can_edit_plan`, reusing the already-tested
+`ResolveShareAccess`), and an explicit requirement for full coverage (all 10 endpoints × 4
+scenarios each) given this task grants write access rather than just unblocking a
+legitimate user — flagged as higher-stakes than Tasks 87/88/91/92.
+
+**Implementation: verified correct.** `git status` confirmed only the 10 allowlisted
+files changed (`routes.py` + 9 use cases). Read every one of the 9 use case diffs and all
+10 route call sites individually — the `skip_ownership_check` pattern (identical to
+`start_workout.py`/`add_workout_set.py` from earlier tasks) is applied correctly and
+consistently everywhere, including the one inline (no-use-case) set-targets endpoint.
+Confirmed the 5 out-of-scope files were genuinely untouched.
+
+**Test coverage: NOT accepted — the agent's own report admitted incompleteness.** Only 11
+tests were written, covering 3 of the 10 required endpoints (and even the 3rd, `POST
+.../days`, was missing its "stranger rejected" case per the agent's own words, "pending
+completion"). The spec required full coverage (~40 minimum test cases) given the security
+stakes; this was explicitly not "sample and extrapolate" work. Ran the suite myself:
+**267 passed** (256 baseline + 11 new), same 4 pre-existing failures, 2 skipped — nothing
+broken, but coverage genuinely falls short of the spec.
+
+**Given the coverage gap, did NOT trust the implementation on code-review alone — live-
+tested every one of the 10 endpoints by hand**, including the 7 untested ones, with a real
+owner + edit-tier grantee + view-tier grantee + a genuine stranger, against a running
+backend. Confirmed correct behavior (edit-tier succeeds, view-tier and stranger both
+rejected with 403) on: `GET`/`PUT` plan, `POST` create day (already had partial pytest
+coverage), plus hands-on live verification of `PUT` update day, `DELETE`/`PUT` exercise,
+`PUT` set-targets, `POST` customize-week, and `POST` match-previous-week — every one of
+the previously-untested endpoints checked out correctly. The core `_caller_can_edit_plan`
+authorization logic is solid.
+
+**Serious incident found mid-verification: the local dev Postgres database (`traqo_dev`)
+had every table dropped except `alembic_version`** (which still claimed to be at the
+latest migration, `plan_shares_001`, despite the schema being empty) — discovered when a
+routine registration call for live-testing returned an unrelated 500
+(`relation "users" does not exist"`). Root cause undetermined — I don't have visibility
+into the coder agent's exact actions, but this happened during or shortly after Task 93's
+agent run, most likely from some ad-hoc verification script it ran against the real
+`DATABASE_URL` rather than the isolated SQLite test fixtures its committed test file
+correctly uses. No production impact (production was never touched by this feature's
+migrations, per established practice). All data lost was synthetic test/verification data
+from this session — nothing outside of that is known to have been affected, but this
+should be treated as a real reminder to be more careful about tooling that can reach the
+shared dev DB. **Recovered**: cleared the stale `alembic_version` row and re-ran
+`alembic upgrade head` from scratch, which rebuilt the full schema cleanly (verified: full
+backend suite still 267/267 relevant, registration/login/plan flows all confirmed working
+again via live curl).
+
+**A second, separate, genuinely new bug found via the live spot-check — not part of Task
+93's scope, not something the spec anticipated:** `AddExerciseToDay` failed for a
+confirmed-valid edit-tier grantee with a *different* error than the fixed plan-ownership
+check — `"User X does not own exercise Y"`. Root cause: `add_exercise_to_day.py` has a
+second, entirely independent ownership check (its own "Step 3": `exercise.user_id !=
+requesting_user_id`, completely separate from the `skip_ownership_check`-gated plan check
+at "Step 1") that verifies the caller personally owns the exercise being added. Since the
+exercise in question belongs to the plan owner (the trainer), not the recipient, this
+blocks an edit-tier grantee from adding ANY of the plan owner's existing exercises to the
+plan — which is the primary real-world editing action. This is the exact same category of
+bug as Task 87 (a share recipient acting on the plan owner's exercise, blocked by a
+same-user-only ownership check that predates sharing) but in a different use case that
+Task 93's scope trace didn't surface, because the earlier trace only looked for
+*plan*-ownership checks, not *exercise*-ownership checks nested inside one of those 10
+endpoints.
+
+**Verdict: Task 93 is NOT fully accepted.** Not committed. Two things remain before Phase
+5c's backend can be considered done: (1) complete the missing test coverage for the 7
+endpoints my live spot-check covered but automated tests don't, plus the revoked-share
+regression test and a re-confirmation that Task 91's bootstrap tests still pass, and (2)
+fix the newly-found `AddExerciseToDay` exercise-ownership gap (bypass it the same way
+under `skip_ownership_check`, plus a regression test). All test data from this
+verification session cleaned up, dev server stopped. Reporting both findings to the owner
+before scoping the follow-up work.
