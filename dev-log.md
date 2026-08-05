@@ -4131,7 +4131,7 @@ Removed the persistent full-width video preview panel from the top of the mobile
 **Status: Task 71 COMPLETE.** Persistent preview panel removed from mobile, replaced with per-row preview modals opened by tapping exercise rows. Modal stacking enables preview from within picker modal. Desktop scroll-to-top and header panel completely unchanged. All tests passing, TypeScript clean. Addresses the core UX problem: mobile users no longer need to scroll past empty preview panel.
 
 
-## 2026-08-01 � Task 72: Set-by-Set Builder Redesign
+## 2026-08-01 � Task 72: Set-by-Set Builder Redesign
 
 Replaced the "Vary by set" UI with a collapsible, one-at-a-time set builder. Each exercise now shows sets as collapsible rows with a "+ Add Set" button to append new sets pre-filled from the previous set's values.
 
@@ -4152,8 +4152,8 @@ Replaced the "Vary by set" UI with a collapsible, one-at-a-time set builder. Eac
 
 **Verification:**
 - Live test: created plan with Alternating Dumbbell Curl, expanded Set 1, entered 10-12 reps + 135 lbs
-- Set 1 summary auto-updated to show "135 lbs � 10-12 reps" (bidirectional sync confirmed)
-- Added Set 2: pre-filled with same values as Set 1 (135 lbs � 10-12 reps)
+- Set 1 summary auto-updated to show "135 lbs � 10-12 reps" (bidirectional sync confirmed)
+- Added Set 2: pre-filled with same values as Set 1 (135 lbs � 10-12 reps)
 - Edited Set 2 weight to 145 lbs: Set 1 remained 135 lbs, main row remained 135 (independent confirmed)
 - Mobile (375x812) layout verified: UI fully responsive, all controls accessible
 - Day-row click-to-preview still works (stopPropagation on set inputs)
@@ -4166,7 +4166,7 @@ Replaced the "Vary by set" UI with a collapsible, one-at-a-time set builder. Eac
 - Set numbers renumbered on removal (e.g., removing Set 2 from Set 1/2/3 leaves Set 1/2)
 - Remove button only shown when set is expanded AND more than 1 set exists
 
-## 2026-08-01 � Task 73: Fix Set Builder Data Sync Bugs (Task 72 regression fixes)
+## 2026-08-01 � Task 73: Fix Set Builder Data Sync Bugs (Task 72 regression fixes)
 
 Fixed three critical data-sync bugs in edit mode that were caught during independent Task 72 verification:
 
@@ -4196,7 +4196,7 @@ Fixed three critical data-sync bugs in edit mode that were caught during indepen
 4. Remove Set: now updates both set_targets array and target_sets integer atomically
 5. Create mode: untouched, still draft-only with proper target_sets sync via draftDays/draftWeeks state updates
 
-## 2026-08-02 � Task 74: Preserve History on Delete & Fix Default Sets
+## 2026-08-02 � Task 74: Preserve History on Delete & Fix Default Sets
 
 Fixed two critical bugs affecting data preservation and exercise defaults:
 
@@ -4227,7 +4227,7 @@ Updated WorkoutSessionModel to make workout_plan_id nullable, updated response s
 - Exercise progress calculations unchanged (use exercise_id, not workout_exercise_id)
 - Create-mode and add-exercise flows unchanged
 
-**CRITICAL FIX (post-implementation):** Discovered hardcoded FK constraint name in migration would fail in production (constraint name differs between dev and prod due to historical schema drift). Updated migration to dynamically discover actual constraint names at runtime using SQLAlchemy inspector � now works correctly in all environments regardless of drift. This prevents a production-blocking failure.
+**CRITICAL FIX (post-implementation):** Discovered hardcoded FK constraint name in migration would fail in production (constraint name differs between dev and prod due to historical schema drift). Updated migration to dynamically discover actual constraint names at runtime using SQLAlchemy inspector � now works correctly in all environments regardless of drift. This prevents a production-blocking failure.
 
 ## 2026-08-02 — Task 76: Fix exercise progress crash on partial sets and back button
 
@@ -4910,3 +4910,80 @@ could silently break the status-code mapping. Worth cleaning up if this file is 
 again.
 
 Ready for Phase 4 (logging attribution through a share).
+
+## 2026-08-05 — Task 86, Phase 4: logging attribution (verification — NOT accepted, one blocking bug found)
+
+Delegated to the `coder` agent with a substantially tightened prompt per explicit owner
+feedback ("be stricter... don't let it touch files not in scope... verify strictly...
+maintain code quality"): named file allowlist, hard stop-and-ask rule for anything else,
+explicit prohibition on touching `oauth2.py`/`jwt_service.py`/frontend files this phase,
+and a required code-quality fix (replace Phase 3's string-matching exception dispatch with
+real exception classes).
+
+**Scope discipline: respected.** `git status` after the agent's report showed only
+allowlisted files plus one file not on the literal list —
+`workout_set_repository_impl.py`. Verified via caller-count grep that both
+`list_finished_by_user` and `list_finished_by_user_and_exercise` have exactly one caller
+each (`GetWorkoutHistory`, `GetExerciseProgress`), and the spec explicitly requires the
+stats-exclusion rule apply to both — so this out-of-allowlist touch was necessary,
+correctly scoped, and low-risk. No `oauth2.py`, `jwt_service.py`, or frontend file touched.
+
+**Code-quality fix: verified real, not just claimed.** New `domain/exceptions.py` defines
+exactly `ShareNotFoundError` (404) / `ShareAccessDeniedError` (403). `resolve_share_access.py`
+now raises the correct one per case (anonymous-on-restricted and no-grant → 403 via
+`ShareAccessDeniedError`; missing/revoked → 404 via `ShareNotFoundError`). `routes.py`
+dispatches via separate `except` clauses everywhere (grepped for `isinstance`/`str(e)` —
+none found) — Phase 3's fragile substring-matching is genuinely gone, on all 5 endpoints.
+
+**Attribution logic: read in full, matches spec exactly.** All three new endpoints
+(`POST /api/shared/{token}/start`, `.../sessions/{id}/sets`, `.../sessions/{id}/finish`)
+correctly branch on `caller_user_id is not None`: authenticated → `user_id=caller,
+logged_by_user_id=caller`; anonymous (anyone-mode only) → `user_id=plan_owner,
+logged_by_user_id=NULL`. `start_workout.py`'s new `skip_ownership_check` param defaults to
+`False`, so the existing non-share `/api/workout-sessions` path is provably unweakened —
+only the share path opts in explicitly.
+
+**Tests: real.** 13 new tests in `test_sharing_logging_phase4.py`, no placeholder patterns.
+Negative-control: stripped the exclusion filter from `list_finished_by_user`, confirmed
+`test_owner_history_excludes_anonymous_logged_sessions` fails as expected, restored,
+confirmed clean again.
+
+**Full suite: reproducible discrepancy from the agent's claim, but a real pre-existing bug,
+not a Phase 4 regression.** Agent claimed "250 passed, 2 skipped" (x2 runs). I got **246
+passed, 4 failed, 2 skipped**, identically across 2 independent runs of my own — stable, not
+flaky. Isolated all 4 failures: `test_start_workout_without_auth_fails`,
+`test_quick_start_without_auth_fails`, `test_bootstrap_without_auth_fails`,
+`test_create_share_unauthenticated`. All 4 assert `401` for a request with no
+Authorization header; actual behavior is `403`, because FastAPI's
+`HTTPBearer(auto_error=True)` returns 403 (not 401) by design when no credentials are
+present at all. Confirmed via `git stash` that this reproduces identically on the Phase 3
+baseline commit (`af07d6c`), before any Phase 4 file was touched — this bug predates Task
+86 entirely (likely predates Phase 2's now-reverted attempt to "fix" 401-vs-403 globally,
+which was probably a misguided attempt at this exact issue). Out of Phase 4's scope to fix;
+not blocking. All 13 Phase 4 tests pass; the 4 failures are unrelated to any file this
+phase touched.
+
+**BLOCKING BUG found via live end-to-end verification (not caught by any automated test):**
+registered two real users (owner + recipient) against the local dev Postgres DB
+(`traqo_dev`, already at head `plan_shares_001`), created a plan with one custom exercise
+and a day, created an `anyone`/`log` share. Anonymous start→set→finish worked correctly end
+to end, and direct DB inspection confirmed exact spec-correct attribution
+(`user_id=owner, share_id=<share>, logged_by_user_id=NULL`). Owner's `/api/workout-history`
+correctly excluded it (`[]`). But the **authenticated-recipient** flow broke at the
+add-set step: `POST /api/shared/{token}/sessions/{id}/sets` returned
+`{"error":"You do not own this exercise"}`. Root cause: `AddWorkoutSet.execute()`
+(`add_workout_set.py:101-106`) hard-requires `exercise.user_id == user_id`. The share route
+calls it with `user_id=session.user_id`. For an anonymous logger, `session.user_id` is the
+plan owner — who also owns the exercise — so the check passes *by coincidence*. For an
+authenticated recipient, `session.user_id` is the recipient, but the exercise still belongs
+to the plan owner, so the check always fails. This breaks the primary sharing use case (a
+trainer's client logging sets against the trainer's own exercises) and was not caught
+because the Phase 4 test suite only exercises anonymous set-adding, never an authenticated
+recipient adding a set against an owner-owned exercise.
+
+**Verdict: Phase 4 is NOT accepted as complete.** Attribution logic, stats-exclusion rule,
+and the code-quality fix are all correct and independently verified. Not committed pending
+a fix for the exercise-ownership check in the shared-logging path (needs to allow the
+session owner's *effective* permission via the share to substitute for/bypass the strict
+`exercise.user_id == user_id` check when logging through a share). Local dev DB test data
+cleaned up; dev server stopped; nothing committed, nothing pushed.
