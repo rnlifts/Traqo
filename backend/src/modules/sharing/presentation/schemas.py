@@ -2,6 +2,11 @@
 from datetime import datetime
 from pydantic import BaseModel, Field
 
+from src.modules.workouts.presentation.schemas import (
+    PlanDayDetailResponse,
+    PlanWeekDetailResponse,
+)
+
 
 class CreateShareRequest(BaseModel):
     """Request to create a plan share (POST /share)."""
@@ -47,8 +52,8 @@ class SharedPlanResponse(BaseModel):
     """Response for GET /api/shared/{token} — the shared plan detail with access info."""
     # Embed the full WorkoutPlanDetailResponse structure
     plan: dict  # Will be populated from WorkoutPlanDetailResponse.plan
-    days: list[dict] | None = None  # For 'days' type plans
-    weeks: list[dict] | None = None  # For 'weeks' type plans
+    days: list[PlanDayDetailResponse] | None = None  # For 'days' type plans
+    weeks: list[PlanWeekDetailResponse] | None = None  # For 'weeks' type plans
     # Additional sharing info
     permission: str  # 'view', 'log', or 'edit'
     plan_owner_username: str

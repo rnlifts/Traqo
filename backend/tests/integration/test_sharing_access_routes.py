@@ -16,6 +16,8 @@ from src.modules.auth.infrastructure.models.user_model import UserModel
 from src.modules.workouts.infrastructure.models.workout_plan_model import WorkoutPlanModel
 from src.modules.workouts.infrastructure.models.plan_day_model import PlanDayModel
 from src.modules.workouts.infrastructure.models.plan_week_model import PlanWeekModel
+from src.modules.exercises.infrastructure.models.exercise_model import ExerciseModel
+from src.modules.workouts.infrastructure.models.workout_exercise_model import WorkoutExerciseModel
 from src.modules.sharing.infrastructure.repositories.plan_share_repository_impl import (
     PlanShareRepositoryImpl,
 )
@@ -125,6 +127,123 @@ def owner_plan(test_session_factory, owner_user):
     plan_id = plan.id
     session.close()
     return {"id": plan_id, "user_id": owner_user["id"]}
+
+
+@pytest.fixture
+def owner_plan_with_exercise(test_session_factory, owner_user):
+    """Create a test plan owned by owner_user with an exercise on a day."""
+    session = test_session_factory()
+    plan = WorkoutPlanModel(
+        user_id=owner_user["id"],
+        name="Test Plan with Exercise",
+        unit_type="days",
+    )
+    session.add(plan)
+    session.commit()
+    plan_id = plan.id
+
+    # Add a day
+    day = PlanDayModel(
+        workout_plan_id=plan_id,
+        order_position=1,
+        label="Day 1",
+    )
+    session.add(day)
+    session.commit()
+    day_id = day.id
+
+    # Add an exercise
+    exercise = ExerciseModel(
+        user_id=owner_user["id"],
+        name="Bench Press",
+    )
+    session.add(exercise)
+    session.commit()
+    exercise_id = exercise.id
+
+    # Add exercise to the day
+    wo_exercise = WorkoutExerciseModel(
+        plan_day_id=day_id,
+        exercise_id=exercise_id,
+        order_number=1,
+    )
+    session.add(wo_exercise)
+    session.commit()
+    wo_exercise_id = wo_exercise.id
+    session.close()
+
+    return {
+        "id": plan_id,
+        "user_id": owner_user["id"],
+        "day_id": day_id,
+        "exercise_id": exercise_id,
+        "wo_exercise_id": wo_exercise_id,
+    }
+
+
+@pytest.fixture
+def owner_weeks_plan_with_exercise(test_session_factory, owner_user):
+    """Create a test weeks-type plan owned by owner_user with an exercise."""
+    session = test_session_factory()
+    plan = WorkoutPlanModel(
+        user_id=owner_user["id"],
+        name="Test Weeks Plan with Exercise",
+        unit_type="weeks",
+        total_units=2,
+    )
+    session.add(plan)
+    session.commit()
+    plan_id = plan.id
+
+    # Add a week
+    week = PlanWeekModel(
+        workout_plan_id=plan_id,
+        week_number=1,
+        mode="base",
+    )
+    session.add(week)
+    session.commit()
+    week_id = week.id
+
+    # Add a day in the week
+    day = PlanDayModel(
+        workout_plan_id=plan_id,
+        plan_week_id=week_id,
+        order_position=1,
+        label="Monday",
+    )
+    session.add(day)
+    session.commit()
+    day_id = day.id
+
+    # Add an exercise
+    exercise = ExerciseModel(
+        user_id=owner_user["id"],
+        name="Squat",
+    )
+    session.add(exercise)
+    session.commit()
+    exercise_id = exercise.id
+
+    # Add exercise to the day
+    wo_exercise = WorkoutExerciseModel(
+        plan_day_id=day_id,
+        exercise_id=exercise_id,
+        order_number=1,
+    )
+    session.add(wo_exercise)
+    session.commit()
+    wo_exercise_id = wo_exercise.id
+    session.close()
+
+    return {
+        "id": plan_id,
+        "user_id": owner_user["id"],
+        "week_id": week_id,
+        "day_id": day_id,
+        "exercise_id": exercise_id,
+        "wo_exercise_id": wo_exercise_id,
+    }
 
 
 @pytest.fixture
@@ -455,3 +574,213 @@ class TestSharedPlanResponseFormat:
         assert "share" in data
         assert "mode" in data["share"]
         assert data["share"]["mode"] == "anyone"
+
+
+class TestSharedPlanWithContent:
+    """Tests for shared plans with actual days/exercises (regression tests for Task 88).
+
+    These tests verify that GET /api/shared/{token} correctly serializes and returns
+    real plan content (days/weeks with exercises) instead of crashing with a 500 error.
+    """
+
+    def test_days_type_plan_with_exercise_returns_200_with_content(
+        self, client, owner_user, owner_plan_with_exercise, owner_auth_headers
+    ):
+        """Test viewing a days-type plan with actual exercises (regression: Task 88).
+
+        This is the exact scenario that was failing with a 500 error:
+        - Plan has at least one day
+        - Day has at least one exercise on it
+        - Call GET /api/shared/{token} as an authenticated user with access
+        - Should return 200 with real exercise data in the days list
+        """
+        plan = owner_plan_with_exercise
+
+        # Create a share for the plan
+        share_resp = client.post(
+            f"/api/workout-plans/{plan['id']}/share",
+            headers=owner_auth_headers,
+            json={},
+        )
+        assert share_resp.status_code == 201
+        share_token = share_resp.json()["token"]
+
+        # Update to anyone mode so the test can access it anonymously or as granted user
+        update_resp = client.put(
+            f"/api/workout-plans/{plan['id']}/share",
+            headers=owner_auth_headers,
+            json={"mode": "anyone", "link_permission": "view"},
+        )
+        assert update_resp.status_code == 200
+
+        # Access the shared plan as an authenticated user with view permission
+        resp = client.get(f"/api/shared/{share_token}", headers=owner_auth_headers)
+
+        # Should return 200 (not 500)
+        assert resp.status_code == 200, f"Expected 200, got {resp.status_code}"
+
+        data = resp.json()
+
+        # Verify basic structure
+        assert "permission" in data
+        assert data["permission"] == "edit"  # owner gets edit
+        assert "plan_owner_username" in data
+        assert data["plan_owner_username"] == "owner"
+        assert "share" in data
+        assert data["share"]["mode"] == "anyone"
+
+        # Verify the plan is for days-type
+        assert "plan" in data
+        assert data["plan"]["unit_type"] == "days"
+
+        # Verify days list exists and has content (not empty)
+        assert "days" in data
+        assert data["days"] is not None
+        assert len(data["days"]) > 0
+
+        # Verify the day has the expected structure and exercises
+        day = data["days"][0]
+        assert "id" in day
+        assert "label" in day
+        assert day["label"] == "Day 1"
+        assert "order_position" in day
+        assert day["order_position"] == 1
+        assert "exercises" in day
+
+        # Verify the exercise is in the day
+        assert len(day["exercises"]) > 0
+        exercise = day["exercises"][0]
+        assert "exercise_id" in exercise
+        assert exercise["exercise_id"] == plan["exercise_id"]
+        assert "exercise_name" in exercise
+        assert exercise["exercise_name"] == "Bench Press"
+
+    def test_weeks_type_plan_with_exercise_returns_200_with_content(
+        self, client, owner_user, owner_weeks_plan_with_exercise, owner_auth_headers
+    ):
+        """Test viewing a weeks-type plan with actual exercises (regression: Task 88).
+
+        The weeks-type plan path has the identical bug pattern as days-type,
+        and was never tested with actual content before. This verifies:
+        - Plan has at least one week with a day
+        - Day has at least one exercise on it
+        - Call GET /api/shared/{token} as an authenticated user with access
+        - Should return 200 with real exercise data in the weeks list
+        """
+        plan = owner_weeks_plan_with_exercise
+
+        # Create a share for the plan
+        share_resp = client.post(
+            f"/api/workout-plans/{plan['id']}/share",
+            headers=owner_auth_headers,
+            json={},
+        )
+        assert share_resp.status_code == 201
+        share_token = share_resp.json()["token"]
+
+        # Update to anyone mode
+        update_resp = client.put(
+            f"/api/workout-plans/{plan['id']}/share",
+            headers=owner_auth_headers,
+            json={"mode": "anyone", "link_permission": "view"},
+        )
+        assert update_resp.status_code == 200
+
+        # Access the shared plan as owner
+        resp = client.get(f"/api/shared/{share_token}", headers=owner_auth_headers)
+
+        # Should return 200 (not 500)
+        assert resp.status_code == 200, f"Expected 200, got {resp.status_code}"
+
+        data = resp.json()
+
+        # Verify basic structure
+        assert "permission" in data
+        assert data["permission"] == "edit"  # owner gets edit
+        assert "plan_owner_username" in data
+        assert data["plan_owner_username"] == "owner"
+
+        # Verify the plan is for weeks-type
+        assert "plan" in data
+        assert data["plan"]["unit_type"] == "weeks"
+
+        # Verify weeks list exists and has content (not empty)
+        assert "weeks" in data
+        assert data["weeks"] is not None
+        assert len(data["weeks"]) > 0
+
+        # Verify the week has the expected structure
+        week = data["weeks"][0]
+        assert "week_number" in week
+        assert week["week_number"] == 1
+        assert "mode" in week
+        assert week["mode"] == "base"
+        assert "days" in week
+
+        # Verify the day in the week has exercises
+        assert len(week["days"]) > 0
+        day = week["days"][0]
+        assert "label" in day
+        assert day["label"] == "Monday"
+        assert "exercises" in day
+
+        # Verify the exercise is in the day
+        assert len(day["exercises"]) > 0
+        exercise = day["exercises"][0]
+        assert "exercise_id" in exercise
+        assert exercise["exercise_id"] == plan["exercise_id"]
+        assert "exercise_name" in exercise
+        assert exercise["exercise_name"] == "Squat"
+
+    def test_anonymous_access_anyone_mode_with_non_empty_plan(
+        self, client, owner_user, owner_plan_with_exercise, owner_auth_headers
+    ):
+        """Test anonymous access to a non-empty anyone-mode plan (verify all paths work).
+
+        Existing anonymous tests used empty plans (no days). This verifies anonymous
+        access still works correctly with actual content.
+        """
+        plan = owner_plan_with_exercise
+
+        # Create and configure share
+        share_resp = client.post(
+            f"/api/workout-plans/{plan['id']}/share",
+            headers=owner_auth_headers,
+            json={},
+        )
+        assert share_resp.status_code == 201
+        share_token = share_resp.json()["token"]
+
+        # Update to anyone mode with view permission
+        update_resp = client.put(
+            f"/api/workout-plans/{plan['id']}/share",
+            headers=owner_auth_headers,
+            json={"mode": "anyone", "link_permission": "view"},
+        )
+        assert update_resp.status_code == 200
+
+        # Access anonymously (no auth header)
+        resp = client.get(f"/api/shared/{share_token}")
+
+        # Should return 200 (not 500)
+        assert resp.status_code == 200, f"Expected 200, got {resp.status_code}"
+
+        data = resp.json()
+
+        # Verify access info
+        assert "permission" in data
+        assert data["permission"] == "view"
+        assert "plan_owner_username" in data
+        assert data["plan_owner_username"] == "owner"
+
+        # Verify days list has content
+        assert "days" in data
+        assert data["days"] is not None
+        assert len(data["days"]) > 0
+
+        # Verify exercise is present
+        day = data["days"][0]
+        assert len(day["exercises"]) > 0
+        exercise = day["exercises"][0]
+        assert "exercise_name" in exercise
+        assert exercise["exercise_name"] == "Bench Press"

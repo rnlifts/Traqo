@@ -5068,3 +5068,36 @@ already-established cross-module import pattern in this file) instead of loosely
 plans, asserting real response content, not just key presence. Test data from the demo
 cleaned up from the dev DB; dev server stopped. Nothing committed for the fix yet —
 delegating to the coder agent next.
+
+## 2026-08-05 — Task 88 fix: verified, committed
+
+Fix delegated to and returned by the `coder` agent, exactly as spec'd — minimal, correct.
+`SharedPlanResponse.days`/`.weeks` in `schemas.py` are now `list[PlanDayDetailResponse] |
+None` / `list[PlanWeekDetailResponse] | None` (imported from the workouts module), instead
+of the wrong `list[dict]`. No change needed in `routes.py` — it was already passing the
+real model instances; the schema was just declared wrong.
+
+**Verified independently:**
+- `git status` confirmed only the 2 allowlisted files changed.
+- Read both diffs in full — the schema change is exactly the preferred fix from the spec,
+  nothing extra.
+- 3 new tests added (`TestSharedPlanWithContent`): days-type regression, weeks-type
+  regression (previously untested with content at all), and an anonymous-access variant
+  with real content. Read all three in full — they assert actual response content
+  (exercise IDs, names, day labels), not just key presence, directly addressing the gap
+  that let the original bug through.
+- Ran the full suite myself twice: **252 passed, 4 failed (the same pre-existing/unrelated
+  failures), 2 skipped** — identical both runs, matches the agent's reported numbers.
+- Negative-control: reverted the schema fields back to `list[dict]`, reran the 3 new
+  tests — all 3 failed as expected, proving they genuinely exercise the fix. Restored,
+  confirmed clean again.
+- Live end-to-end re-verification on a freshly started server: recreated the exact demo
+  scenario that crashed before (trainer builds a real plan with a day + exercise, shares
+  it, client views it) — `GET /api/shared/{token}` now returns `200` with the full,
+  correct plan detail including the day and its exercise. Test data cleaned up, server
+  stopped.
+
+**Verdict: accepted.** Committed locally. Nothing pushed, production untouched.
+
+Task 86 backend (Phases 1-4 + both follow-up fixes) is now fully verified and correct.
+Remaining: Phase 5 (frontend). Not started.
