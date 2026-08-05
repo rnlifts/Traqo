@@ -5438,3 +5438,47 @@ Nothing pushed, production untouched.
 Task 86 Phase 5c backend is done. Remaining for Task 86: Phase 5c frontend (an "Edit"
 button on the shared-plan page, linking edit-tier grantees into the existing plan-builder
 UI) — not started, not yet scoped.
+
+## 2026-08-05 — Task 86 Phase 5c frontend: Edit plan button — done directly, not delegated
+
+Owner asked for this to be built directly rather than via the `coder` agent. Added an
+"Edit plan" link to `SharedPlanPage.tsx`, shown only when `permission === 'edit'` AND the
+viewer is authenticated (`localStorage.getItem('auth_token')` present) — matching the
+already-documented limitation from the original Phase 5 spec: anonymous `anyone`+`edit`
+visitors don't get the button, since the plan-builder UI assumes auth throughout. Links to
+the existing `/workout-plans/{plan.id}/edit` route (already `ProtectedRoute`-wrapped, no
+route changes needed) via react-router's `Link`.
+
+Added 4 new tests to `SharedPlanPage.test.tsx`: renders for an authenticated edit-tier
+viewer with the correct `href`; does NOT render for an anonymous edit-tier viewer; does
+NOT render for an authenticated log-tier viewer; does NOT render for an authenticated
+view-tier viewer.
+
+**Verified:**
+- `npx vitest run`: 213/213 passed (209 baseline + 4 new), 19/19 files.
+- `npx tsc -b`: clean.
+- Live browser verification against running dev servers hit a Browser-pane tooling quirk
+  along the way worth noting: pixel-coordinate clicks and `form_input` on the login form
+  silently failed to trigger React's controlled-input state/submit (DOM value updated,
+  but no network request fired) — not an app bug, confirmed by driving the same form via
+  a native input-value setter + `dispatchEvent('input')` + `form.requestSubmit()`, which
+  worked immediately and logged in correctly. Worth remembering for future live-testing in
+  this environment: if a click/type sequence appears to silently do nothing, try the
+  JS-dispatched-event approach before concluding the app itself is broken.
+- With that worked around: logged in as a real edit-tier grantee, opened a real shared
+  plan — "Edit plan" rendered with the correct `href`
+  (`/workout-plans/{id}/edit`). Navigated there directly: the real plan-builder loaded
+  correctly with the plan's actual name, day, and exercise (confirming Task 93's backend
+  fix and this frontend change work together end to end). Switched the same share to
+  `anyone`+`edit` mode, cleared `localStorage` to simulate a genuine anonymous visitor:
+  "Edit plan" correctly absent (only "Start workout" shown, from the log-tier-or-above
+  gate) — the documented anonymous-edit limitation holds in practice, not just in the
+  conditional-rendering code. Test data cleaned up, both dev servers stopped.
+
+**Verdict: accepted.** Task 86 (the entire plan-sharing feature — backend phases 1-4 plus
+three follow-up bugfixes, and frontend phases 5a/5b/5c) is now complete and independently
+verified end to end: share management, viewing (authenticated and anonymous), logging
+(authenticated and anonymous), and editing (edit-tier grantees) all work correctly through
+the real UI. Nothing pushed; production untouched (still lacks the `plan_shares_001`
+migration onward — a coordinated push+migration remains a separate, deliberately deferred
+step).

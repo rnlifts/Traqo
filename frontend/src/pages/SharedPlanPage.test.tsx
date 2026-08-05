@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { SharedPlanPage } from './SharedPlanPage';
@@ -304,5 +304,103 @@ describe('SharedPlanPage', () => {
 
     // Start workout button should not be visible for view-only permission
     expect(screen.queryByText('Start workout')).not.toBeInTheDocument();
+  });
+
+  describe('Edit plan button (Phase 5c)', () => {
+    afterEach(() => {
+      localStorage.clear();
+    });
+
+    it('renders an Edit plan link when permission is edit and the viewer is authenticated', async () => {
+      localStorage.setItem('auth_token', 'fake-token');
+      const editData = { ...mockDaysPlan, permission: 'edit' as const };
+      vi.mocked(sharingApi.sharingApi.getSharedPlan).mockResolvedValue(
+        editData as any
+      );
+
+      render(
+        <MemoryRouter initialEntries={['/shared/test-token']}>
+          <Routes>
+            <Route path="/shared/:token" element={<SharedPlanPage />} />
+          </Routes>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Test Plan')).toBeInTheDocument();
+      });
+
+      const editLink = screen.getByText('Edit plan');
+      expect(editLink).toBeInTheDocument();
+      expect(editLink.closest('a')).toHaveAttribute(
+        'href',
+        `/workout-plans/${editData.plan.id}/edit`
+      );
+    });
+
+    it('does NOT render the Edit plan link when permission is edit but the viewer is anonymous', async () => {
+      // No auth_token in localStorage - anonymous visitor, even with edit-tier link permission.
+      const editData = { ...mockDaysPlan, permission: 'edit' as const };
+      vi.mocked(sharingApi.sharingApi.getSharedPlan).mockResolvedValue(
+        editData as any
+      );
+
+      render(
+        <MemoryRouter initialEntries={['/shared/test-token']}>
+          <Routes>
+            <Route path="/shared/:token" element={<SharedPlanPage />} />
+          </Routes>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Test Plan')).toBeInTheDocument();
+      });
+
+      expect(screen.queryByText('Edit plan')).not.toBeInTheDocument();
+    });
+
+    it('does NOT render the Edit plan link for an authenticated viewer with only log permission', async () => {
+      localStorage.setItem('auth_token', 'fake-token');
+      const logData = { ...mockDaysPlan, permission: 'log' as const };
+      vi.mocked(sharingApi.sharingApi.getSharedPlan).mockResolvedValue(
+        logData as any
+      );
+
+      render(
+        <MemoryRouter initialEntries={['/shared/test-token']}>
+          <Routes>
+            <Route path="/shared/:token" element={<SharedPlanPage />} />
+          </Routes>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Test Plan')).toBeInTheDocument();
+      });
+
+      expect(screen.queryByText('Edit plan')).not.toBeInTheDocument();
+    });
+
+    it('does NOT render the Edit plan link for an authenticated viewer with only view permission', async () => {
+      localStorage.setItem('auth_token', 'fake-token');
+      vi.mocked(sharingApi.sharingApi.getSharedPlan).mockResolvedValue(
+        mockDaysPlan as any
+      );
+
+      render(
+        <MemoryRouter initialEntries={['/shared/test-token']}>
+          <Routes>
+            <Route path="/shared/:token" element={<SharedPlanPage />} />
+          </Routes>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Test Plan')).toBeInTheDocument();
+      });
+
+      expect(screen.queryByText('Edit plan')).not.toBeInTheDocument();
+    });
   });
 });

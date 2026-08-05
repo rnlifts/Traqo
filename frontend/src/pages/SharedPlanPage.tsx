@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { sharingApi } from '../api/sharingApi';
 import type { SharedPlanResponse } from '../api/sharingApi';
 import { ShareWorkoutStarter } from '../features/sharing/ShareWorkoutStarter';
@@ -85,6 +85,11 @@ export const SharedPlanPage: React.FC = () => {
   }
 
   const { plan, days, weeks, permission, plan_owner_username } = data;
+  // Edit-tier access via the plan-builder UI requires an authenticated viewer — the
+  // builder assumes auth throughout, so an anonymous "anyone + edit" visitor simply
+  // doesn't get the Edit button. This is a deliberate, documented limitation.
+  const isAuthenticated = !!localStorage.getItem('auth_token');
+  const canEditPlan = permission === 'edit' && isAuthenticated;
 
   return (
     <div className="page-container">
@@ -106,7 +111,30 @@ export const SharedPlanPage: React.FC = () => {
 
       {/* Plan Info */}
       <div style={{ marginBottom: '20px' }}>
-        <h1 className="page-title">{plan.name}</h1>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: '12px',
+          }}
+        >
+          <h1 className="page-title">{plan.name}</h1>
+          {canEditPlan && (
+            <Link
+              to={`/workout-plans/${plan.id}/edit`}
+              className="btn btn-secondary"
+              style={{
+                padding: '8px 16px',
+                fontSize: '14px',
+                textDecoration: 'none',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Edit plan
+            </Link>
+          )}
+        </div>
         <p className="section-label">
           {plan.unit_type === 'days'
             ? `${plan.total_units} DAY${plan.total_units === 1 ? '' : 'S'}`
