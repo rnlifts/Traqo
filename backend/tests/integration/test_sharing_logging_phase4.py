@@ -745,3 +745,110 @@ class TestStatsExclusionRule:
         history = history_resp.json()
         assert len(history) == 1
         assert history[0]["session_id"] == session_id
+
+
+class TestBootstrapViaShare:
+    """Tests for GET /api/workout-sessions/{session_id}/bootstrap with share-started sessions.
+
+    This is the exact regression scenario from Task 91: an authenticated recipient starts a
+    session via share, then navigates to the normal Active Workout screen which calls the
+    bootstrap endpoint. Before the fix, this returned 403 "You do not own this plan" because
+    the bootstrap handler was re-checking plan ownership instead of relying on the session
+    ownership check that already ran earlier. After the fix, it succeeds.
+    """
+
+    def test_authenticated_recipient_bootstrap_after_share_start(
+        self, client, owner_plan_with_exercise, share_log_permission_anyone, recipient_auth_headers, recipient_user
+    ):
+        """Authenticated recipient can load bootstrap after starting via share (regression test for Task 91).
+
+        Scenario: recipient starts a workout via share, then navigates to the normal
+        Active Workout screen which calls GET /api/workout-sessions/{id}/bootstrap to load
+        the UI. Before the fix, this endpoint returned 403 because it re-checked plan
+        ownership (plan is owned by trainer, not recipient) instead of relying on the
+        session-ownership check that already established the caller's right to view
+        this session.
+        """
+        # Start a session as authenticated recipient via share
+        start_resp = client.post(
+            f"/api/shared/{share_log_permission_anyone['token']}/start",
+            headers=recipient_auth_headers,
+            json={
+                "plan_day_id": owner_plan_with_exercise["day_id"],
+            },
+        )
+        assert start_resp.status_code == 201
+        session_id = start_resp.json()["session_id"]
+
+        # Now call the bootstrap endpoint as the recipient (this is what the Active Workout
+        # screen does when the frontend navigates there after the share start)
+        bootstrap_resp = client.get(
+            f"/api/workout-sessions/{session_id}/bootstrap",
+            headers=recipient_auth_headers,
+        )
+
+        # Before the fix, this returned 403. After the fix, it should return 200.
+        assert bootstrap_resp.status_code == 200, f"Expected 200, got {bootstrap_resp.status_code}: {bootstrap_resp.json()}"
+
+        data = bootstrap_resp.json()
+
+        # Verify session data (recipient owns it)
+        assert data["session"]["session"]["id"] == session_id
+        assert data["session"]["session"]["user_id"] == recipient_user["id"]
+        assert data["session"]["session"]["plan_name"] == "Test Plan"
+
+        # Verify plan data is present and correct
+        assert data["plan"] is not None
+        assert data["plan"]["plan"]["id"] == owner_plan_with_exercise["plan_id"]
+
+        # Verify exercises list is present (may be empty if recipient has no exercises of their own)
+        assert isinstance(data["exercises"], list)
+
+    def test_stranger_bootstrap_still_rejected(
+        self, client, owner_plan_with_exercise, share_log_permission_anyone, owner_auth_headers, recipient_auth_headers, test_session_factory, owner_user, recipient_user
+    ):
+        """Verify that a genuine stranger (not session owner, not via any share) still gets 403.
+
+        This is a negative-control test to confirm that the fix doesn't weaken the
+        session-ownership check. The session-ownership check (from GetWorkoutSessionDetail)
+        should still reject anyone who doesn't own the session.
+        """
+        # Create a third user (not owner, not recipient)
+        session = test_session_factory()
+        from src.modules.auth.infrastructure.models.user_model import UserModel
+        stranger = UserModel(
+            username="stranger",
+            display_name="Stranger",
+            password_hash="fake_hash",
+        )
+        session.add(stranger)
+        session.commit()
+        stranger_id = stranger.id
+        session.close()
+
+        # Recipient starts a session via share
+        start_resp = client.post(
+            f"/api/shared/{share_log_permission_anyone['token']}/start",
+            headers=recipient_auth_headers,
+            json={
+                "plan_day_id": owner_plan_with_exercise["day_id"],
+            },
+        )
+        session_id = start_resp.json()["session_id"]
+
+        # Create auth headers for the stranger
+        from src.infrastructure.security.jwt_service import create_access_token
+        stranger_token = create_access_token(stranger_id)
+        stranger_auth_headers = {"Authorization": f"Bearer {stranger_token}"}
+
+        # Stranger tries to call bootstrap on someone else's session
+        bootstrap_resp = client.get(
+            f"/api/workout-sessions/{session_id}/bootstrap",
+            headers=stranger_auth_headers,
+        )
+
+        # Should be rejected with 403 (from the session-ownership check)
+        assert bootstrap_resp.status_code == 403, f"Expected 403, got {bootstrap_resp.status_code}"
+        # Verify it's the right error (session ownership check, not plan ownership check)
+        error_msg = bootstrap_resp.json().get("detail", bootstrap_resp.json().get("error", "")).lower()
+        assert "session" in error_msg or "own" in error_msg

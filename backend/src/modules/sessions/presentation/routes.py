@@ -14,6 +14,7 @@ from src.modules.workouts.infrastructure.repositories.workout_plan_repository_im
 from src.modules.workouts.application.use_cases.get_workout_plan_detail import (
     GetWorkoutPlanDetail,
 )
+from src.modules.workouts.domain.exceptions import WorkoutPlanNotFoundError
 from src.modules.workouts.infrastructure.repositories.workout_exercise_repository_impl import (
     WorkoutExerciseRepositoryImpl,
 )
@@ -242,7 +243,9 @@ async def get_active_workout_bootstrap(
     plan_response = None
     if session.workout_plan_id:
         use_case_plan = GetWorkoutPlanDetail(plan_repo, workout_exercise_repo, day_repo, week_repo)
-        plan, _ = use_case_plan.execute(session.workout_plan_id, user_id)
+        plan = plan_repo.get_by_id(session.workout_plan_id)
+        if not plan:
+            raise WorkoutPlanNotFoundError(f"Plan {session.workout_plan_id} not found")
         plan_response = build_plan_detail_response(
             plan, session.workout_plan_id, use_case_plan, workout_exercise_repo, day_repo, week_repo, db
         )

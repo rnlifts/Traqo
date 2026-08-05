@@ -5211,3 +5211,61 @@ written and is being committed as-is; the fix belongs on the backend (a follow-u
 same pattern as Task 87/88: let a caller through when they don't own the plan but do own
 the session tied to it). Test data cleaned up, both dev servers stopped. Reporting to the
 owner before scoping the fix.
+
+## 2026-08-05 — Task 91: fix bootstrap plan-ownership bug — verified, committed; found a second, related bug live
+
+Fix delegated to and returned by the `coder` agent per
+`task_specs/task_91_sharing_phase5b_bootstrap_plan_ownership_fix.md` — exactly the
+preferred minimal fix: `get_active_workout_bootstrap` now fetches the plan directly via
+`plan_repo.get_by_id()` instead of the ownership-checked `GetWorkoutPlanDetail.execute()`,
+since session ownership (checked earlier in the same handler) is already the real
+authorization boundary here.
+
+**Verified independently:**
+- `git status`: only the two allowlisted files changed. `get_workout_plan_detail.py` and
+  every workouts-module file untouched, confirmed.
+- Diff matches the spec's preferred fix exactly — minimal, single call-site change plus
+  one new import.
+- 2 new tests (`TestBootstrapViaShare`): the exact regression scenario (recipient starts
+  via share, then loads bootstrap — asserts 200 with correct session AND plan content, not
+  just the status code) and a negative-control (a genuine stranger with no relationship to
+  the session still gets 403, proving the session-ownership check itself wasn't touched).
+  Both real, read in full.
+- Ran the full suite myself twice: **254 passed, 4 pre-existing/unrelated failures, 2
+  skipped** — identical both runs, matches the agent's claim.
+- Negative-control: reverted the fix, reran the new test class — the regression test
+  failed as expected, the stranger-rejection test still passed (proving that check is
+  independent and untouched). Restored, confirmed clean again.
+- **Live re-verification in the browser, repeating the exact scenario that broke
+  before**: fresh trainer+client accounts, real plan+share, logged in as the client,
+  clicked through to the shared plan, started a workout — the Active Workout screen now
+  loaded correctly (plan name, day, exercise all rendered; confirmed via network trace
+  that `GET /api/workout-sessions/{id}/bootstrap` returned `200`, not `403`). Task 91:
+  **accepted, committed.**
+
+**But continuing the live walkthrough one step further (logging an actual set) surfaced a
+second, related, still-blocking bug — not part of Task 91's scope, found by accident while
+proving the fix end-to-end rather than stopping at "the screen loads."** Clicking "Log
+set" on the loaded screen returned **"You do not own this exercise."**
+
+Root cause: the standard Active Workout screen — which recipients now correctly reach
+after Task 91's fix — logs sets through the **normal** endpoint,
+`POST /api/workout-sessions/{session_id}/sets`, not the share-token-scoped one. That
+normal endpoint's use case, `AddWorkoutSet.execute()`
+(`sessions/application/use_cases/add_workout_set.py`), still hard-requires
+`exercise.user_id == caller` with no awareness that the session came from a share. Task 87
+already solved this exact problem (recipient logging against the plan-owner's exercise)
+but only added the bypass (`skip_exercise_ownership_check`) to the share-token-scoped
+route (`POST /api/shared/{token}/sessions/{id}/sets`) — nobody taught the *normal* route
+about it, because at the time Task 87 was scoped, no frontend flow existed yet that would
+route an authenticated recipient into the normal endpoint. Now that Phase 5b's frontend
+does exactly that (by design — it's supposed to reuse the normal screen), this gap is now
+reachable and blocking.
+
+Preferred fix (to be spec'd next): make the exercise-ownership bypass in
+`AddWorkoutSet.execute()` automatic whenever `session.share_id is not None`, rather than
+requiring an external caller to opt in — this fixes both routes at once (the share-scoped
+one already always passes `skip_exercise_ownership_check=True`, redundantly but harmlessly,
+once this lands) with a single-file change, and needs no route-level changes anywhere.
+Session/test data from this walkthrough cleaned up, both dev servers stopped. Scoping the
+fix as Task 92.
