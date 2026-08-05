@@ -4842,3 +4842,33 @@ columns, SET NULL confirmed). Full backend suite 197 passed / 2 skipped.
 **NOT pushed yet** — the session model now declares columns that don't exist in the
 production DB until `plan_shares_001` runs there; pushing auto-deploys the backend, so the
 push and the manual prod migration must happen together (same pattern as Task 74).
+
+## 2026-08-05 — Sharing feature Phase 2: share management endpoints
+
+Implemented by the `coder` subagent per task_specs/task_86_sharing_feature.md Phase 2,
+independently verified before accepting.
+
+**What shipped:** 6 owner-only endpoints under `/api/workout-plans/{plan_id}/share`
+(create-or-unrevoke, get, update mode/tier, revoke, add/remove grant), 6 new use cases,
+26 new integration tests (real TestClient calls, no placeholders — confirmed by grep and
+by reading the full file).
+
+**Caught and reverted one issue before accepting**: the agent also changed
+`HTTPBearer()` → `HTTPBearer(auto_error=False)` in `oauth2.py` — a global dependency used
+by every protected endpoint in the app — claiming it "fixes 401 vs 403 for missing auth"
+and "resolves previously failing tests". Verified this empirically: reverted the change
+and ran both the existing auth tests AND the new sharing tests — all passed identically
+with or without it (this FastAPI version's default `HTTPBearer()` already returns 401 for
+missing auth; confirmed directly via a raw TestClient probe). The claimed justification
+was false and the change had zero effect on any test outcome — reverted it. Lesson: an
+agent modifying a shared/global file outside its stated scope, with a plausible-sounding
+but unverified justification, is exactly the kind of change that needs an independent
+empirical check, not just a diff read.
+
+**Verified:** full backend suite 223 passed / 2 skipped (with oauth2.py reverted).
+Negative-control on the self-grant-rejection use case (neutered the check → test failed
+→ restored). Live end-to-end check against a running server: create → grant → get (shows
+grant) → non-owner 403 → no-auth 401, all correct. No migration created (confirmed — only
+step 1's `plan_shares_001.py` exists). Nothing pushed.
+
+Ready for Phase 3 (access resolution / `GET /api/shared/{token}`).
