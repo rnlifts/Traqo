@@ -48,6 +48,30 @@ describe('ShareDialog', () => {
     });
   });
 
+  it('renders "Create share link" (not the management UI) when the existing share is revoked', async () => {
+    // Regression test: GetShare returns 200 for a revoked share (it's still a row),
+    // not 404 - the dialog must not mistake that for an active share, or the owner
+    // gets stuck editing a config that silently never takes effect (mode/permission
+    // changes hit UpdateShare, which never clears revoked_at).
+    vi.mocked(sharingApi.sharingApi.getShare).mockResolvedValue({
+      ...mockShare,
+      revoked_at: '2026-08-06T05:08:25Z',
+    });
+
+    render(
+      <ShareDialog isOpen={true} onClose={vi.fn()} planId={1} />
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: /Create share link/i })
+      ).toBeInTheDocument();
+    });
+
+    // Must NOT render the management UI (mode toggle, copy-link box) for a revoked share.
+    expect(screen.queryByText(/Who can access/i)).not.toBeInTheDocument();
+  });
+
   it('creates share and shows management UI on create button click', async () => {
     vi.mocked(sharingApi.sharingApi.getShare).mockRejectedValue({
       response: { status: 404 },

@@ -36,9 +36,20 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
     setLoading(true);
     try {
       const data = await sharingApi.getShare(planId);
-      setShare(data);
-      setShareExists(true);
-      setGrants(data.grants);
+      if (data.revoked_at) {
+        // The share row exists but was revoked (e.g. via "Stop sharing"). Treat it
+        // the same as "no share yet" so the dialog offers "Create share link" —
+        // that button calls the same create-or-unrevoke endpoint, which correctly
+        // un-revokes this row (preserving its token) rather than leaving the owner
+        // stuck editing a config that silently never takes effect.
+        setShareExists(false);
+        setShare(null);
+        setGrants([]);
+      } else {
+        setShare(data);
+        setShareExists(true);
+        setGrants(data.grants);
+      }
     } catch (err: any) {
       if (err.response?.status === 404) {
         setShareExists(false);

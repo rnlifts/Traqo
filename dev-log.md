@@ -5482,3 +5482,43 @@ verified end to end: share management, viewing (authenticated and anonymous), lo
 the real UI. Nothing pushed; production untouched (still lacks the `plan_shares_001`
 migration onward — a coordinated push+migration remains a separate, deliberately deferred
 step).
+
+## 2026-08-06 — Bug found by the owner while trying the feature: re-sharing after "Stop sharing" silently doesn't work
+
+Owner report: shared a plan, stopped sharing, then re-shared it — the link still said
+"invalid" afterward. Reproduced and root-caused directly (not delegated): `GetShare`'s
+use case only checks `if not share:`, but a revoked share is still a row (soft revocation
+by design, see the 2026-08-04 entry) — so the owner-side `GET /workout-plans/{id}/share`
+returns `200` with the revoked share's stale data instead of signaling "no active share."
+`ShareDialog.tsx` took that `200` at face value and rendered the full management UI
+(mode toggle, copy-link box) instead of the "Create share link" button — which is the
+*only* UI path wired to `CreateOrUnrevokeShare`, the use case that actually clears
+`revoked_at`. So toggling mode/permission in the dialog called `UpdateShare` instead,
+which never touches `revoked_at` — the share looked freshly configured but stayed
+revoked the entire time, and the public link kept 404ing.
+
+**Immediate fix for the owner's live plan**: manually cleared `revoked_at` on their share
+row directly in the dev DB so their link worked again right away, confirmed via curl.
+
+**Root-cause fix**: `ShareDialog.tsx`'s `loadShare()` now checks `data.revoked_at` — if
+set, treats it the same as "no share yet" (shows "Create share link" instead of the
+management UI). Clicking that button still hits the same `POST /share` endpoint, which
+correctly un-revokes (preserving the original token) rather than creating a disconnected
+new share.
+
+**Verified**: added a regression test to `ShareDialog.test.tsx` (revoked share → renders
+"Create share link", not the management UI); negative-controlled it (reverted the fix,
+confirmed the new test fails, restored, confirmed clean); full frontend suite 214/214,
+`tsc -b` clean. Live end-to-end re-verification with a fresh synthetic account (not the
+owner's real one): shared a plan, revoked it, reopened the dialog — correctly showed
+"Create share link" this time; clicked it — same token reappeared; confirmed via curl the
+link now correctly returns `403` for an anonymous visitor (share genuinely exists again,
+mode defaulted back to `restricted`) and `200` for the owner. Synthetic test data cleaned
+up.
+
+Also worth logging: this session's live-testing repeatedly hit a Browser-pane tooling
+quirk where pixel-coordinate clicks / `form_input` on the login form silently failed to
+trigger React's controlled-input state or form submission (no network request fired) even
+though the DOM value visibly updated. Not an app bug — confirmed by driving the exact same
+form via `dispatchEvent(new Event('input'))` + `form.requestSubmit()`, which worked
+immediately. Worth remembering for future live verification in this environment.
