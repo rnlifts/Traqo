@@ -1,11 +1,77 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { sharingApi } from '../api/sharingApi';
-import type { SharedPlanResponse } from '../api/sharingApi';
+import type { SharedPlanResponse, SharedPlanExercise, SharedPlanDay } from '../api/sharingApi';
 import { ShareWorkoutStarter } from '../features/sharing/ShareWorkoutStarter';
+
+function ExerciseCard({ exercise }: { exercise: SharedPlanExercise }) {
+  return (
+    <div className="exercise-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+      <div className="field-cell field-cell-name">
+        <span className="cell-label">Exercise</span>
+        <span className="cell-static-value">{exercise.exercise_name}</span>
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+        {exercise.target_sets !== null && (
+          <div className="field-cell">
+            <span className="cell-label">Sets</span>
+            <span className="cell-static-value">{exercise.target_sets}</span>
+          </div>
+        )}
+        {exercise.target_reps && (
+          <div className="field-cell">
+            <span className="cell-label">Reps</span>
+            <span className="cell-static-value">{exercise.target_reps}</span>
+          </div>
+        )}
+        {exercise.target_weight !== null && (
+          <div className="field-cell">
+            <span className="cell-label">Weight</span>
+            <span className="cell-static-value">{exercise.target_weight} lbs</span>
+          </div>
+        )}
+        {exercise.target_duration_seconds !== null && (
+          <div className="field-cell">
+            <span className="cell-label">Duration</span>
+            <span className="cell-static-value">
+              {Math.floor(exercise.target_duration_seconds / 60)}m
+            </span>
+          </div>
+        )}
+      </div>
+      {exercise.notes && (
+        <div className="field-cell field-cell-notes">
+          <span className="cell-label">Notes</span>
+          <span className="cell-static-value" style={{ fontWeight: 'normal' }}>
+            {exercise.notes}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DayCard({ day }: { day: SharedPlanDay }) {
+  return (
+    <div className="card">
+      <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', color: 'var(--text-h)' }}>
+        {day.is_rest ? '🛌 ' : ''}
+        Day {day.order_position}: {day.label}
+      </h3>
+      {day.is_rest ? (
+        <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>Rest day</p>
+      ) : day.exercises.length > 0 ? (
+        day.exercises.map((exercise, idx) => <ExerciseCard key={idx} exercise={exercise} />)
+      ) : (
+        <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>No exercises</p>
+      )}
+    </div>
+  );
+}
 
 export const SharedPlanPage: React.FC = () => {
   const { token } = useParams<{ token: string }>();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<SharedPlanResponse | null>(null);
   const [error, setError] = useState<{ status: number; message: string } | null>(
@@ -49,30 +115,27 @@ export const SharedPlanPage: React.FC = () => {
   }
 
   if (loading) {
-    return (
-      <div className="page-container">
-        <div className="loading">Loading shared plan...</div>
-      </div>
-    );
+    return <div className="loading">Loading plan...</div>;
   }
 
   if (error) {
     return (
       <div className="page-container">
-        <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-          <h1 style={{ fontSize: '24px', marginBottom: '20px' }}>
+        <div style={{ marginBottom: '20px' }}>
+          <button onClick={() => navigate('/workout-plans')} className="btn btn-secondary">
+            ← Back
+          </button>
+        </div>
+        <div className="card" style={{ textAlign: 'center' }}>
+          <h1 className="page-title" style={{ marginBottom: '12px' }}>
             {error.status === 404 ? 'Invalid Link' : 'Access Denied'}
           </h1>
-          <p style={{ fontSize: '16px', marginBottom: '20px', color: 'var(--text)' }}>
+          <p style={{ fontSize: '16px', marginBottom: '12px', color: 'var(--text)' }}>
             {error.message}
           </p>
           {error.status === 403 && (
             <p style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
-              You can{' '}
-              <a href="/login" style={{ color: '#007bff', textDecoration: 'none' }}>
-                log in
-              </a>{' '}
-              with an account that has access.
+              You can <Link to="/login">log in</Link> with an account that has access.
             </p>
           )}
         </div>
@@ -93,261 +156,66 @@ export const SharedPlanPage: React.FC = () => {
 
   return (
     <div className="page-container">
-      {/* Banner */}
-      <div
-        style={{
-          padding: '16px',
-          backgroundColor: 'var(--bg-hover)',
-          borderRadius: '8px',
-          marginBottom: '20px',
-          textAlign: 'center',
-        }}
-      >
-        <p style={{ margin: 0, fontSize: '14px' }}>
-          Shared by <strong>{plan_owner_username}</strong> — you can{' '}
-          <strong>{permission}</strong>.
-        </p>
-      </div>
-
-      {/* Plan Info */}
-      <div style={{ marginBottom: '20px' }}>
+      {/* Same header pattern as SessionSetupPage's plan card: small line, big title */}
+      <div className="card">
         <div
           style={{
             display: 'flex',
             justifyContent: 'space-between',
-            alignItems: 'center',
+            alignItems: 'flex-start',
             gap: '12px',
           }}
         >
-          <h1 className="page-title">{plan.name}</h1>
+          <div>
+            <h2 style={{ margin: '0 0 8px 0', fontSize: '14px', color: 'var(--text)', fontWeight: 'normal' }}>
+              Shared by <strong>{plan_owner_username}</strong> — you can{' '}
+              <strong>{permission}</strong>
+            </h2>
+            <h1 style={{ margin: 0, fontSize: '28px', color: 'var(--text-h)', fontWeight: 'bold' }}>
+              {plan.name}
+            </h1>
+          </div>
           {canEditPlan && (
             <Link
               to={`/workout-plans/${plan.id}/edit`}
               className="btn btn-secondary"
-              style={{
-                padding: '8px 16px',
-                fontSize: '14px',
-                textDecoration: 'none',
-                whiteSpace: 'nowrap',
-              }}
+              style={{ textDecoration: 'none', whiteSpace: 'nowrap' }}
             >
               Edit plan
             </Link>
           )}
         </div>
-        <p className="section-label">
-          {plan.unit_type === 'days'
-            ? `${plan.total_units} DAY${plan.total_units === 1 ? '' : 'S'}`
-            : `${plan.total_units} WEEK${plan.total_units === 1 ? '' : 'S'}`}
-        </p>
       </div>
 
+      <p className="section-label">
+        {plan.unit_type === 'days'
+          ? `${plan.total_units} DAY${plan.total_units === 1 ? '' : 'S'}`
+          : `${plan.total_units} WEEK${plan.total_units === 1 ? '' : 'S'}`}
+      </p>
+
       {/* Workout Starter — only if permission allows */}
-      {(data.permission === 'log' || data.permission === 'edit') && token && (
+      {(permission === 'log' || permission === 'edit') && token && (
         <ShareWorkoutStarter data={data} token={token} />
       )}
 
-      {/* Days Plan */}
-      {days && days.length > 0 && (
-        <div>
-          <h2 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '16px' }}>
-            Days
-          </h2>
-          {days.map((day) => (
-            <div
-              key={day.id}
-              style={{
-                marginBottom: '20px',
-                padding: '16px',
-                backgroundColor: 'var(--bg-hover)',
-                borderRadius: '8px',
-              }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  marginBottom: '12px',
-                }}
-              >
-                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>
-                  {day.is_rest ? '🛌 ' : ''} Day {day.order_position}: {day.label}
-                </h3>
-              </div>
+      {/* Days-type plan */}
+      {days && days.length > 0 && days.map((day) => <DayCard key={day.id} day={day} />)}
 
-              {day.is_rest ? (
-                <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>
-                  Rest day
-                </p>
-              ) : day.exercises.length > 0 ? (
-                <ul
-                  style={{
-                    margin: 0,
-                    paddingLeft: '20px',
-                    fontSize: '14px',
-                  }}
-                >
-                  {day.exercises.map((exercise, idx) => (
-                    <li
-                      key={idx}
-                      style={{
-                        marginBottom: '8px',
-                        color: 'var(--text)',
-                      }}
-                    >
-                      <strong>{exercise.exercise_name}</strong>
-                      {exercise.target_sets !== null && (
-                        <span> • {exercise.target_sets} sets</span>
-                      )}
-                      {exercise.target_reps && (
-                        <span> • {exercise.target_reps} reps</span>
-                      )}
-                      {exercise.target_weight !== null && (
-                        <span> • {exercise.target_weight}lbs</span>
-                      )}
-                      {exercise.target_duration_seconds !== null && (
-                        <span>
-                          {' '}
-                          • {Math.floor(exercise.target_duration_seconds / 60)}m
-                        </span>
-                      )}
-                      {exercise.notes && (
-                        <div
-                          style={{
-                            fontSize: '12px',
-                            color: 'var(--text-muted)',
-                            marginTop: '4px',
-                          }}
-                        >
-                          Note: {exercise.notes}
-                        </div>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>
-                  No exercises
-                </p>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Weeks Plan */}
+      {/* Weeks-type plan */}
       {weeks && weeks.length > 0 && (
-        <div>
-          <h2 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '16px' }}>
-            Weeks
-          </h2>
+        <>
           {weeks.map((week) => (
-            <div
-              key={week.week_number}
-              style={{
-                marginBottom: '20px',
-                padding: '16px',
-                backgroundColor: 'var(--bg-hover)',
-                borderRadius: '8px',
-              }}
-            >
-              <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: '600' }}>
+            <div key={week.week_number}>
+              <p className="section-label">
                 Week {week.resolved_week_number || week.week_number}
                 {week.mode !== 'base' && ` (${week.mode})`}
-              </h3>
-
+              </p>
               {week.days.map((day) => (
-                <div
-                  key={day.id}
-                  style={{
-                    marginBottom: '12px',
-                    paddingLeft: '16px',
-                    borderLeft: '2px solid var(--border)',
-                  }}
-                >
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      marginBottom: '8px',
-                    }}
-                  >
-                    <h4
-                      style={{
-                        margin: 0,
-                        fontSize: '14px',
-                        fontWeight: '600',
-                      }}
-                    >
-                      {day.is_rest ? '🛌 ' : ''} Day {day.order_position}:{' '}
-                      {day.label}
-                    </h4>
-                  </div>
-
-                  {day.is_rest ? (
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: '12px',
-                        color: 'var(--text-muted)',
-                      }}
-                    >
-                      Rest day
-                    </p>
-                  ) : day.exercises.length > 0 ? (
-                    <ul
-                      style={{
-                        margin: '0',
-                        paddingLeft: '20px',
-                        fontSize: '12px',
-                      }}
-                    >
-                      {day.exercises.map((exercise, idx) => (
-                        <li
-                          key={idx}
-                          style={{
-                            marginBottom: '4px',
-                            color: 'var(--text)',
-                          }}
-                        >
-                          <strong>{exercise.exercise_name}</strong>
-                          {exercise.target_sets !== null && (
-                            <span> • {exercise.target_sets} sets</span>
-                          )}
-                          {exercise.target_reps && (
-                            <span> • {exercise.target_reps} reps</span>
-                          )}
-                          {exercise.target_weight !== null && (
-                            <span> • {exercise.target_weight}lbs</span>
-                          )}
-                          {exercise.target_duration_seconds !== null && (
-                            <span>
-                              {' '}
-                              •{' '}
-                              {Math.floor(exercise.target_duration_seconds / 60)}m
-                            </span>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: '12px',
-                        color: 'var(--text-muted)',
-                      }}
-                    >
-                      No exercises
-                    </p>
-                  )}
-                </div>
+                <DayCard key={day.id} day={day} />
               ))}
             </div>
           ))}
-        </div>
+        </>
       )}
     </div>
   );

@@ -180,7 +180,8 @@ describe('SharedPlanPage', () => {
     );
 
     await waitFor(() => {
-      const banner = container.querySelector('p');
+      // The banner now lives in the plan-header card's <h2>, not a standalone <p>.
+      const banner = container.querySelector('.card h2');
       const bannerText = banner?.textContent || '';
       expect(bannerText).toContain('Shared by');
       expect(bannerText).toContain('john_doe');

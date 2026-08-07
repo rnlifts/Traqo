@@ -5651,3 +5651,37 @@ Files, in order:
   user's `GET /shared-with-me` returns `[]` — no leakage. Test data cleaned up.
 
 Not pushed; production untouched.
+
+## 2026-08-07 — SharedPlanPage visual consistency fix
+
+Owner report: the shared-plan viewing page (`/shared/:token`) looked visually
+inconsistent with the rest of the app compared to viewing/starting an own plan.
+Root cause: `SharedPlanPage.tsx` was originally built (Phase 5a) with ad-hoc inline
+styles (`backgroundColor: 'var(--bg-hover)'` boxes with manual `borderRadius`) instead of
+the real CSS classes used everywhere else — `.card`, `.section-label`, `.exercise-row`,
+`.field-cell`/`.cell-label`/`.cell-static-value` (the last three normally power the
+set-logging inputs in `ActiveWorkout.tsx`, reused here purely for their visual language
+in a read-only context).
+
+Rewrote the page to match `SessionSetupPage.tsx`'s established pattern exactly: a `.card`
+header (small `<h2>` line + big `<h1>` plan name, same structure SessionSetupPage uses for
+plan name + day label), `.section-label` for the unit-count line, and each day rendered as
+its own `.card` with exercises as `.exercise-row` blocks using labeled `.field-cell`s for
+sets/reps/weight/duration/notes — instead of the old bespoke `<ul>`/`<li>` list. Confirmed
+live via DOM structure inspection that the resulting hierarchy now matches
+`SessionSetupPage`'s `.card` → `.section-label` pattern precisely.
+
+One existing test (`renders permission banner...`) queried the banner text via
+`container.querySelector('p')`, which broke since the banner text moved from a standalone
+`<p>` into the new card's `<h2>` — fixed the selector, no behavior change.
+
+**Verified**: full frontend suite 223/223 (no count change — one test's selector fixed,
+no tests added/removed since this was a pure visual/markup refactor, not new behavior),
+`tsc -b` clean, live browser reload of a real shared plan confirming the new `.card`/
+`.exercise-row`/`.field-cell` structure renders correctly.
+
+Noted but not fixed (pre-existing, unrelated, already flagged once before): the "NULL
+WEEKS"/"NULL DAYS" cosmetic bug when a plan's `total_units` is unset — still present,
+low priority.
+
+Not pushed; production untouched.
