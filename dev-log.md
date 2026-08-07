@@ -5587,3 +5587,67 @@ files had been built around the old, correct-at-the-time assumption that `anyone
   check will need re-running against production whenever this ships there.
 
 Not pushed; production untouched.
+
+## 2026-08-07 — "Shared with me" section on the Plans page
+
+New requirement, worked through requirements-first then one file at a time (per the
+owner's request to watch each change land), plus a test for every file including the
+thin API-wrapper layer this session had previously treated as conventionally untested.
+
+Design decision locked in by the owner's own phrasing ("granted access with username"):
+**grant-based, not mode-based** — a plan shows up here because of an explicit
+`plan_share_grants` row naming this user, regardless of whether the parent share's mode
+is `restricted` or `anyone`.
+
+Files, in order:
+1. `sharing/domain/interfaces/plan_share_repository.py` — new abstract method
+   `list_active_grants_for_user(user_id) -> list[tuple[PlanShareGrant, PlanShare]]`.
+2. `sharing/infrastructure/repositories/plan_share_repository_impl.py` — single JOIN
+   query across `plan_share_grants` + `plan_shares` (both sharing-module tables — no
+   cross-module boundary crossed here), excluding revoked shares without a per-row query.
+3. `sharing/application/use_cases/list_shared_with_me.py` — thin, delegates straight to
+   the repository (matches every other use case in this module).
+4. `sharing/presentation/schemas.py` (`SharedWithMeEntry`) + `routes.py`
+   (`GET /api/shared-with-me`, registered as its own router — deliberately NOT nested
+   under `/api/shared/`, since that prefix's `{token}` path param would otherwise swallow
+   any sub-path as a literal token value) + `app.py` registration. The route does the
+   plan-name/owner-username enrichment loop, same established pattern as the existing
+   grants-list-with-usernames response in `create_share`/`get_share`.
+5. `tests/integration/test_shared_with_me_routes.py` (new, 8 tests) — grant appears with
+   correct fields, empty list when none, revoked share disappears, removed grant
+   disappears, another user's grant never leaks, appears regardless of share mode,
+   multiple shared plans all appear, deleted plan disappears (cascade). Plus 5 new tests
+   directly in `test_plan_shares_repository.py` for the repository method itself.
+6. `api/sharingApi.ts` (`getSharedWithMe`) + a new `sharingApi.test.ts` (3 tests) — even
+   though thin API wrappers haven't had dedicated tests elsewhere in this session, the
+   owner asked for one here; used the same real-adapter-override technique as
+   `client.test.ts` to prove the actual request shape and that it uses the
+   interceptor-bearing `client` (this is a private, auth-required list, never anonymous).
+7. `features/workoutPlans/PlanList.tsx` — new "Shared with me" section below "Saved
+   plans," loaded in parallel with the owner's own plans, with its own quiet
+   `console.error` on failure so a problem here can never block the main plans list from
+   rendering. Clicking a card navigates to the existing `/shared/{token}` page — no new
+   viewing UI. 5 new tests in `PlanList.test.tsx`.
+
+**Verified:**
+- Backend: 314 total (301 baseline + 5 new repository tests + 8 new route tests), stable
+  across repeated runs, same 4 pre-existing/unrelated failures. Negative-controlled both
+  the leakage guard and the revoked-share filter on the new repository method —
+  deliberately broke the query, confirmed exactly those tests failed, restored, confirmed
+  clean.
+- Frontend: 223/223, `tsc -b` clean.
+- **Live end-to-end verification surfaced one real environment issue, not a code bug**:
+  the running dev backend had been started long before this session's route/app.py
+  changes and was never restarted, so `GET /api/shared-with-me` 404'd (FastAPI's own
+  "route not found", not the app's) purely because the server was serving stale code.
+  Restarted it, confirmed the exact same request then returned `200` with correct data.
+  **Lesson for next time**: after backend route/app.py changes, restart the dev server
+  before live-verifying — `uvicorn` without `--reload` (how this session's servers were
+  started) never picks up source changes on its own.
+- With a fresh server: registered a real trainer + client, granted the client's username
+  `log` access, logged in as the client in the browser — "Shared with me" correctly showed
+  the plan with the owner's username and permission tier; clicked it, landed on the exact
+  correct `/shared/{token}` page with real content. Confirmed a genuinely unrelated third
+  user's `GET /shared-with-me` returns `[]` — no leakage. Test data cleaned up.
+
+Not pushed; production untouched.

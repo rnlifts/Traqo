@@ -40,6 +40,7 @@ from src.modules.sharing.application.use_cases.add_share_grant import (
 )
 from src.modules.sharing.application.use_cases.remove_share_grant import RemoveShareGrant
 from src.modules.sharing.application.use_cases.resolve_share_access import ResolveShareAccess
+from src.modules.sharing.application.use_cases.list_shared_with_me import ListSharedWithMe
 from src.modules.sharing.domain.exceptions import (
     ShareNotFoundError,
     ShareAccessDeniedError,
@@ -59,10 +60,14 @@ from .schemas import (
     AddSetViaShareRequest,
     AddSetViaShareResponse,
     FinishWorkoutViaShareResponse,
+    SharedWithMeEntry,
 )
 
 sharing_router = APIRouter(prefix="/api/workout-plans/{plan_id}/share", tags=["sharing"])
 shared_plan_router = APIRouter(prefix="/api/shared", tags=["sharing"])
+# Separate top-level path, not nested under /api/shared/ - that prefix's {token}
+# path parameter would otherwise swallow any sub-path here as a literal token value.
+shared_with_me_router = APIRouter(prefix="/api/shared-with-me", tags=["sharing"])
 
 
 def _check_plan_ownership(plan_id: int, user_id: int, db: Session):
@@ -767,3 +772,40 @@ async def finish_workout_via_share(
     return schemas.FinishWorkoutViaShareResponse(
         message="Workout completed",
     )
+
+
+@shared_with_me_router.get("", response_model=list[SharedWithMeEntry])
+async def list_shared_with_me(
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """List every plan shared with the current user via an explicit username grant.
+
+    Grant-based, not mode-based - a plan appears here because someone specifically
+    granted this user access, regardless of the share's overall mode. Revoked
+    shares (and grants on them) are excluded by the repository query. If the
+    underlying plan was deleted (share cascades with it), that grant simply won't
+    appear here at all - not treated as an error case.
+    """
+    share_repo = PlanShareRepositoryImpl(db)
+    plan_repo = WorkoutPlanRepositoryImpl(db)
+    use_case = ListSharedWithMe(share_repo)
+
+    pairs = use_case.execute(user_id)
+
+    entries = []
+    for grant, share in pairs:
+        plan = plan_repo.get_by_id(share.workout_plan_id)
+        if not plan:
+            continue
+        owner = db.get(UserModel, plan.user_id)
+        entries.append(
+            SharedWithMeEntry(
+                plan_id=plan.id,
+                plan_name=plan.name,
+                token=share.token,
+                owner_username=owner.username if owner else "unknown",
+                permission=grant.permission,
+            )
+        )
+    return entries

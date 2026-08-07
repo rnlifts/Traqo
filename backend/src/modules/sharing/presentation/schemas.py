@@ -90,3 +90,12 @@ class AddSetViaShareResponse(BaseModel):
 class FinishWorkoutViaShareResponse(BaseModel):
     """Response for finishing a workout via share."""
     message: str
+
+
+class SharedWithMeEntry(BaseModel):
+    """One entry in the current user's 'Shared with me' list."""
+    plan_id: int
+    plan_name: str
+    token: str
+    owner_username: str
+    permission: str  # 'view', 'log', or 'edit' - this user's own granted tier

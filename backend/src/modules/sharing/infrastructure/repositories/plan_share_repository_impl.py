@@ -106,3 +106,18 @@ class PlanShareRepositoryImpl(PlanShareRepository):
             .delete()
         )
         self.session.commit()
+
+    def list_active_grants_for_user(self, user_id: int) -> list[tuple[PlanShareGrant, PlanShare]]:
+        # Single join across the two sharing-module tables - excludes revoked shares
+        # without a second query per grant.
+        rows = (
+            self.session.query(PlanShareGrantModel, PlanShareModel)
+            .join(PlanShareModel, PlanShareGrantModel.plan_share_id == PlanShareModel.id)
+            .filter(
+                PlanShareGrantModel.user_id == user_id,
+                PlanShareModel.revoked_at.is_(None),
+            )
+            .order_by(PlanShareGrantModel.created_at.desc())
+            .all()
+        )
+        return [(grant_model.to_domain(), share_model.to_domain()) for grant_model, share_model in rows]

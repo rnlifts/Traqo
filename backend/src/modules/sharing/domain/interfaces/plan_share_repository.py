@@ -37,3 +37,11 @@ class PlanShareRepository(ABC):
     @abstractmethod
     def remove_grant(self, plan_share_id: int, user_id: int) -> None:
         """Remove a user's grant. No-op if absent."""
+
+    @abstractmethod
+    def list_active_grants_for_user(self, user_id: int) -> list[tuple[PlanShareGrant, PlanShare]]:
+        """All (grant, share) pairs where this user has an explicit grant, excluding
+        shares that have been revoked. This is the "Shared with me" query - it is
+        grant-based, not mode-based: a grant counts regardless of whether the
+        share's overall mode is 'restricted' or 'anyone'.
+        """

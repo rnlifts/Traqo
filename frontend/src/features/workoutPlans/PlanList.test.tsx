@@ -3,8 +3,16 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import PlanList from './PlanList';
 import * as workoutPlansApi from '../../api/workoutPlansApi';
+import * as sharingApi from '../../api/sharingApi';
 
 vi.mock('../../api/workoutPlansApi');
+vi.mock('../../api/sharingApi');
+
+const mockNavigate = vi.fn();
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual('react-router-dom');
+  return { ...actual, useNavigate: () => mockNavigate };
+});
 vi.mock('../../features/sharing/ShareDialog', () => ({
   ShareDialog: ({ isOpen, onClose, planId }: any) =>
     isOpen ? (
@@ -20,9 +28,16 @@ const mockPlans = [
   { id: 2, name: 'Workout B', unit_type: 'weeks' as const, total_units: 8, user_id: 1, created_at: '2026-08-01T00:00:00Z', updated_at: '2026-08-01T00:00:00Z' },
 ];
 
+const mockSharedWithMe = [
+  { plan_id: 10, plan_name: 'Coach Plan', token: 'tok-abc', owner_username: 'coach_sam', permission: 'log' as const },
+];
+
 describe('PlanList', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default: no shared-with-me plans, so existing tests (which don't care about
+    // this section) don't need to mock it individually.
+    vi.mocked(sharingApi.sharingApi.getSharedWithMe).mockResolvedValue([]);
   });
 
   it('renders page title and action cards during loading state', async () => {
@@ -118,5 +133,91 @@ describe('PlanList', () => {
       expect(dialog).toBeInTheDocument();
       expect(dialog).toHaveAttribute('data-plan-id', '1');
     });
+  });
+
+  it('renders a "Shared with me" section header', async () => {
+    vi.mocked(workoutPlansApi.listWorkoutPlans).mockResolvedValue([]);
+
+    render(
+      <BrowserRouter>
+        <PlanList />
+      </BrowserRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Shared with me')).toBeInTheDocument();
+    });
+  });
+
+  it('renders shared plans with owner username and permission tier', async () => {
+    vi.mocked(workoutPlansApi.listWorkoutPlans).mockResolvedValue([]);
+    vi.mocked(sharingApi.sharingApi.getSharedWithMe).mockResolvedValue(mockSharedWithMe);
+
+    render(
+      <BrowserRouter>
+        <PlanList />
+      </BrowserRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Coach Plan')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText(/coach_sam/)).toBeInTheDocument();
+    expect(screen.getByText(/log/)).toBeInTheDocument();
+  });
+
+  it('renders empty-state note when nothing has been shared with the user', async () => {
+    vi.mocked(workoutPlansApi.listWorkoutPlans).mockResolvedValue([]);
+    vi.mocked(sharingApi.sharingApi.getSharedWithMe).mockResolvedValue([]);
+
+    render(
+      <BrowserRouter>
+        <PlanList />
+      </BrowserRouter>
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Nothing shared with you yet — plans someone grants you access to will show up here.')
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('navigates to /shared/{token} when a shared-plan card is clicked', async () => {
+    vi.mocked(workoutPlansApi.listWorkoutPlans).mockResolvedValue([]);
+    vi.mocked(sharingApi.sharingApi.getSharedWithMe).mockResolvedValue(mockSharedWithMe);
+
+    render(
+      <BrowserRouter>
+        <PlanList />
+      </BrowserRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Coach Plan')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Coach Plan'));
+
+    expect(mockNavigate).toHaveBeenCalledWith('/shared/tok-abc');
+  });
+
+  it('does not let a "Shared with me" load failure block the main plans list', async () => {
+    vi.mocked(workoutPlansApi.listWorkoutPlans).mockResolvedValue(mockPlans);
+    vi.mocked(sharingApi.sharingApi.getSharedWithMe).mockRejectedValue(new Error('network error'));
+
+    render(
+      <BrowserRouter>
+        <PlanList />
+      </BrowserRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Workout A')).toBeInTheDocument();
+    });
+
+    // The main "Saved plans" list must render fine despite the shared-with-me failure.
+    expect(screen.getByText('Workout B')).toBeInTheDocument();
   });
 });

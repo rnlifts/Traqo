@@ -189,3 +189,79 @@ class TestSessionAttributionColumns:
         tokens = {generate_share_token() for _ in range(50)}
         assert len(tokens) == 50
         assert all(len(t) >= 40 for t in tokens)
+
+
+class TestListActiveGrantsForUser:
+    """Tests for the 'Shared with me' repository query."""
+
+    def test_returns_grant_and_share_for_granted_user(self, db_session, owner_and_plan):
+        repo = PlanShareRepositoryImpl(db_session)
+        share = repo.create(
+            PlanShare(workout_plan_id=owner_and_plan["plan_id"], token=generate_share_token())
+        )
+        rid = owner_and_plan["recipient_id"]
+        repo.add_grant(PlanShareGrant(plan_share_id=share.id, user_id=rid, permission="edit"))
+
+        results = repo.list_active_grants_for_user(rid)
+
+        assert len(results) == 1
+        grant, returned_share = results[0]
+        assert grant.user_id == rid
+        assert grant.permission == "edit"
+        assert returned_share.id == share.id
+        assert returned_share.workout_plan_id == owner_and_plan["plan_id"]
+
+    def test_excludes_grants_on_revoked_shares(self, db_session, owner_and_plan):
+        repo = PlanShareRepositoryImpl(db_session)
+        share = repo.create(
+            PlanShare(workout_plan_id=owner_and_plan["plan_id"], token=generate_share_token())
+        )
+        rid = owner_and_plan["recipient_id"]
+        repo.add_grant(PlanShareGrant(plan_share_id=share.id, user_id=rid, permission="view"))
+
+        # Revoke the share - the grant row still exists, but must no longer show up.
+        share.revoked_at = datetime.utcnow()
+        repo.update(share)
+
+        assert repo.list_active_grants_for_user(rid) == []
+
+    def test_never_returns_another_users_grants(self, db_session, owner_and_plan):
+        repo = PlanShareRepositoryImpl(db_session)
+        share = repo.create(
+            PlanShare(workout_plan_id=owner_and_plan["plan_id"], token=generate_share_token())
+        )
+        rid = owner_and_plan["recipient_id"]
+        repo.add_grant(PlanShareGrant(plan_share_id=share.id, user_id=rid, permission="view"))
+
+        # A different, ungranted user asking for their own "shared with me" list
+        # must get nothing - not this grant, not any hint it exists.
+        stranger = UserModel(username="stranger", display_name="Stranger", password_hash="x")
+        db_session.add(stranger)
+        db_session.commit()
+
+        assert repo.list_active_grants_for_user(stranger.id) == []
+        # Sanity: the original recipient's own query is unaffected by the stranger existing.
+        assert len(repo.list_active_grants_for_user(rid)) == 1
+
+    def test_returns_grants_across_multiple_plans(self, db_session, owner_and_plan):
+        repo = PlanShareRepositoryImpl(db_session)
+        rid = owner_and_plan["recipient_id"]
+
+        share1 = repo.create(
+            PlanShare(workout_plan_id=owner_and_plan["plan_id"], token=generate_share_token())
+        )
+        repo.add_grant(PlanShareGrant(plan_share_id=share1.id, user_id=rid, permission="view"))
+
+        second_plan = WorkoutPlanModel(user_id=owner_and_plan["owner_id"], name="Second Shared Plan")
+        db_session.add(second_plan)
+        db_session.commit()
+        share2 = repo.create(PlanShare(workout_plan_id=second_plan.id, token=generate_share_token()))
+        repo.add_grant(PlanShareGrant(plan_share_id=share2.id, user_id=rid, permission="log"))
+
+        results = repo.list_active_grants_for_user(rid)
+        plan_ids = {share.workout_plan_id for _, share in results}
+        assert plan_ids == {owner_and_plan["plan_id"], second_plan.id}
+
+    def test_returns_empty_list_when_no_grants(self, db_session, owner_and_plan):
+        repo = PlanShareRepositoryImpl(db_session)
+        assert repo.list_active_grants_for_user(owner_and_plan["recipient_id"]) == []

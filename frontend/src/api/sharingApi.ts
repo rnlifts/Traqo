@@ -17,6 +17,14 @@ export interface WorkoutShare {
   grants: ShareGrant[];
 }
 
+export interface SharedWithMeEntry {
+  plan_id: number;
+  plan_name: string;
+  token: string;
+  owner_username: string;
+  permission: 'view' | 'log' | 'edit';
+}
+
 export interface SharedPlanExercise {
   exercise_id: number;
   exercise_name: string;
@@ -124,6 +132,14 @@ export const sharingApi = {
       `/workout-plans/${planId}/share/revoke`,
       {}
     );
+    return response.data;
+  },
+
+  // Requires auth (like the other owner-facing functions above) - uses the normal
+  // interceptor-bearing client, not publicClient. This is a private "what's shared
+  // with me" list, never reachable anonymously.
+  async getSharedWithMe(): Promise<SharedWithMeEntry[]> {
+    const response = await client.get<SharedWithMeEntry[]>('/shared-with-me');
     return response.data;
   },
 

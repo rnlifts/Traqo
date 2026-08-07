@@ -5,6 +5,8 @@ import {
   deleteWorkoutPlan,
 } from "../../api/workoutPlansApi";
 import type { WorkoutPlan } from "../../api/workoutPlansApi";
+import { sharingApi } from "../../api/sharingApi";
+import type { SharedWithMeEntry } from "../../api/sharingApi";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { useToast } from "../../components/Toast";
 import { PlanActionCards } from "../../components/PlanActionCards";
@@ -26,11 +28,14 @@ export default function PlanList() {
   }>({ isOpen: false, planId: null });
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
+  const [sharedWithMe, setSharedWithMe] = useState<SharedWithMeEntry[]>([]);
+  const [sharedWithMeLoading, setSharedWithMeLoading] = useState(true);
   const navigate = useNavigate();
   const { Toast, showToast } = useToast();
 
   useEffect(() => {
     loadPlans();
+    loadSharedWithMe();
   }, []);
 
   async function loadPlans() {
@@ -44,6 +49,20 @@ export default function PlanList() {
       );
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadSharedWithMe() {
+    try {
+      setSharedWithMeLoading(true);
+      const data = await sharingApi.getSharedWithMe();
+      setSharedWithMe(data);
+    } catch (err) {
+      // Secondary section - a failure here shouldn't block the main plans list
+      // or take over the page's error banner.
+      console.error("Error loading shared-with-me plans:", err);
+    } finally {
+      setSharedWithMeLoading(false);
     }
   }
 
@@ -143,6 +162,31 @@ export default function PlanList() {
         </div>
       ) : (
         <p className="empty-note">Nothing saved yet — plans you create will show up here.</p>
+      )}
+
+      <p className="section-label">Shared with me</p>
+      {sharedWithMeLoading ? (
+        <div className="loading">Loading shared plans...</div>
+      ) : sharedWithMe.length > 0 ? (
+        <div className="plan-grid">
+          {sharedWithMe.map((entry) => (
+            <div
+              key={entry.token}
+              className="plan-card"
+              onClick={() => navigate(`/shared/${entry.token}`)}
+              style={{ cursor: "pointer" }}
+            >
+              <div className="name">{entry.plan_name}</div>
+              <div className="meta">
+                Shared by @{entry.owner_username} — {entry.permission}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="empty-note">
+          Nothing shared with you yet — plans someone grants you access to will show up here.
+        </p>
       )}
 
       <ConfirmDialog
