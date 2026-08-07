@@ -291,7 +291,7 @@ class TestShareUpdate:
         assert data["link_permission"] == "edit"
 
     def test_update_both(self, client, owner_plan, owner_auth_headers):
-        """PUT /share updates both mode and link_permission."""
+        """PUT /share updates both mode and link_permission (valid combination)."""
         # Create
         client.post(
             f"/api/workout-plans/{owner_plan['id']}/share",
@@ -299,16 +299,98 @@ class TestShareUpdate:
             json={},
         )
 
-        # Update
+        # Update - restricted mode may carry any link_permission value (it's simply
+        # unused while restricted; only 'anyone' mode restricts it to 'view').
+        resp = client.put(
+            f"/api/workout-plans/{owner_plan['id']}/share",
+            headers=owner_auth_headers,
+            json={"mode": "restricted", "link_permission": "log"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["mode"] == "restricted"
+        assert data["link_permission"] == "log"
+
+    def test_update_anyone_mode_rejects_log_permission(self, client, owner_plan, owner_auth_headers):
+        """PUT /share with mode='anyone' + link_permission='log' is rejected (422).
+
+        A public link may only ever grant view access - log/edit access requires a
+        per-username grant to a specific, authenticated person instead.
+        """
+        client.post(
+            f"/api/workout-plans/{owner_plan['id']}/share",
+            headers=owner_auth_headers,
+            json={},
+        )
         resp = client.put(
             f"/api/workout-plans/{owner_plan['id']}/share",
             headers=owner_auth_headers,
             json={"mode": "anyone", "link_permission": "log"},
         )
+        assert resp.status_code == 422
+
+    def test_update_anyone_mode_rejects_edit_permission(self, client, owner_plan, owner_auth_headers):
+        """PUT /share with mode='anyone' + link_permission='edit' is rejected (422)."""
+        client.post(
+            f"/api/workout-plans/{owner_plan['id']}/share",
+            headers=owner_auth_headers,
+            json={},
+        )
+        resp = client.put(
+            f"/api/workout-plans/{owner_plan['id']}/share",
+            headers=owner_auth_headers,
+            json={"mode": "anyone", "link_permission": "edit"},
+        )
+        assert resp.status_code == 422
+
+    def test_update_anyone_mode_allows_view_permission(self, client, owner_plan, owner_auth_headers):
+        """PUT /share with mode='anyone' + link_permission='view' succeeds (200)."""
+        client.post(
+            f"/api/workout-plans/{owner_plan['id']}/share",
+            headers=owner_auth_headers,
+            json={},
+        )
+        resp = client.put(
+            f"/api/workout-plans/{owner_plan['id']}/share",
+            headers=owner_auth_headers,
+            json={"mode": "anyone", "link_permission": "view"},
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data["mode"] == "anyone"
-        assert data["link_permission"] == "log"
+        assert data["link_permission"] == "view"
+
+    def test_update_mode_alone_rejected_if_leftover_permission_invalid(
+        self, client, owner_plan, owner_auth_headers
+    ):
+        """Switching mode='anyone' alone is rejected if link_permission is already log/edit.
+
+        The validation must consider the RESULTING combination, not just the field(s)
+        present in this specific request - a prior request may have already set
+        link_permission='log' while mode was still 'restricted' (a harmless, allowed
+        combination at the time), and only this later request is what actually
+        produces the disallowed 'anyone' + 'log' combination.
+        """
+        client.post(
+            f"/api/workout-plans/{owner_plan['id']}/share",
+            headers=owner_auth_headers,
+            json={},
+        )
+        # First set link_permission='log' while still restricted - allowed, unused.
+        setup_resp = client.put(
+            f"/api/workout-plans/{owner_plan['id']}/share",
+            headers=owner_auth_headers,
+            json={"link_permission": "log"},
+        )
+        assert setup_resp.status_code == 200
+
+        # Now switch mode alone - the resulting combination (anyone + log) must be rejected.
+        resp = client.put(
+            f"/api/workout-plans/{owner_plan['id']}/share",
+            headers=owner_auth_headers,
+            json={"mode": "anyone"},
+        )
+        assert resp.status_code == 422
 
     def test_update_invalid_mode(self, client, owner_plan, owner_auth_headers):
         """PUT /share with invalid mode returns 422."""
@@ -708,15 +790,16 @@ class TestRoundTripWorkflow:
         assert get_resp.status_code == 200
         assert get_resp.json()["token"] == token_1
 
-        # 3. Update mode
+        # 3. Update mode - 'anyone' mode may only carry 'view' permission (log/edit
+        # requires a per-username grant instead, added in step 4 below).
         update_resp = client.put(
             f"/api/workout-plans/{plan_id}/share",
             headers=owner_auth_headers,
-            json={"mode": "anyone", "link_permission": "edit"},
+            json={"mode": "anyone", "link_permission": "view"},
         )
         assert update_resp.status_code == 200
         assert update_resp.json()["mode"] == "anyone"
-        assert update_resp.json()["link_permission"] == "edit"
+        assert update_resp.json()["link_permission"] == "view"
 
         # 4. Add a grant
         grant_resp = client.post(

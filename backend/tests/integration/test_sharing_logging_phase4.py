@@ -167,19 +167,25 @@ def owner_plan_with_exercise(test_session_factory, owner_user):
 
 @pytest.fixture
 def share_log_permission_anyone(test_session_factory, owner_plan_with_exercise):
-    """Create an 'anyone' mode share with 'log' permission."""
+    """Create an 'anyone' mode share with 'log' permission.
+
+    Built directly via the repository rather than UpdateShare.execute(), because
+    that use case now rejects mode='anyone' combined with link_permission='log'
+    (a public link may only ever grant 'view' - see InvalidShareConfigurationError).
+    This fixture intentionally bypasses that rule: it exists to keep testing that
+    the underlying logging-via-share mechanics (attribution, stats-exclusion, etc.)
+    still work correctly for this permission level, even though a real owner can no
+    longer configure a share into this state through the normal API. If anonymous
+    log access is ever re-enabled, these tests are already in place.
+    """
     session = test_session_factory()
     share_repo = PlanShareRepositoryImpl(session)
     use_case = CreateOrUnrevokeShare(share_repo)
     share = use_case.execute(owner_plan_with_exercise["plan_id"])
 
-    # Update to 'anyone' mode with 'log' permission
-    update_use_case = UpdateShare(share_repo)
-    share = update_use_case.execute(
-        owner_plan_with_exercise["plan_id"],
-        mode="anyone",
-        link_permission="log",
-    )
+    share.mode = "anyone"
+    share.link_permission = "log"
+    share = share_repo.update(share)
     session.close()
     return {"token": share.token, "share_id": share.id}
 
@@ -371,21 +377,25 @@ class TestAddSetViaShare:
         session.commit()
         session.close()
 
-        # Create share for plan 2
+        # Create share for plan 2 - built directly via the repository (bypassing
+        # UpdateShare.execute()), same reason as the share_log_permission_anyone
+        # fixture above: mode='anyone' + link_permission='log' is no longer
+        # configurable through the normal API, but this test still needs that
+        # state to verify session/share mismatch is correctly rejected.
         share_repo = PlanShareRepositoryImpl(test_session_factory())
         use_case = CreateOrUnrevokeShare(share_repo)
         share2 = use_case.execute(plan2_id)
-        update_use_case = UpdateShare(share_repo)
-        share2 = update_use_case.execute(plan2_id, mode="anyone", link_permission="log")
+        share2.mode = "anyone"
+        share2.link_permission = "log"
+        share2 = share_repo.update(share2)
 
         # Create share for plan 1
         share_repo1 = PlanShareRepositoryImpl(test_session_factory())
         use_case1 = CreateOrUnrevokeShare(share_repo1)
         share1 = use_case1.execute(owner_plan_with_exercise["plan_id"])
-        update_use_case1 = UpdateShare(share_repo1)
-        share1 = update_use_case1.execute(
-            owner_plan_with_exercise["plan_id"], mode="anyone", link_permission="log"
-        )
+        share1.mode = "anyone"
+        share1.link_permission = "log"
+        share1 = share_repo1.update(share1)
 
         # Start session with share1
         start_resp = client.post(

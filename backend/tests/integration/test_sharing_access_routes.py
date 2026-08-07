@@ -305,41 +305,28 @@ class TestSharedPlanAccessAnonymous:
         assert "plan" in data
         assert "days" in data or "weeks" in data
 
-    def test_anonymous_access_anyone_mode_log(self, client, owner_plan, owner_auth_headers, plan_share):
-        """Anonymous access to anyone-mode share with log permission returns 200."""
-        share = plan_share
+    def test_cannot_configure_anyone_mode_with_log_permission(self, client, owner_plan, owner_auth_headers, plan_share):
+        """A public 'anyone' link can no longer be configured with log permission (422).
 
-        # Update to mode='anyone', link_permission='log'
+        Anonymous log access was deliberately disabled - see
+        UpdateShare.execute()'s InvalidShareConfigurationError check. Log/edit access
+        now requires a per-username grant to a specific, authenticated person.
+        """
         update_resp = client.put(
             f"/api/workout-plans/{owner_plan['id']}/share",
             headers=owner_auth_headers,
             json={"mode": "anyone", "link_permission": "log"},
         )
-        assert update_resp.status_code == 200
+        assert update_resp.status_code == 422
 
-        # Access anonymously
-        resp = client.get(f"/api/shared/{share['token']}")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["permission"] == "log"
-
-    def test_anonymous_access_anyone_mode_edit(self, client, owner_plan, owner_auth_headers, plan_share):
-        """Anonymous access to anyone-mode share with edit permission returns 200."""
-        share = plan_share
-
-        # Update to mode='anyone', link_permission='edit'
+    def test_cannot_configure_anyone_mode_with_edit_permission(self, client, owner_plan, owner_auth_headers, plan_share):
+        """A public 'anyone' link can no longer be configured with edit permission (422)."""
         update_resp = client.put(
             f"/api/workout-plans/{owner_plan['id']}/share",
             headers=owner_auth_headers,
             json={"mode": "anyone", "link_permission": "edit"},
         )
-        assert update_resp.status_code == 200
-
-        # Access anonymously
-        resp = client.get(f"/api/shared/{share['token']}")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["permission"] == "edit"
+        assert update_resp.status_code == 422
 
     def test_anonymous_access_restricted_mode_returns_403(self, client, owner_plan, plan_share):
         """Anonymous access to restricted-mode share returns 403, NOT 401.
@@ -440,17 +427,27 @@ class TestSharedPlanAccessGrantTiers:
         data = resp.json()
         assert data["permission"] == "log"
 
-    def test_link_tier_stronger_than_grant_tier(self, client, owner_plan, owner_auth_headers, granted_user, plan_share):
-        """If link tier > grant tier, use link tier (via permission_at_least)."""
-        share = plan_share
+    def test_link_tier_stronger_than_grant_tier(
+        self, client, owner_plan, owner_auth_headers, granted_user, plan_share, test_session_factory
+    ):
+        """If link tier > grant tier, use link tier (via permission_at_least).
 
-        # Set to anyone mode with 'edit' link_permission
-        update_resp = client.put(
-            f"/api/workout-plans/{owner_plan['id']}/share",
-            headers=owner_auth_headers,
-            json={"mode": "anyone", "link_permission": "edit"},
-        )
-        assert update_resp.status_code == 200
+        mode='anyone' with link_permission='edit' can no longer be reached through
+        the normal PUT /share endpoint (UpdateShare now rejects it - a public link
+        may only ever grant 'view'). This scenario is constructed directly via the
+        repository instead, to keep independently verifying that
+        ResolveShareAccess's merge logic is still correct for it - e.g. against
+        rows that predate this rule, or if a future feature reintroduces a
+        stronger link tier.
+        """
+        share = plan_share
+        session = test_session_factory()
+        share_repo = PlanShareRepositoryImpl(session)
+        share_entity = share_repo.get_by_plan(owner_plan["id"])
+        share_entity.mode = "anyone"
+        share_entity.link_permission = "edit"
+        share_repo.update(share_entity)
+        session.close()
 
         # Grant 'log' to granted_user (weaker than 'edit')
         grant_resp = client.post(
@@ -468,17 +465,23 @@ class TestSharedPlanAccessGrantTiers:
         data = resp.json()
         assert data["permission"] == "edit"
 
-    def test_grant_and_link_same_tier(self, client, owner_plan, owner_auth_headers, granted_user, plan_share):
-        """If grant tier == link tier, use that tier."""
-        share = plan_share
+    def test_grant_and_link_same_tier(
+        self, client, owner_plan, owner_auth_headers, granted_user, plan_share, test_session_factory
+    ):
+        """If grant tier == link tier, use that tier.
 
-        # Set to anyone mode with 'log' link_permission
-        update_resp = client.put(
-            f"/api/workout-plans/{owner_plan['id']}/share",
-            headers=owner_auth_headers,
-            json={"mode": "anyone", "link_permission": "log"},
-        )
-        assert update_resp.status_code == 200
+        Constructed directly via the repository (see
+        test_link_tier_stronger_than_grant_tier above) since mode='anyone' with
+        link_permission='log' can no longer be reached through PUT /share.
+        """
+        share = plan_share
+        session = test_session_factory()
+        share_repo = PlanShareRepositoryImpl(session)
+        share_entity = share_repo.get_by_plan(owner_plan["id"])
+        share_entity.mode = "anyone"
+        share_entity.link_permission = "log"
+        share_repo.update(share_entity)
+        session.close()
 
         # Grant 'log' to granted_user (same)
         grant_resp = client.post(

@@ -40,7 +40,11 @@ from src.modules.sharing.application.use_cases.add_share_grant import (
 )
 from src.modules.sharing.application.use_cases.remove_share_grant import RemoveShareGrant
 from src.modules.sharing.application.use_cases.resolve_share_access import ResolveShareAccess
-from src.modules.sharing.domain.exceptions import ShareNotFoundError, ShareAccessDeniedError
+from src.modules.sharing.domain.exceptions import (
+    ShareNotFoundError,
+    ShareAccessDeniedError,
+    InvalidShareConfigurationError,
+)
 from . import schemas
 from .schemas import (
     CreateShareRequest,
@@ -200,6 +204,11 @@ async def update_share(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="This plan has no share yet",
+        )
+    except InvalidShareConfigurationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
         )
 
     # Get grants

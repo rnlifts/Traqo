@@ -128,35 +128,71 @@ describe('ShareDialog', () => {
     fireEvent.click(anyoneRadio);
 
     await waitFor(() => {
+      // A public "anyone" link may only ever grant view access, so switching to
+      // it always resets link_permission to 'view' in the same request.
       expect(sharingApi.sharingApi.updateShare).toHaveBeenCalledWith(1, {
         mode: 'anyone',
+        link_permission: 'view',
       });
     });
   });
 
-  it('shows link-permission picker only in "anyone" mode and updates on change', async () => {
-    const updatedShare = {
+  it('shows a view-only note (not a permission picker) in "anyone" mode', async () => {
+    // Regression: a public "anyone" link may only ever grant view access (log/edit
+    // requires a per-username grant instead) - there is no picker for this anymore,
+    // just an explanatory note.
+    const anyoneShare = {
       ...mockShare,
       mode: 'anyone' as const,
-      link_permission: 'log' as const,
+      link_permission: 'view' as const,
     };
-    vi.mocked(sharingApi.sharingApi.getShare).mockResolvedValue(updatedShare);
-    vi.mocked(sharingApi.sharingApi.updateShare).mockResolvedValue(updatedShare);
+    vi.mocked(sharingApi.sharingApi.getShare).mockResolvedValue(anyoneShare);
 
     render(
       <ShareDialog isOpen={true} onClose={vi.fn()} planId={1} />
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Permission level')).toBeInTheDocument();
-      expect(screen.getByLabelText('Log')).toBeInTheDocument();
+      expect(screen.getByText(/Anyone with this link can/i)).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByLabelText('Edit'));
+    expect(screen.queryByText('Permission level')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Log')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Edit')).not.toBeInTheDocument();
+  });
+
+  it('switching to "anyone" mode resets link_permission to "view" in the same request', async () => {
+    // Regression: if link_permission was previously 'log'/'edit' (from before this
+    // rule existed, or from a prior restricted-mode grant default), switching mode
+    // to "anyone" must reset it to 'view' in the same request - otherwise the
+    // backend rejects mode='anyone' combined with a leftover log/edit tier.
+    const restrictedShare = {
+      ...mockShare,
+      mode: 'restricted' as const,
+      link_permission: 'log' as const,
+    };
+    const anyoneShare = {
+      ...mockShare,
+      mode: 'anyone' as const,
+      link_permission: 'view' as const,
+    };
+    vi.mocked(sharingApi.sharingApi.getShare).mockResolvedValue(restrictedShare);
+    vi.mocked(sharingApi.sharingApi.updateShare).mockResolvedValue(anyoneShare);
+
+    render(
+      <ShareDialog isOpen={true} onClose={vi.fn()} planId={1} />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Anyone with the link')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByLabelText('Anyone with the link'));
 
     await waitFor(() => {
       expect(sharingApi.sharingApi.updateShare).toHaveBeenCalledWith(1, {
-        link_permission: 'edit',
+        mode: 'anyone',
+        link_permission: 'view',
       });
     });
   });

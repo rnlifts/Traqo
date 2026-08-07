@@ -80,22 +80,17 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
   async function handleModeChange(newMode: 'restricted' | 'anyone') {
     if (!share) return;
     try {
-      const updated = await sharingApi.updateShare(planId, { mode: newMode });
+      // A public "anyone" link may only ever grant view access - reset
+      // link_permission in the same request so switching to "anyone" never
+      // gets rejected just because a log/edit tier was set previously.
+      const updates =
+        newMode === 'anyone'
+          ? { mode: newMode, link_permission: 'view' as const }
+          : { mode: newMode };
+      const updated = await sharingApi.updateShare(planId, updates);
       setShare(updated);
     } catch (err: any) {
       console.error('Error updating mode:', err);
-    }
-  }
-
-  async function handlePermissionChange(newPermission: 'view' | 'log' | 'edit') {
-    if (!share) return;
-    try {
-      const updated = await sharingApi.updateShare(planId, {
-        link_permission: newPermission,
-      });
-      setShare(updated);
-    } catch (err: any) {
-      console.error('Error updating permission:', err);
     }
   }
 
@@ -241,26 +236,20 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
               </div>
             </div>
 
-            {/* Link Permission (shown only for 'anyone' mode) */}
+            {/* A public "anyone" link only ever grants view access - no picker needed.
+                For log/edit, the owner grants a specific username below instead. */}
             {share.mode === 'anyone' && (
-              <div>
-                <label style={{ display: 'block', marginBottom: '10px', fontWeight: '600' }}>
-                  Permission level
-                </label>
-                <div style={{ display: 'flex', gap: '20px' }}>
-                  {(['view', 'log', 'edit'] as const).map((perm) => (
-                    <label key={perm} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <input
-                        type="radio"
-                        name="link_permission"
-                        value={perm}
-                        checked={share.link_permission === perm}
-                        onChange={() => handlePermissionChange(perm)}
-                      />
-                      {perm.charAt(0).toUpperCase() + perm.slice(1)}
-                    </label>
-                  ))}
-                </div>
+              <div
+                style={{
+                  padding: '10px 12px',
+                  backgroundColor: 'var(--bg-hover)',
+                  borderRadius: '4px',
+                  fontSize: '13px',
+                  color: 'var(--text-muted)',
+                }}
+              >
+                Anyone with this link can <strong>view</strong> the plan. To let someone
+                log workouts or edit it, grant their username access below.
               </div>
             )}
 

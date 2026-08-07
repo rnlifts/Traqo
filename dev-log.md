@@ -5522,3 +5522,68 @@ trigger React's controlled-input state or form submission (no network request fi
 though the DOM value visibly updated. Not an app bug — confirmed by driving the exact same
 form via `dispatchEvent(new Event('input'))` + `form.requestSubmit()`, which worked
 immediately. Worth remembering for future live verification in this environment.
+
+## 2026-08-07 — Restrict "anyone with the link" to view-only (log/edit anonymous access disabled for now)
+
+Owner's explicit decision after discussing the risks of anonymous logging (orphaned,
+unrecoverable history — see the 2026-08-06 conversation): for now, a public "anyone" link
+may only ever grant `view` access. `log`/`edit` access now requires a per-username grant
+to a specific, authenticated person — that path is completely unaffected. Anonymous
+logging is planned to be revisited later, not removed from the codebase.
+
+Done directly (not delegated), one file at a time per the owner's request:
+
+1. **`sharing/domain/exceptions.py`** — new `InvalidShareConfigurationError`.
+2. **`sharing/application/use_cases/update_share.py`** — `UpdateShare.execute()` now
+   validates the *resulting* combination of `mode`+`link_permission` (not just whichever
+   field the caller happened to pass), rejecting `mode='anyone'` + `link_permission` in
+   `(log, edit)`. This is the single source of truth for the rule — enforced at the use
+   case level, not just the route, so nothing can bypass it by calling the use case
+   directly.
+3. **`sharing/presentation/routes.py`** — catches the new exception, returns `422`.
+4. **`ShareDialog.tsx`** — `handleModeChange` now resets `link_permission` to `'view'` in
+   the same request when switching to "anyone" mode (so simply toggling the mode radio
+   never surfaces a rejected-request error), and the permission-tier radio picker is
+   replaced with a static explanatory note when mode is "anyone" (there's nothing left to
+   pick — it's always `view`). Removed the now-dead `handlePermissionChange`.
+
+**Real, unplanned ripple effect worth documenting**: several *existing* tests across 3
+files had been built around the old, correct-at-the-time assumption that `anyone` +
+`log`/`edit` was a valid, reachable configuration:
+- `test_sharing_routes.py`: `test_update_both` and the full-lifecycle test both
+  constructed exactly that combination via the API — fixed to use valid combinations.
+- `test_sharing_access_routes.py`: `test_anonymous_access_anyone_mode_log`/`_edit` were
+  testing the exact behavior now deliberately disabled — rewritten to assert the new
+  `422` rejection instead of `200`. `test_link_tier_stronger_than_grant_tier` and
+  `test_grant_and_link_same_tier` (the "stronger of link vs grant" tests from the earlier
+  design walkthrough) test scenarios that are now **structurally unreachable through the
+  API** — since `link_permission` for anyone-mode can never be stronger than `view` (the
+  weakest tier) anymore, a link tier that's *stronger* than a grant can no longer occur.
+  Fixed by constructing that share state directly via the repository (bypassing
+  `UpdateShare`), preserving coverage of `ResolveShareAccess`'s merge logic itself in case
+  such a state ever arises again (e.g. old data, or a future feature change).
+- `test_sharing_logging_phase4.py`: the central `share_log_permission_anyone` fixture —
+  used by nearly every anonymous-logging test from Tasks 87/91/92 — built its share via
+  `UpdateShare.execute(mode="anyone", link_permission="log")` directly, which would now
+  raise on every single test run. Fixed the same way (direct repository construction,
+  bypassing the use case), with an explicit comment explaining why: those tests intentionally
+  keep verifying the underlying logging-via-share mechanics still work, since the owner
+  plans to revisit anonymous logging later — only the ability to *configure* a share into
+  that state through the normal API is what's disabled right now.
+
+**Verified:**
+- Backend: 26 tests in the affected files run individually, all pass; full suite run
+  twice, **301 passed** (297 baseline + net 4 new/changed), same 4 pre-existing/unrelated
+  failures, 2 skipped, stable both runs.
+- Negative-control: disabled the core validation in `update_share.py`, confirmed exactly
+  the 5 rejection-asserting tests fail (proving they genuinely test the rule), restored,
+  confirmed clean again.
+- Frontend: full suite 215/215 (214 baseline, net +1), `tsc -b` clean.
+- Live end-to-end in the browser with a fresh test account: created a share, switched to
+  "anyone" mode — the log/edit picker is gone, replaced by the explanatory note; confirmed
+  via direct DB query the stored state is exactly `mode='anyone', link_permission='view'`.
+- Confirmed no existing share (including the owner's own real plan) was already sitting in
+  the now-disallowed state — nothing needed a one-time data fix this time, but the same
+  check will need re-running against production whenever this ships there.
+
+Not pushed; production untouched.
