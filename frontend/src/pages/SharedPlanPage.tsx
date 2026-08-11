@@ -3,70 +3,139 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { sharingApi } from '../api/sharingApi';
 import type { SharedPlanResponse, SharedPlanExercise, SharedPlanDay } from '../api/sharingApi';
 import { ShareWorkoutStarter } from '../features/sharing/ShareWorkoutStarter';
+import { ExercisePreviewPanel } from '../components/ExercisePreviewPanel';
+import { ExerciseWorkoutPreview } from '../components/ExerciseWorkoutPreview';
+import { Modal } from '../components/Modal';
+import { getYoutubeThumbnailUrl } from '../utils/youtube';
 import { useLanguage } from '../contexts/LanguageContext';
 import type { TranslationKeys } from '../i18n/en';
 
-function ExerciseCard({ exercise, t }: { exercise: SharedPlanExercise; t: TranslationKeys }) {
-  return (
-    <div className="exercise-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
-      <div className="field-cell field-cell-name">
-        <span className="cell-label">{t.sharedPlanPage.exerciseLabel}</span>
-        <span className="cell-static-value">{exercise.exercise_name}</span>
-      </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
-        {exercise.target_sets !== null && (
-          <div className="field-cell">
-            <span className="cell-label">{t.sharedPlanPage.setsLabel}</span>
-            <span className="cell-static-value">{exercise.target_sets}</span>
-          </div>
-        )}
-        {exercise.target_reps && (
-          <div className="field-cell">
-            <span className="cell-label">{t.planBuilder.repsLabel}</span>
-            <span className="cell-static-value">{exercise.target_reps}</span>
-          </div>
-        )}
-        {exercise.target_weight !== null && (
-          <div className="field-cell">
-            <span className="cell-label">{t.planBuilder.weightLabel}</span>
-            <span className="cell-static-value">{exercise.target_weight} lbs</span>
-          </div>
-        )}
-        {exercise.target_duration_seconds !== null && (
-          <div className="field-cell">
-            <span className="cell-label">{t.planBuilder.durationLabel}</span>
-            <span className="cell-static-value">
-              {Math.floor(exercise.target_duration_seconds / 60)}m
-            </span>
-          </div>
-        )}
-      </div>
-      {exercise.notes && (
-        <div className="field-cell field-cell-notes">
-          <span className="cell-label">{t.sharing.notesLabel}</span>
-          <span className="cell-static-value" style={{ fontWeight: 'normal' }}>
-            {exercise.notes}
-          </span>
-        </div>
-      )}
-    </div>
-  );
+interface PreviewInfo {
+  name: string;
+  video_url: string | null;
+  muscle_group: string | null;
+  equipment: string | null;
 }
 
-function DayCard({ day, t }: { day: SharedPlanDay; t: TranslationKeys }) {
+// Read-only exercise row matching Plan Builder's collapsed exercise card look
+// (thumbnail + name + summary line) — clicking it opens the video preview,
+// same as the owner's own plan view.
+function ExerciseRow({
+  exercise,
+  index,
+  t,
+  onPreview,
+}: {
+  exercise: SharedPlanExercise;
+  index: number;
+  t: TranslationKeys;
+  onPreview: (info: PreviewInfo) => void;
+}) {
+  const summaryText = [
+    exercise.target_sets !== null ? t.planBuilder.setsCount(exercise.target_sets) : null,
+    exercise.target_reps !== null ? t.planBuilder.repsCount(exercise.target_reps) : null,
+    exercise.target_weight !== null ? t.planBuilder.lbsWeight(exercise.target_weight) : null,
+    exercise.target_duration_seconds !== null
+      ? `${Math.floor(exercise.target_duration_seconds / 60)}:${String(exercise.target_duration_seconds % 60).padStart(2, '0')}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  const handleClick = () =>
+    onPreview({
+      name: exercise.exercise_name,
+      video_url: exercise.video_url || null,
+      muscle_group: exercise.muscle_group || null,
+      equipment: exercise.equipment || null,
+    });
+
   return (
-    <div className="card">
-      <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', color: 'var(--text-h)' }}>
-        {day.is_rest ? '🛌 ' : ''}
-        {t.sharedPlanPage.dayHeading(day.order_position, day.label)}
-      </h3>
-      {day.is_rest ? (
-        <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>{t.sharedPlanPage.restDay}</p>
-      ) : day.exercises.length > 0 ? (
-        day.exercises.map((exercise, idx) => <ExerciseCard key={idx} exercise={exercise} t={t} />)
-      ) : (
-        <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>{t.sharedPlanPage.noExercises}</p>
-      )}
+    <div
+      onClick={handleClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') handleClick();
+      }}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px',
+        padding: '12px',
+        border: '1px solid var(--border)',
+        borderRadius: '12px',
+        marginBottom: '12px',
+        cursor: 'pointer',
+      }}
+    >
+      <div style={{ position: 'relative', flexShrink: 0 }}>
+        {getYoutubeThumbnailUrl(exercise.video_url) ? (
+          <img
+            src={getYoutubeThumbnailUrl(exercise.video_url)!}
+            alt={exercise.exercise_name}
+            style={{ width: '52px', height: '52px', borderRadius: '8px', objectFit: 'cover' }}
+          />
+        ) : (
+          <div
+            style={{
+              width: '52px',
+              height: '52px',
+              borderRadius: '8px',
+              backgroundColor: 'var(--border)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'var(--text-h)',
+              fontSize: '20px',
+            }}
+          >
+            🏋️
+          </div>
+        )}
+        <span
+          style={{
+            position: 'absolute',
+            bottom: '-4px',
+            left: '-4px',
+            backgroundColor: 'var(--accent)',
+            color: '#fff',
+            fontSize: '11px',
+            fontWeight: 700,
+            width: '18px',
+            height: '18px',
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          {index + 1}
+        </span>
+      </div>
+
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div
+          style={{
+            fontWeight: 600,
+            fontSize: '14px',
+            color: 'var(--text-h)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {exercise.exercise_name}
+        </div>
+        {summaryText && (
+          <div style={{ fontSize: '12px', color: 'var(--text)', marginTop: '2px' }}>{summaryText}</div>
+        )}
+        {exercise.notes && (
+          <div style={{ fontSize: '12px', color: 'var(--text)', fontStyle: 'italic', marginTop: '2px' }}>
+            {exercise.notes}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -81,11 +150,27 @@ export const SharedPlanPage: React.FC = () => {
     null
   );
 
+  // Day/week navigation + video preview state — only used for view-only visitors.
+  // (log/edit visitors get their own picker + preview via ShareWorkoutStarter.)
+  const [selectedWeekIndex, setSelectedWeekIndex] = useState(0);
+  const [selectedDayIndex, setSelectedDayIndex] = useState(0);
+  const [selectedPreview, setSelectedPreview] = useState<PreviewInfo | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+
   useEffect(() => {
     if (token) {
       loadSharedPlan();
     }
   }, [token]);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(max-width: 768px)');
+    setIsMobile(mediaQuery.matches);
+    const listener = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mediaQuery.addEventListener('change', listener);
+    return () => mediaQuery.removeEventListener('change', listener);
+  }, []);
 
   async function loadSharedPlan() {
     if (!token) return;
@@ -115,6 +200,11 @@ export const SharedPlanPage: React.FC = () => {
       setLoading(false);
     }
   }
+
+  const handlePreview = (info: PreviewInfo) => {
+    setSelectedPreview(info);
+    if (isMobile) setShowPreviewModal(true);
+  };
 
   if (loading) {
     return <div className="loading">{t.sessionSetup.loadingPlan}</div>;
@@ -156,70 +246,143 @@ export const SharedPlanPage: React.FC = () => {
   const isAuthenticated = !!localStorage.getItem('auth_token');
   const canEditPlan = permission === 'edit' && isAuthenticated;
 
+  const isWeeksType = plan.unit_type === 'weeks';
+  const hasMultipleWeeks = isWeeksType && !!weeks && weeks.length > 1;
+  const displayedDays: SharedPlanDay[] = isWeeksType
+    ? weeks?.[selectedWeekIndex]?.days || []
+    : days || [];
+  const currentDay = displayedDays[selectedDayIndex];
+
   return (
     <div className="page-container">
-      {/* Same header pattern as SessionSetupPage's plan card: small line, big title */}
-      <div className="card">
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'flex-start',
-            gap: '12px',
-          }}
-        >
-          <div>
-            <h2 style={{ margin: '0 0 8px 0', fontSize: '14px', color: 'var(--text)', fontWeight: 'normal' }}>
-              {t.sharedPlanPage.sharedByPrefix}<strong>{plan_owner_username}</strong>{t.sharedPlanPage.youCanPrefix}{' '}
-              <strong>{permission}</strong>
-            </h2>
-            <h1 style={{ margin: 0, fontSize: '28px', color: 'var(--text-h)', fontWeight: 'bold' }}>
-              {plan.name}
-            </h1>
-          </div>
-          {canEditPlan && (
-            <Link
-              to={`/workout-plans/${plan.id}/edit`}
-              className="btn btn-secondary"
-              style={{ textDecoration: 'none', whiteSpace: 'nowrap' }}
+      <div style={{ display: 'flex', gap: '20px' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {/* Same header pattern as SessionSetupPage's plan card: small line, big title */}
+          <div className="card">
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
+                gap: '12px',
+              }}
             >
-              {t.sharedPlanPage.editPlan}
-            </Link>
-          )}
-        </div>
-      </div>
+              <div>
+                <h2 style={{ margin: '0 0 8px 0', fontSize: '14px', color: 'var(--text)', fontWeight: 'normal' }}>
+                  {t.sharedPlanPage.sharedByPrefix}<strong>{plan_owner_username}</strong>{t.sharedPlanPage.youCanPrefix}{' '}
+                  <strong>{permission}</strong>
+                </h2>
+                <h1 style={{ margin: 0, fontSize: '28px', color: 'var(--text-h)', fontWeight: 'bold' }}>
+                  {plan.name}
+                </h1>
+              </div>
+              {canEditPlan && (
+                <Link
+                  to={`/workout-plans/${plan.id}/edit`}
+                  className="btn btn-secondary"
+                  style={{ textDecoration: 'none', whiteSpace: 'nowrap' }}
+                >
+                  {t.sharedPlanPage.editPlan}
+                </Link>
+              )}
+            </div>
+          </div>
 
-      <p className="section-label">
-        {plan.unit_type === 'days'
-          ? t.planList.dayCount(plan.total_units)
-          : t.planList.weekCount(plan.total_units)}
-      </p>
+          <p className="section-label">
+            {plan.unit_type === 'days'
+              ? t.planList.dayCount(plan.total_units)
+              : t.planList.weekCount(plan.total_units)}
+          </p>
 
-      {permission === 'view' ? (
-        // View-only visitors have no picker to interact with, so showing the
-        // full plan is the only way for them to see what's in it.
-        <>
-          {days && days.length > 0 && days.map((day) => <DayCard key={day.id} day={day} t={t} />)}
-          {weeks && weeks.length > 0 && (
+          {permission === 'view' ? (
+            // Same day-tab / week-rail navigation the owner sees in Plan Builder —
+            // one day visible at a time, instead of dumping every day vertically.
             <>
-              {weeks.map((week) => (
-                <div key={week.week_number}>
-                  <p className="section-label">
-                    {t.sharing.weekChip(week.resolved_week_number || week.week_number)}
-                    {week.mode !== 'base' && t.sharedPlanPage.weekModeSuffix(week.mode)}
-                  </p>
-                  {week.days.map((day) => (
-                    <DayCard key={day.id} day={day} t={t} />
+              {hasMultipleWeeks && (
+                <div className="panel" style={{ marginBottom: '20px' }}>
+                  <label className="field-label">{t.planBuilder.weeksLabel}</label>
+                  <div className="week-selector-row">
+                    {weeks!.map((week, idx) => (
+                      <div key={week.week_number} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <button
+                          onClick={() => {
+                            setSelectedWeekIndex(idx);
+                            setSelectedDayIndex(0);
+                          }}
+                          className={`week-node${idx === selectedWeekIndex ? ' active' : ''}`}
+                        >
+                          {week.resolved_week_number || week.week_number}
+                        </button>
+                        {idx < weeks!.length - 1 && <div className="week-connector" />}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {displayedDays.length > 0 && (
+                <div className="day-tabs">
+                  {displayedDays.map((day, idx) => (
+                    <button
+                      key={day.id}
+                      onClick={() => setSelectedDayIndex(idx)}
+                      className={`day-tab${idx === selectedDayIndex ? ' active' : ''}`}
+                    >
+                      {day.label}
+                    </button>
                   ))}
                 </div>
-              ))}
+              )}
+
+              {currentDay ? (
+                currentDay.is_rest ? (
+                  <div className="card" style={{ textAlign: 'center' }}>
+                    <p style={{ margin: 0, color: 'var(--text)', fontSize: '14px' }}>
+                      {t.sharedPlanPage.restDay}
+                    </p>
+                  </div>
+                ) : currentDay.exercises.length > 0 ? (
+                  <div>
+                    {currentDay.exercises.map((exercise, idx) => (
+                      <ExerciseRow key={idx} exercise={exercise} index={idx} t={t} onPreview={handlePreview} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="empty-state">
+                    <p>{t.sharedPlanPage.noExercises}</p>
+                  </div>
+                )
+              ) : (
+                <div className="empty-state">
+                  <p>{t.sharedPlanPage.noExercises}</p>
+                </div>
+              )}
             </>
+          ) : (
+            // log/edit permission: ShareWorkoutStarter's own picker + per-day preview
+            // replaces the day-tab view above, so the same content isn't shown twice at once.
+            token && <ShareWorkoutStarter data={data} token={token} />
           )}
-        </>
-      ) : (
-        // log/edit permission: ShareWorkoutStarter's own picker + per-day preview
-        // replaces the full plan dump, so the same content isn't shown twice at once.
-        token && <ShareWorkoutStarter data={data} token={token} />
+        </div>
+
+        {/* Preview side panel (desktop only, view-only visitors) */}
+        {permission === 'view' && !isMobile && (
+          <div style={{ flexShrink: 0 }}>
+            <ExercisePreviewPanel selected={selectedPreview} fullWidth={false} />
+          </div>
+        )}
+      </div>
+
+      {/* Preview modal (mobile only, view-only visitors) */}
+      {permission === 'view' && isMobile && selectedPreview && (
+        <Modal isOpen={showPreviewModal} onClose={() => setShowPreviewModal(false)} title={selectedPreview.name} fullScreen={true}>
+          <ExerciseWorkoutPreview
+            name={selectedPreview.name}
+            video_url={selectedPreview.video_url}
+            muscle_group={selectedPreview.muscle_group}
+            equipment={selectedPreview.equipment}
+          />
+        </Modal>
       )}
     </div>
   );

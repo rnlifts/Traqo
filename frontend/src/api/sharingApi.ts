@@ -34,6 +34,9 @@ export interface SharedPlanExercise {
   target_weight: number | null;
   target_duration_seconds: number | null;
   notes?: string;
+  video_url?: string | null;
+  muscle_group?: string | null;
+  equipment?: string | null;
 }
 
 export interface SharedPlanDay {
