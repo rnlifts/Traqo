@@ -388,7 +388,15 @@ export const ne = {
     dateLabel: 'मिति',
     durationLabel: 'अवधि',
     exerciseFallback: (id: number) => `व्यायाम ${id}`,
-    setLabel: (n: number, weight: number | null, reps: number | null) => `सेट ${n}: ${weight} × ${reps}`,
+    setLabel: (n: number, weight: number | null, reps: number | null, durationSeconds: number | null = null) => {
+      let value: string;
+      if (weight !== null && reps !== null) value = `${weight} × ${reps}`;
+      else if (weight !== null) value = `${weight} lbs`;
+      else if (reps !== null) value = `${reps} रेप्स`;
+      else if (durationSeconds !== null) value = `${durationSeconds}se`;
+      else value = '—';
+      return `सेट ${n}: ${value}`;
+    },
     noSetsLogged: 'यो व्यायामको लागि कुनै सेट लग गरिएको छैन',
     unknownExercise: 'अज्ञात व्यायाम',
     noExercises: 'यो वर्कआउट दिनमा कुनै व्यायाम छैन।',

@@ -6652,4 +6652,115 @@ new namespaces added to both `en.ts` and `ne.ts` per feature area, verified with
   in `ne.ts` (loanword choices, numeral style, short-microcopy tone) still applies
   to everything added in this pass too.
 
+## 2026-08-09 — Fixed shared-plan (view-only) rendering: day-tabs instead of a vertical dump, plus video thumbnails
+
+**Report:** view-only share-link visitors saw every day (and every week's days, for
+multi-week plans) stacked vertically as plain text field-lists — no thumbnails, no
+video, nothing matching how the owner sees their own plan.
+
+**Root cause, two separate issues:**
+1. `SharedPlanPage.tsx`'s `permission === 'view'` branch rendered `days.map(DayCard)`
+   / `weeks.map(week => week.days.map(DayCard))` unconditionally — no day-tab or
+   week-rail navigation at all, unlike the `log`/`edit` branch (`ShareWorkoutStarter`)
+   which already had day/week chip pickers.
+2. `SharedPlanExercise` (frontend type in `sharingApi.ts`) was missing `video_url`,
+   `muscle_group`, `equipment` — even though the backend was already sending them.
+   `SharedPlanResponse.days`/`weeks` reuse `PlanDayDetailResponse` →
+   `WorkoutExerciseDetailedResponse` (`backend/src/modules/workouts/presentation/
+   schemas.py:121-140`), which has always included those three fields; the frontend
+   type just didn't expose them, so `ExerciseCard` never had access. **No backend
+   change was needed.**
+
+**Fix:**
+- `sharingApi.ts`: added the three missing fields to `SharedPlanExercise`.
+- `SharedPlanPage.tsx`: rewrote the `view` branch to match Plan Builder's own
+  layout — reuses the exact same CSS classes (`.week-selector-row`/`.week-node` for
+  multi-week, `.day-tabs`/`.day-tab` for days) so a view-only visitor sees one day
+  at a time, navigable, identical in structure to what the owner sees when editing.
+  Replaced the old plain-text `ExerciseCard` with `ExerciseRow` — thumbnail (via
+  `getYoutubeThumbnailUrl`), numbered badge, name, and a condensed summary line
+  (`t.planBuilder.setsCount`/`repsCount`/`lbsWeight`, same formatting PlanBuilder
+  uses) — clicking a row opens the video: `ExercisePreviewPanel` in a desktop side
+  panel (matches PlanBuilder), `ExerciseWorkoutPreview` in a full-screen `Modal` on
+  mobile (matches ActiveWorkout's mobile pattern). Both components were already
+  built and used elsewhere — reused as-is, no new preview logic.
+
+**Verified:**
+- `tsc -b` clean; full suite 294/295 passed (`CustomExerciseForm`'s one failure
+  reproduced only under full-parallel-suite CPU contention, passed cleanly 17/17 in
+  isolation — confirmed unrelated to this change).
+- `SharedPlanPage.test.tsx`: all 13 existing tests passed unmodified.
+- Live in browser: created a real plan, added a library exercise with a YouTube
+  link, saved, generated an "anyone can view" share link, opened it in a second tab
+  with `localStorage` fully cleared (genuinely anonymous, not just logged-out UI
+  state). Confirmed day-tab navigation renders, the exercise thumbnail displays,
+  clicking it loads the real YouTube embed (`iframe.src` pointed at
+  `youtube.com/embed/...`) in the desktop side panel, and the same click → embed
+  flow works via the full-screen modal at 375px mobile width with no horizontal
+  overflow (`scrollWidth` vs `clientWidth`).
+
 Not pushed; production untouched.
+
+## 2026-08-11 — Fixed production login (missing migration), workout-timestamp timezone bug, and duration-only sets showing "null × null" in history
+
+**Production incident:** login was returning 500s in production
+(`psycopg2.errors.UndefinedColumn: column users.age does not exist`). The last
+deploy shipped the `UserModel` profile-fields columns, but the corresponding
+Alembic migrations (`change_fks_to_set_null_001`, `plan_shares_001`,
+`add_user_profile_fields_001`) had only ever been run against local dev — never
+against production Postgres. Applied `alembic upgrade head` directly against
+production (via the public Postgres proxy URL) with the user's explicit
+authorization; verified head revision, verified the new columns are queryable,
+and verified `POST /api/auth/login` now returns a normal 401 for bad credentials
+instead of a 500.
+
+**Bug 1 — workout-completion time shown in the wrong timezone.** Reported: a
+workout finished at 1:42 PM Nepal time displayed as "7:55 am". Root cause:
+`started_at`/`completed_at` (and every other stored timestamp) are written with
+naive `datetime.utcnow()` into plain (non-timezone-aware) `DateTime` columns, and
+serialized by Pydantic with no `Z`/offset suffix (e.g. `"2026-08-11T07:59:37"`).
+`new Date(...)` in the browser parses an offset-less ISO string as **local** time,
+not UTC — so the raw UTC wall-clock value was being displayed as if it were
+already local time, instead of being converted.
+- Fix: added `src/shared/utc_datetime.py` — a `UTCDatetime` Pydantic-annotated
+  type (`Annotated[datetime, PlainSerializer(...)]`) that tags naive datetimes as
+  UTC (and normalizes aware-non-UTC ones) at serialization time, always emitting
+  an explicit `Z` suffix. Applied it to every `datetime` field in
+  `sessions/presentation/schemas.py`, `sharing/presentation/schemas.py`, and
+  `workouts/presentation/schemas.py` (session timestamps, share `created_at`/
+  `revoked_at`, plan/day `created_at`/`updated_at`, previous-performance
+  `session_date`). Chose this over migrating DB columns to `TIMESTAMPTZ` — no
+  schema migration needed, fixes every existing naive-UTC row immediately, lower
+  risk right after a migration-caused outage.
+- No frontend changes needed — `new Date(...)`/`toLocaleTimeString` were already
+  correct once the string carries an unambiguous offset.
+- New test: `backend/tests/unit/test_utc_datetime.py` (naive → `Z`, aware-non-UTC
+  → converted, aware-UTC round-trips).
+
+**Bug 2 — duration-only sets (e.g. a squat hold logged with just a duration, no
+reps/weight) rendered as "Set 1: null × null" in workout history.** Root cause:
+`SessionDetail.tsx`'s two set-formatting spots (the `t.sessionDetail.setLabel`
+call in the matched-plan-day branch, and an inline `{set.weight} × {set.reps}` in
+the no-matching-plan-day fallback branch) unconditionally combined weight and
+reps, never checking `duration_seconds`. `ActiveWorkout.tsx`'s
+`buildPreviousPerformanceLine` already had the correct branching logic
+(weight+reps / weight-only / reps-only / duration-only) — ported the same
+priority order into `t.sessionDetail.setLabel` (now takes an optional 4th
+`durationSeconds` param) in both `en.ts` and `ne.ts`, and updated both call sites
+in `SessionDetail.tsx` to pass `set.duration_seconds`.
+- New test: `frontend/src/features/sessions/SessionDetail.test.tsx` — duration-only
+  set renders `"Set 1: 60s"` (not `null`) in both the matched-day and fallback
+  branches; weight/reps sets still render `"135 × 8"` unchanged.
+
+**Verified:** backend `pytest` 387/395 passed (8 pre-existing unrelated failures,
+confirmed via `git stash` to predate this session's changes — a 403-vs-401
+auth-middleware assertion mismatch); frontend `npx tsc -b` clean, `vitest run`
+298/298 passed. Live-verified the login fix against production directly (`curl`
+against `/api/auth/login` returned a normal 401, not a 500). The timezone and
+duration-display fixes were verified via the new unit/component tests (no local
+dev server was reachable from this session's sandboxed shell to do a live
+browser pass — noting this explicitly rather than claiming a browser check that
+didn't happen).
+
+Login fix applied directly to production. Timezone and duration-display fixes
+are local only — not committed or pushed.

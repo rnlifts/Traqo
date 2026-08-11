@@ -1,8 +1,7 @@
-from datetime import datetime
-
 from pydantic import BaseModel, Field
 from src.modules.workouts.presentation.schemas import WorkoutPlanDetailResponse
 from src.modules.exercises.presentation.schemas import ExerciseResponse
+from src.shared.utc_datetime import UTCDatetime
 
 
 class StartWorkoutRequest(BaseModel):
@@ -20,8 +19,8 @@ class WorkoutSessionResponse(BaseModel):
     user_id: int
     workout_plan_id: int | None
     plan_day_id: int | None
-    started_at: datetime
-    completed_at: datetime | None
+    started_at: UTCDatetime
+    completed_at: UTCDatetime | None
 
 
 class AddWorkoutSetRequest(BaseModel):
@@ -75,8 +74,8 @@ class WorkoutSessionDetailResponse(BaseModel):
         day_label: str | None
         plan_week_id: int | None
         week_number: int | None
-        started_at: datetime
-        completed_at: datetime | None
+        started_at: UTCDatetime
+        completed_at: UTCDatetime | None
         duration_minutes: int | None
 
     session: Session
@@ -99,7 +98,7 @@ class StartWorkoutResponse(BaseModel):
 class WorkoutHistoryEntryResponse(BaseModel):
     """A single workout history entry."""
 
-    date: datetime
+    date: UTCDatetime
     workout: str
     duration: str
     session_id: int
@@ -122,7 +121,7 @@ class ProgressSessionEntryResponse(BaseModel):
     """A single session's worth of sets for an exercise in progress view."""
 
     session_id: int
-    date: datetime
+    date: UTCDatetime
     sets: list[ProgressSetResponse]
     volume: float
     is_volume_pr: bool
@@ -132,13 +131,13 @@ class PersonalRecordsResponse(BaseModel):
     """Personal records for an exercise."""
 
     heaviest_weight: float | None
-    heaviest_weight_date: datetime | None
+    heaviest_weight_date: UTCDatetime | None
     best_estimated_1rm: float | None
-    best_estimated_1rm_date: datetime | None
+    best_estimated_1rm_date: UTCDatetime | None
     best_volume: float | None
-    best_volume_date: datetime | None
+    best_volume_date: UTCDatetime | None
     most_reps: int | None
-    most_reps_date: datetime | None
+    most_reps_date: UTCDatetime | None
 
 
 class ExerciseProgressResponse(BaseModel):
@@ -185,7 +184,7 @@ class DayActivityResponse(BaseModel):
     """One day's activity in the weekly calendar."""
 
     day_label: str
-    date: datetime
+    date: UTCDatetime
     has_workout: bool
     session_id: int | None
 

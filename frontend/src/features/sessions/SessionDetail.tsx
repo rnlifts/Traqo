@@ -145,7 +145,7 @@ export const SessionDetail: React.FC<SessionDetailProps> = ({
                         }}
                       >
                         <div style={{ fontWeight: "500" }}>
-                          {t.sessionDetail.setLabel(set.set_number, set.weight, set.reps)}
+                          {t.sessionDetail.setLabel(set.set_number, set.weight, set.reps, set.duration_seconds)}
                         </div>
                         {set.notes && (
                           <div style={{ fontSize: "13px", color: "var(--text)", fontStyle: "italic", marginTop: "4px" }}>
@@ -224,7 +224,7 @@ export const SessionDetail: React.FC<SessionDetailProps> = ({
                       }}
                     >
                       <div style={{ fontWeight: "500" }}>
-                        Set {set.set_number}: {set.weight} × {set.reps}
+                        {t.sessionDetail.setLabel(set.set_number, set.weight, set.reps, set.duration_seconds)}
                       </div>
                       {set.notes && (
                         <div style={{ fontSize: "13px", color: "var(--text)", fontStyle: "italic", marginTop: "4px" }}>

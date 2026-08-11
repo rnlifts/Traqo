@@ -376,7 +376,15 @@ export const en = {
     dateLabel: 'Date',
     durationLabel: 'Duration',
     exerciseFallback: (id: number) => `Exercise ${id}`,
-    setLabel: (n: number, weight: number | null, reps: number | null) => `Set ${n}: ${weight} × ${reps}`,
+    setLabel: (n: number, weight: number | null, reps: number | null, durationSeconds: number | null = null) => {
+      let value: string;
+      if (weight !== null && reps !== null) value = `${weight} × ${reps}`;
+      else if (weight !== null) value = `${weight} lbs`;
+      else if (reps !== null) value = `${reps} reps`;
+      else if (durationSeconds !== null) value = `${durationSeconds}s`;
+      else value = '—';
+      return `Set ${n}: ${value}`;
+    },
     noSetsLogged: 'No sets logged for this exercise',
     unknownExercise: 'Unknown Exercise',
     noExercises: 'No exercises in this workout day.',

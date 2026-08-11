@@ -1,4 +1,4 @@
-from datetime import datetime
+from src.shared.utc_datetime import UTCDatetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -54,8 +54,8 @@ class WorkoutPlanResponse(BaseModel):
     id: int
     user_id: int
     name: str
-    created_at: datetime
-    updated_at: datetime
+    created_at: UTCDatetime
+    updated_at: UTCDatetime
 
 
 class SetTargetResponse(BaseModel):
@@ -114,8 +114,8 @@ class PlanDayResponse(BaseModel):
     label: str
     order_position: int
     is_rest: bool = False
-    created_at: datetime
-    updated_at: datetime
+    created_at: UTCDatetime
+    updated_at: UTCDatetime
 
 
 class WorkoutExerciseDetailedResponse(BaseModel):
@@ -148,8 +148,8 @@ class PlanDayDetailResponse(BaseModel):
     order_position: int
     is_rest: bool = False
     exercises: list[WorkoutExerciseDetailedResponse]
-    created_at: datetime
-    updated_at: datetime
+    created_at: UTCDatetime
+    updated_at: UTCDatetime
 
 
 class PlanWeekDetailResponse(BaseModel):
@@ -171,8 +171,8 @@ class WorkoutPlanDetailResponse(BaseModel):
         unit_type: str | None  # 'days' | 'weeks'
         total_units: int | None
         is_quick_start: bool
-        created_at: datetime
-        updated_at: datetime
+        created_at: UTCDatetime
+        updated_at: UTCDatetime
 
     plan: Plan
     days: list[PlanDayDetailResponse] | None = None  # For 'days' type plans
@@ -198,7 +198,7 @@ class PreviousPerformanceExerciseResponse(BaseModel):
 class PreviousPerformanceResponse(BaseModel):
     """Previous performance data for a plan day."""
 
-    session_date: datetime | None
+    session_date: UTCDatetime | None
     exercises: list[PreviousPerformanceExerciseResponse]
 
 

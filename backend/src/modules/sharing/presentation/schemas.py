@@ -1,11 +1,11 @@
 """Request/response schemas for sharing endpoints."""
-from datetime import datetime
 from pydantic import BaseModel, Field
 
 from src.modules.workouts.presentation.schemas import (
     PlanDayDetailResponse,
     PlanWeekDetailResponse,
 )
+from src.shared.utc_datetime import UTCDatetime
 
 
 class CreateShareRequest(BaseModel):
@@ -38,8 +38,8 @@ class ShareResponse(BaseModel):
     token: str
     mode: str
     link_permission: str
-    created_at: datetime
-    revoked_at: datetime | None
+    created_at: UTCDatetime
+    revoked_at: UTCDatetime | None
     grants: list[ShareGrantResponse] = Field(default_factory=list)
 
 
