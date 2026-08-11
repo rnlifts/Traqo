@@ -2237,9 +2237,17 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
           onClose={() => setShowPreviewModal(false)}
           title={selectedPreview?.name || t.planBuilder.exercisePreviewModalTitle}
           fullScreen={true}
+          hideCloseButton={true}
         >
           <div style={{ padding: '12px 16px', paddingTop: '0' }}>
             <ExercisePreviewPanel selected={selectedPreview} fullWidth={true} />
+            <button
+              onClick={() => setShowPreviewModal(false)}
+              className="btn btn-secondary"
+              style={{ width: '100%', marginTop: '16px' }}
+            >
+              {t.exercisePreview.backButton}
+            </button>
           </div>
         </Modal>
       )}

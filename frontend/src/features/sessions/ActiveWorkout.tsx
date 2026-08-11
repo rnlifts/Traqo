@@ -1577,13 +1577,23 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
           onClose={() => setSelectedPreview(null)}
           title={selectedPreview.name}
           fullScreen={true}
+          hideCloseButton={true}
         >
-          <ExerciseWorkoutPreview
-            name={selectedPreview.name}
-            video_url={selectedPreview.video_url || null}
-            muscle_group={selectedPreview.muscle_group || null}
-            equipment={selectedPreview.equipment || null}
-          />
+          <div style={{ padding: "16px" }}>
+            <ExerciseWorkoutPreview
+              name={selectedPreview.name}
+              video_url={selectedPreview.video_url || null}
+              muscle_group={selectedPreview.muscle_group || null}
+              equipment={selectedPreview.equipment || null}
+            />
+            <button
+              onClick={() => setSelectedPreview(null)}
+              className="btn btn-secondary"
+              style={{ width: "100%", marginTop: "16px" }}
+            >
+              {t.exercisePreview.backButton}
+            </button>
+          </div>
         </Modal>
       )}
 

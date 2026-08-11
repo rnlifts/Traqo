@@ -227,6 +227,7 @@ export const ne = {
   exercisePreview: {
     clickToPreview: 'हेर्न व्यायाममा क्लिक गर्नुहोस्',
     noVideo: 'भिडियो उपलब्ध छैन',
+    backButton: '← फिर्ता',
   },
   durationInput: {
     removeDuration: 'अवधि हटाउनुहोस्',

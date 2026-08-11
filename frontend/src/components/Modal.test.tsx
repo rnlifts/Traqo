@@ -79,6 +79,29 @@ describe("Modal", () => {
     });
   });
 
+  describe("hideCloseButton", () => {
+    it("hides the top-right close button when no title is given", () => {
+      render(
+        <Modal isOpen={true} onClose={() => {}} hideCloseButton={true}>
+          Test Content
+        </Modal>
+      );
+
+      expect(screen.queryByLabelText("Close modal")).not.toBeInTheDocument();
+    });
+
+    it("hides the header close button when a title is given", () => {
+      render(
+        <Modal isOpen={true} onClose={() => {}} title="Modal Title" hideCloseButton={true}>
+          Test Content
+        </Modal>
+      );
+
+      expect(screen.getByText("Modal Title")).toBeInTheDocument();
+      expect(screen.queryByLabelText("Close modal")).not.toBeInTheDocument();
+    });
+  });
+
   describe("Backdrop", () => {
     it("calls onClose when backdrop is clicked", () => {
       const onClose = vi.fn();

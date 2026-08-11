@@ -375,13 +375,22 @@ export const SharedPlanPage: React.FC = () => {
 
       {/* Preview modal (mobile only, view-only visitors) */}
       {permission === 'view' && isMobile && selectedPreview && (
-        <Modal isOpen={showPreviewModal} onClose={() => setShowPreviewModal(false)} title={selectedPreview.name} fullScreen={true}>
-          <ExerciseWorkoutPreview
-            name={selectedPreview.name}
-            video_url={selectedPreview.video_url}
-            muscle_group={selectedPreview.muscle_group}
-            equipment={selectedPreview.equipment}
-          />
+        <Modal isOpen={showPreviewModal} onClose={() => setShowPreviewModal(false)} title={selectedPreview.name} fullScreen={true} hideCloseButton={true}>
+          <div style={{ padding: '16px' }}>
+            <ExerciseWorkoutPreview
+              name={selectedPreview.name}
+              video_url={selectedPreview.video_url}
+              muscle_group={selectedPreview.muscle_group}
+              equipment={selectedPreview.equipment}
+            />
+            <button
+              onClick={() => setShowPreviewModal(false)}
+              className="btn btn-secondary"
+              style={{ width: '100%', marginTop: '16px' }}
+            >
+              {t.exercisePreview.backButton}
+            </button>
+          </div>
         </Modal>
       )}
     </div>

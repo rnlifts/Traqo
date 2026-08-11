@@ -7,6 +7,7 @@ export interface ModalProps {
   children: React.ReactNode;
   title?: string;
   fullScreen?: boolean;
+  hideCloseButton?: boolean;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -15,6 +16,7 @@ export const Modal: React.FC<ModalProps> = ({
   children,
   title,
   fullScreen = false,
+  hideCloseButton = false,
 }) => {
   const { t } = useLanguage();
   useEffect(() => {
@@ -111,17 +113,19 @@ export const Modal: React.FC<ModalProps> = ({
         {title && (
           <div style={headerStyle}>
             <h2 style={titleStyle}>{title}</h2>
-            <button
-              onClick={onClose}
-              style={closeButtonStyle}
-              className="modal-close-btn"
-              aria-label={t.modal.closeModal}
-            >
-              ×
-            </button>
+            {!hideCloseButton && (
+              <button
+                onClick={onClose}
+                style={closeButtonStyle}
+                className="modal-close-btn"
+                aria-label={t.modal.closeModal}
+              >
+                ×
+              </button>
+            )}
           </div>
         )}
-        {!title && (
+        {!title && !hideCloseButton && (
           <button
             onClick={onClose}
             style={{

@@ -216,6 +216,7 @@ export const en = {
   exercisePreview: {
     clickToPreview: 'Click exercise to preview',
     noVideo: 'No video available',
+    backButton: '← Back',
   },
   durationInput: {
     removeDuration: 'Remove duration',
