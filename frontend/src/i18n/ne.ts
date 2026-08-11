@@ -536,6 +536,7 @@ export const ne = {
     setWeightReps: (weight: number, reps: number) => `${weight} × ${reps}`,
     setWeightOnly: (weight: number) => `${weight} lbs`,
     setRepsOnly: (reps: number) => `${reps} रेप्स`,
+    setDurationOnly: (seconds: number) => `${seconds}se`,
     setNotSet: 'सेट गरिएको छैन',
     setLine: (n: number, detail: string) => `सेट ${n}: ${detail}`,
     est1rmLine: (val: number) => `अनुमानित 1RM: ${val} lbs`,

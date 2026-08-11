@@ -437,6 +437,7 @@ async def get_exercise_progress_handler(
                         set_number=s.set_number,
                         weight=s.weight,
                         reps=s.reps,
+                        duration_seconds=s.duration_seconds,
                         notes=s.notes,
                         estimated_1rm=s.estimated_1rm,
                         is_weight_pr=s.is_weight_pr,

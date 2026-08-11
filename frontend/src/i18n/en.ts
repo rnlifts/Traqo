@@ -524,6 +524,7 @@ export const en = {
     setWeightReps: (weight: number, reps: number) => `${weight} × ${reps}`,
     setWeightOnly: (weight: number) => `${weight} lbs`,
     setRepsOnly: (reps: number) => `${reps} reps`,
+    setDurationOnly: (seconds: number) => `${seconds}s`,
     setNotSet: 'not set',
     setLine: (n: number, detail: string) => `Set ${n}: ${detail}`,
     est1rmLine: (val: number) => `Est. 1RM: ${val} lbs`,

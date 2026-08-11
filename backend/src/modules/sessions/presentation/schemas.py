@@ -110,6 +110,7 @@ class ProgressSetResponse(BaseModel):
     set_number: int
     weight: float | None
     reps: int | None
+    duration_seconds: int | None
     notes: str
     estimated_1rm: float | None
     is_weight_pr: bool

@@ -626,6 +626,93 @@ class TestGetExerciseProgressMultipleSessions:
         assert result.personal_records.heaviest_weight_date == session3.started_at
 
 
+class TestGetExerciseProgressDurationOnlySets:
+    """Test progress tracking for duration-only exercises (e.g. a plank/cardio hold
+    logged with just a duration, no weight/reps)."""
+
+    def test_duration_is_threaded_through_to_progress_set(self):
+        """duration_seconds on the logged set must appear on the ProgressSet,
+        not be silently dropped (this caused the frontend to show "not set")."""
+        user_id = 1
+        exercise_id = 1
+        session_repo = InMemoryWorkoutSessionRepository()
+        set_repo = InMemoryWorkoutSetRepository()
+        exercise_repo = InMemoryExerciseRepository()
+
+        exercise = Exercise(user_id=user_id, name="Cardio")
+        exercise_repo.create(exercise)
+
+        session = WorkoutSession(
+            user_id=user_id,
+            workout_plan_id=1,
+            plan_day_id=1,
+            started_at=datetime.now(),
+            completed_at=datetime.now() + timedelta(minutes=10),
+        )
+        session = session_repo.create(session)
+
+        duration_set = WorkoutSet(
+            workout_session_id=session.id,
+            exercise_id=exercise_id,
+            set_number=1,
+            weight=None,
+            reps=None,
+            duration_seconds=60,
+            notes="",
+        )
+        duration_set = set_repo.create(duration_set)
+        duration_set._session_ref = session
+
+        use_case = GetExerciseProgress(session_repo, set_repo, exercise_repo)
+        result = use_case.execute(user_id, exercise_id)
+
+        progress_set = result.sessions[0].sets[0]
+        assert progress_set.duration_seconds == 60
+        assert progress_set.weight is None
+        assert progress_set.reps is None
+
+    def test_duration_only_session_does_not_produce_spurious_zero_volume_pr(self):
+        """A purely duration-based exercise has no weight×reps data, so volume is
+        always 0 — best_volume should stay None instead of reporting a fake
+        "Best Volume: 0 lbs" PR."""
+        user_id = 1
+        exercise_id = 1
+        session_repo = InMemoryWorkoutSessionRepository()
+        set_repo = InMemoryWorkoutSetRepository()
+        exercise_repo = InMemoryExerciseRepository()
+
+        exercise = Exercise(user_id=user_id, name="Plank Hold")
+        exercise_repo.create(exercise)
+
+        session = WorkoutSession(
+            user_id=user_id,
+            workout_plan_id=1,
+            plan_day_id=1,
+            started_at=datetime.now(),
+            completed_at=datetime.now() + timedelta(minutes=5),
+        )
+        session = session_repo.create(session)
+
+        duration_set = WorkoutSet(
+            workout_session_id=session.id,
+            exercise_id=exercise_id,
+            set_number=1,
+            weight=None,
+            reps=None,
+            duration_seconds=90,
+            notes="",
+        )
+        duration_set = set_repo.create(duration_set)
+        duration_set._session_ref = session
+
+        use_case = GetExerciseProgress(session_repo, set_repo, exercise_repo)
+        result = use_case.execute(user_id, exercise_id)
+
+        assert result.sessions[0].volume == 0
+        assert result.personal_records.best_volume is None
+        assert result.personal_records.best_volume_date is None
+
+
 class TestGetExerciseProgressErrors:
     """Test error cases."""
 

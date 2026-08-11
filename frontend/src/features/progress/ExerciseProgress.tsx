@@ -367,10 +367,12 @@ export const ExerciseProgress: React.FC<ExerciseProgressProps> = ({
                   >
                     {formatDate(session.date)}
                   </Link>
-                  <div style={{ fontSize: "14px" }}>
-                    {t.progress.volumeLine(session.volume.toFixed(1))}
-                    {renderVolumePRBadge(session.is_volume_pr)}
-                  </div>
+                  {session.volume > 0 && (
+                    <div style={{ fontSize: "14px" }}>
+                      {t.progress.volumeLine(session.volume.toFixed(1))}
+                      {renderVolumePRBadge(session.is_volume_pr)}
+                    </div>
+                  )}
                 </div>
 
                 {/* Sets list */}
@@ -403,6 +405,8 @@ export const ExerciseProgress: React.FC<ExerciseProgressProps> = ({
                                 ? t.progress.setWeightOnly(set.weight)
                                 : set.reps !== null
                                 ? t.progress.setRepsOnly(set.reps)
+                                : set.duration_seconds != null
+                                ? t.progress.setDurationOnly(set.duration_seconds)
                                 : t.progress.setNotSet
                             )}
                           </span>

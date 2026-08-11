@@ -4,6 +4,7 @@ export interface ProgressSet {
   set_number: number;
   weight: number | null;
   reps: number | null;
+  duration_seconds: number | null;
   notes: string;
   estimated_1rm: number | null;
   is_weight_pr: boolean;

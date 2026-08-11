@@ -18,6 +18,7 @@ class ProgressSet:
     set_number: int
     weight: float | None
     reps: int | None
+    duration_seconds: int | None
     notes: str
     estimated_1rm: float | None
     is_weight_pr: bool
@@ -134,6 +135,7 @@ class GetExerciseProgress:
                         set_number=s.set_number,
                         weight=s.weight,
                         reps=s.reps,
+                        duration_seconds=s.duration_seconds,
                         notes=s.notes,
                         estimated_1rm=e1rm,
                         is_weight_pr=is_weight_pr,
@@ -188,8 +190,10 @@ class GetExerciseProgress:
         most_reps_date: datetime | None = None
 
         for entry in entries:
-            # Check volume
-            if best_volume is None or entry.volume > best_volume:
+            # Check volume (skip sessions with no weight×reps data at all, e.g. a
+            # purely duration-based exercise — otherwise every such exercise gets
+            # a spurious "Best Volume: 0 lbs" PR)
+            if entry.volume > 0 and (best_volume is None or entry.volume > best_volume):
                 best_volume = entry.volume
                 best_volume_date = entry.date
 

@@ -6763,4 +6763,59 @@ browser pass — noting this explicitly rather than claiming a browser check tha
 didn't happen).
 
 Login fix applied directly to production. Timezone and duration-display fixes
-are local only — not committed or pushed.
+were committed (`3e00cd8`, alongside the shared-plan rendering fix `9771c58`)
+and pushed to `origin/main`; both `backend`/`frontend` Railway deploys
+succeeded and login was re-verified live post-deploy.
+
+## 2026-08-11 (cont'd) — Fixed the same duration-only-set display bug on the Exercise Progress page, and a spurious "Best Volume: 0 lbs" PR
+
+Same class of bug as the workout-history fix above, on a different page:
+Exercise Progress (`/exercises/:id/progress`) showed "Set 1: not set" for a
+duration-only exercise (e.g. "cardio"), and a Personal Records card reading
+"Best Volume: 0 lbs" — nonsensical for an exercise that's never had a
+weight/reps set logged.
+
+**Root cause, two parts:**
+1. `duration_seconds` was silently dropped from the whole progress pipeline —
+   present on the `WorkoutSet` domain entity, but never copied onto `ProgressSet`
+   in `get_exercise_progress.py`, never in `ProgressSetResponse`
+   (`sessions/presentation/schemas.py`), and never passed through when
+   `routes.py` built the response. The frontend `ProgressSet` type
+   (`frontend/src/api/progressApi.ts`) had no field for it either. With no
+   duration data available, `ExerciseProgress.tsx`'s weight/reps fallback chain
+   had nothing left to fall back to but the literal `"not set"` string.
+2. `_build_personal_records()` tracked `best_volume` unconditionally per
+   session, including sessions where `volume` was `0` because every set in that
+   session was duration-only (Σ weight×reps over an all-`None` set is 0) — so
+   every duration-only exercise got a fake "Best Volume: 0 lbs" PR with a date
+   attached.
+
+**Fix:**
+- Backend: added `duration_seconds` to `ProgressSet` (use case), `ProgressSetResponse`
+  (schema), and the response-building call in `routes.py`.
+- Backend: `_build_personal_records()` now only updates `best_volume`/
+  `best_volume_date` when `entry.volume > 0`, so a purely duration-based
+  exercise correctly reports `best_volume: null` (frontend's existing
+  `!== null` gate already hides the card once this stopped always being 0).
+- Frontend: added `duration_seconds` to the `ProgressSet` type; added a
+  `t.progress.setDurationOnly` formatter (`${seconds}s`, mirroring
+  `t.activeWorkout.prevDurationOnly`'s existing precedent) to both `en.ts`/
+  `ne.ts`; wired it into `ExerciseProgress.tsx`'s set-label fallback chain
+  after reps-only, before the `setNotSet` fallback.
+- Frontend: the per-session "Volume: 0.0 lbs" line is now only shown when
+  `session.volume > 0` — a duration-only session no longer displays a
+  meaningless zero-volume line.
+
+**New tests:** `backend/tests/unit/test_get_exercise_progress.py` — two new
+cases (`TestGetExerciseProgressDurationOnlySets`): duration threads through to
+`ProgressSet`, and a duration-only session doesn't produce a spurious
+zero-volume PR. `frontend/src/features/progress/ExerciseProgress.test.tsx`
+(new file) — three cases: duration-only set renders `"Set 1: 60s"` not "not
+set"; a duration-only exercise shows neither the Best Volume PR card nor a
+per-session Volume line; weight/reps exercises are unchanged.
+
+**Verified:** backend `pytest` 389/407 passed (same 8 pre-existing unrelated
+auth-assertion failures as before); frontend `tsc -b` clean, `vitest run`
+301/301 passed.
+
+Not committed or pushed yet.
