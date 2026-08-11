@@ -61,3 +61,12 @@ class WorkoutSetRepository(ABC):
         Used for per-exercise progress views.
         """
         pass
+
+    @abstractmethod
+    def list_distinct_exercise_ids_by_user(self, user_id: int) -> list[int]:
+        """Return the distinct exercise ids the user has ever logged a finished set for.
+
+        Same anonymous-share exclusion rule as list_finished_by_user_and_exercise.
+        Used to pick a random exercise to feature in the Dashboard's progress preview.
+        """
+        pass

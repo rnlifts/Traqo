@@ -209,6 +209,82 @@ def share_view_permission_anyone(test_session_factory, owner_plan_with_exercise)
     return {"token": share.token, "share_id": share.id}
 
 
+@pytest.fixture
+def share_restricted_default(test_session_factory, owner_plan_with_exercise):
+    """Create a share with the default mode='restricted', link_permission='view'.
+
+    No grants are added — this is exactly the state a real share is in until the
+    owner explicitly invites someone. Used to test that the *owner themselves*
+    can still use their own share link even though they (correctly) never have a
+    self-grant.
+    """
+    session = test_session_factory()
+    share_repo = PlanShareRepositoryImpl(session)
+    use_case = CreateOrUnrevokeShare(share_repo)
+    share = use_case.execute(owner_plan_with_exercise["plan_id"])
+    session.close()
+    return {"token": share.token, "share_id": share.id}
+
+
+class TestOwnerViaOwnRestrictedShareLink:
+    """Regression tests: the plan owner must always get full access through their
+    own share link, even in restricted mode with no self-grant on record.
+
+    Access resolution used to run once with a placeholder plan_owner_user_id=None
+    before the plan was even fetched. On a restricted share, that placeholder call
+    would find no grant for the (real) owner and raise ShareAccessDeniedError
+    immediately — a 403 the endpoint returned before ever reaching the corrected
+    resolution that would have recognized the caller as the owner.
+    """
+
+    def test_owner_starts_workout_via_own_restricted_share(
+        self, client, owner_plan_with_exercise, share_restricted_default, owner_auth_headers
+    ):
+        resp = client.post(
+            f"/api/shared/{share_restricted_default['token']}/start",
+            headers=owner_auth_headers,
+            json={"plan_day_id": owner_plan_with_exercise["day_id"]},
+        )
+        assert resp.status_code == 201
+
+    def test_owner_adds_set_via_own_restricted_share(
+        self, client, owner_plan_with_exercise, share_restricted_default, owner_auth_headers
+    ):
+        start_resp = client.post(
+            f"/api/shared/{share_restricted_default['token']}/start",
+            headers=owner_auth_headers,
+            json={"plan_day_id": owner_plan_with_exercise["day_id"]},
+        )
+        session_id = start_resp.json()["session_id"]
+
+        resp = client.post(
+            f"/api/shared/{share_restricted_default['token']}/sessions/{session_id}/sets",
+            headers=owner_auth_headers,
+            json={
+                "exercise_id": owner_plan_with_exercise["exercise_id"],
+                "weight": 100,
+                "reps": 5,
+            },
+        )
+        assert resp.status_code == 201
+
+    def test_owner_finishes_workout_via_own_restricted_share(
+        self, client, owner_plan_with_exercise, share_restricted_default, owner_auth_headers
+    ):
+        start_resp = client.post(
+            f"/api/shared/{share_restricted_default['token']}/start",
+            headers=owner_auth_headers,
+            json={"plan_day_id": owner_plan_with_exercise["day_id"]},
+        )
+        session_id = start_resp.json()["session_id"]
+
+        resp = client.post(
+            f"/api/shared/{share_restricted_default['token']}/sessions/{session_id}/finish",
+            headers=owner_auth_headers,
+        )
+        assert resp.status_code == 200
+
+
 class TestStartWorkoutViaShare:
     """Tests for POST /api/shared/{token}/start."""
 

@@ -447,3 +447,78 @@ class TestLoginLockout:
         assert response.status_code == 200, "Real user should still be able to log in"
         assert "token" in response.json()
 
+
+# ============================================================================
+# Profile Tests
+# ============================================================================
+
+
+class TestProfileRoutes:
+    """Tests for GET /api/auth/me and PUT /api/auth/profile endpoints."""
+
+    @pytest.fixture
+    def auth_headers(self, client):
+        """Register and log in a test user, return auth headers."""
+        client.post(
+            "/api/auth/register",
+            json={"display_name": "Profile Tester", "username": "profiletester", "password": "SecurePass123!"},
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={"username": "profiletester", "password": "SecurePass123!"},
+        )
+        token = login_response.json()["token"]
+        return {"Authorization": f"Bearer {token}"}
+
+    def test_get_me_for_new_user_is_incomplete_with_null_metrics(self, client, auth_headers):
+        response = client.get("/api/auth/me", headers=auth_headers)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["username"] == "profiletester"
+        assert data["is_complete"] is False
+        assert data["body_metrics"] is None
+        assert data["age"] is None
+
+    def test_get_me_without_auth_fails(self, client):
+        response = client.get("/api/auth/me")
+        assert response.status_code == 401
+
+    def test_update_profile_then_get_me_returns_complete_profile_with_metrics(self, client, auth_headers):
+        update_response = client.put(
+            "/api/auth/profile",
+            json={"age": 25, "weight_kg": 70, "height_cm": 175, "gender": "male", "activity_level": "moderate"},
+            headers=auth_headers,
+        )
+        assert update_response.status_code == 200
+        data = update_response.json()
+        assert data["is_complete"] is True
+        assert data["body_metrics"]["bmi"] == 22.9
+
+        me_response = client.get("/api/auth/me", headers=auth_headers)
+        assert me_response.json()["age"] == 25
+        assert me_response.json()["body_metrics"]["bmi"] == 22.9
+
+    def test_update_profile_rejects_invalid_gender(self, client, auth_headers):
+        response = client.put(
+            "/api/auth/profile",
+            json={"age": 25, "weight_kg": 70, "height_cm": 175, "gender": "robot", "activity_level": "moderate"},
+            headers=auth_headers,
+        )
+        assert response.status_code == 422
+
+    def test_update_profile_rejects_non_positive_weight(self, client, auth_headers):
+        response = client.put(
+            "/api/auth/profile",
+            json={"age": 25, "weight_kg": -5, "height_cm": 175, "gender": "male", "activity_level": "moderate"},
+            headers=auth_headers,
+        )
+        assert response.status_code == 422
+
+    def test_update_profile_without_auth_fails(self, client):
+        response = client.put(
+            "/api/auth/profile",
+            json={"age": 25, "weight_kg": 70, "height_cm": 175, "gender": "male", "activity_level": "moderate"},
+        )
+        assert response.status_code == 401
+

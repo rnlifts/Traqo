@@ -15,39 +15,14 @@ from src.modules.exercise_library.application.use_cases.get_equipment_options im
 from src.modules.exercise_library.infrastructure.repositories.exercise_library_repository_impl import (
     ExerciseLibraryRepositoryImpl,
 )
+from src.modules.exercise_library.domain.services.youtube_thumbnail import (
+    derive_youtube_thumbnail,
+)
 from .schemas import LibraryExerciseResponse, MuscleGroupsResponse, EquipmentOptionsResponse
 
 exercise_library_router = APIRouter(
     prefix="/api/exercise-library", tags=["exercise-library"]
 )
-
-
-def derive_youtube_thumbnail(video_url: str | None) -> str | None:
-    """Derive YouTube thumbnail URL from video_url. Returns None if url is None or unparseable."""
-    if not video_url:
-        return None
-
-    video_id = None
-
-    if "youtube.com/watch" in video_url:
-        try:
-            idx = video_url.find("v=")
-            if idx != -1:
-                video_id = video_url[idx + 2 : idx + 13]
-        except Exception:
-            pass
-    elif "youtu.be/" in video_url:
-        try:
-            idx = video_url.find("youtu.be/")
-            if idx != -1:
-                video_id = video_url[idx + 9 : idx + 20]
-        except Exception:
-            pass
-
-    if video_id:
-        return f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
-
-    return None
 
 
 @exercise_library_router.get("", response_model=list[LibraryExerciseResponse])

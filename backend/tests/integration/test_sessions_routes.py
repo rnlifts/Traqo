@@ -16,6 +16,7 @@ from src.modules.workouts.infrastructure.models.workout_plan_model import Workou
 from src.modules.workouts.infrastructure.models.plan_day_model import PlanDayModel
 from src.modules.exercises.infrastructure.models.exercise_model import ExerciseModel
 from src.modules.workouts.infrastructure.models.workout_exercise_model import WorkoutExerciseModel
+from src.modules.sessions.infrastructure.models.workout_session_model import WorkoutSessionModel
 
 
 @pytest.fixture(scope="function")
@@ -238,6 +239,197 @@ class TestGetUnresolvedSessionRoute:
 
 
 # ============================================================================
+# Get Last Active Plan Tests
+# ============================================================================
+
+
+class TestGetLastActivePlanRoute:
+    """Tests for GET /api/workout-sessions/last-active-plan endpoint."""
+
+    def test_get_last_active_plan_no_sessions(self, client, auth_headers):
+        """GET /workout-sessions/last-active-plan with no finished sessions returns null."""
+        response = client.get(
+            "/api/workout-sessions/last-active-plan",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["plan"] is None
+
+    def test_get_last_active_plan_returns_most_recent_finished_session(
+        self, client, auth_headers, test_plan_and_day
+    ):
+        """GET /workout-sessions/last-active-plan returns the most recently finished session's plan/day."""
+        start_response = client.post(
+            "/api/workout-sessions",
+            json={
+                "workout_plan_id": test_plan_and_day["plan_id"],
+                "plan_day_id": test_plan_and_day["day_id"],
+            },
+            headers=auth_headers,
+        )
+        session_id = start_response.json()["session_id"]
+
+        finish_response = client.put(
+            f"/api/workout-sessions/{session_id}/finish",
+            headers=auth_headers,
+        )
+        assert finish_response.status_code == 200
+
+        response = client.get(
+            "/api/workout-sessions/last-active-plan",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["plan"] is not None
+        assert data["plan"]["workout_plan_id"] == test_plan_and_day["plan_id"]
+        assert data["plan"]["plan_name"] == "Test Plan"
+        assert data["plan"]["day_label"] == "Day 1"
+        assert data["plan"]["session_id"] == session_id
+
+    def test_get_last_active_plan_ignores_unresolved_session(
+        self, client, auth_headers, test_plan_and_day
+    ):
+        """An in-progress (unfinished) session must not appear here — only finished ones."""
+        client.post(
+            "/api/workout-sessions",
+            json={
+                "workout_plan_id": test_plan_and_day["plan_id"],
+                "plan_day_id": test_plan_and_day["day_id"],
+            },
+            headers=auth_headers,
+        )
+
+        response = client.get(
+            "/api/workout-sessions/last-active-plan",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["plan"] is None
+
+    def test_get_last_active_plan_includes_quick_start_plans(
+        self, client, auth_headers
+    ):
+        """Quick-start plans qualify too — no plan-type distinction for this endpoint."""
+        start_response = client.post(
+            "/api/workout-sessions/quick-start",
+            headers=auth_headers,
+        )
+        session_id = start_response.json()["session_id"]
+
+        client.put(
+            f"/api/workout-sessions/{session_id}/finish",
+            headers=auth_headers,
+        )
+
+        response = client.get(
+            "/api/workout-sessions/last-active-plan",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["plan"] is not None
+        assert data["plan"]["session_id"] == session_id
+
+    def test_get_last_active_plan_without_auth_fails(self, client):
+        """GET /workout-sessions/last-active-plan without auth returns 401."""
+        response = client.get("/api/workout-sessions/last-active-plan")
+        assert response.status_code == 401
+
+    def test_get_last_active_plan_skips_deleted_plan(
+        self, client, auth_headers, test_session_factory, test_user
+    ):
+        """A finished session on a since-deleted plan must never surface here —
+        it falls back to the next most recent session on a plan that still exists.
+
+        Deleting a plan sets workout_sessions.workout_plan_id to NULL in production
+        (see migration change_fks_to_set_null_001 — ON DELETE SET NULL, chosen
+        specifically to preserve logged history after a plan/exercise is deleted).
+        Simulated directly here since the test schema (built from the SQLAlchemy
+        models' bare `ForeignKey(...)` declarations, no explicit ondelete) doesn't
+        carry that DB-level behavior the way the real Postgres schema does.
+        """
+        session = test_session_factory()
+        old_plan = WorkoutPlanModel(user_id=test_user["id"], name="Old Plan")
+        session.add(old_plan)
+        session.commit()
+        old_day = PlanDayModel(workout_plan_id=old_plan.id, order_position=1, label="Day 1")
+        session.add(old_day)
+        session.commit()
+        old_plan_id, old_day_id = old_plan.id, old_day.id
+        session.close()
+
+        old_start = client.post(
+            "/api/workout-sessions",
+            json={"workout_plan_id": old_plan_id, "plan_day_id": old_day_id},
+            headers=auth_headers,
+        )
+        client.put(f"/api/workout-sessions/{old_start.json()['session_id']}/finish", headers=auth_headers)
+
+        session = test_session_factory()
+        new_plan = WorkoutPlanModel(user_id=test_user["id"], name="New Plan")
+        session.add(new_plan)
+        session.commit()
+        new_day = PlanDayModel(workout_plan_id=new_plan.id, order_position=1, label="Day 1")
+        session.add(new_day)
+        session.commit()
+        new_plan_id, new_day_id = new_plan.id, new_day.id
+        session.close()
+
+        new_start = client.post(
+            "/api/workout-sessions",
+            json={"workout_plan_id": new_plan_id, "plan_day_id": new_day_id},
+            headers=auth_headers,
+        )
+        new_session_id = new_start.json()["session_id"]
+        client.put(f"/api/workout-sessions/{new_session_id}/finish", headers=auth_headers)
+
+        # Simulate deleting the more recent plan: ON DELETE SET NULL detaches its
+        # session (the use case under test only looks at session.workout_plan_id,
+        # so it doesn't matter whether the plan row itself is also removed).
+        session = test_session_factory()
+        session.query(WorkoutSessionModel).filter_by(id=new_session_id).update(
+            {"workout_plan_id": None}
+        )
+        session.commit()
+        session.close()
+
+        response = client.get("/api/workout-sessions/last-active-plan", headers=auth_headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["plan"] is not None
+        assert data["plan"]["workout_plan_id"] == old_plan_id
+        assert data["plan"]["plan_name"] == "Old Plan"
+
+    def test_get_last_active_plan_returns_null_if_only_plan_ever_touched_was_deleted(
+        self, client, auth_headers, test_session_factory, test_plan_and_day
+    ):
+        """If the user's only finished session was on a plan that's since been deleted,
+        there's nothing to continue — the card must fall back to the empty state."""
+        start_response = client.post(
+            "/api/workout-sessions",
+            json={
+                "workout_plan_id": test_plan_and_day["plan_id"],
+                "plan_day_id": test_plan_and_day["day_id"],
+            },
+            headers=auth_headers,
+        )
+        session_id = start_response.json()["session_id"]
+        client.put(f"/api/workout-sessions/{session_id}/finish", headers=auth_headers)
+
+        session = test_session_factory()
+        session.query(WorkoutSessionModel).filter_by(id=session_id).update({"workout_plan_id": None})
+        session.commit()
+        session.close()
+
+        response = client.get("/api/workout-sessions/last-active-plan", headers=auth_headers)
+        assert response.status_code == 200
+        assert response.json()["plan"] is None
+
+
+# ============================================================================
 # Get Session Detail Tests
 # ============================================================================
 
@@ -308,6 +500,35 @@ class TestAddWorkoutSetRoute:
         assert data["set_number"] == 1
         assert data["weight"] == 185.0
         assert data["reps"] == 10
+
+    def test_add_set_nonexistent_workout_exercise_returns_404_not_500(
+        self, client, auth_headers, test_plan_and_day
+    ):
+        """A nonexistent workout_exercise_id must return a proper 404, not fall
+        through to the generic 500 handler (regression test — this use case used
+        to raise a bare ValueError, which no handler in app.py catches)."""
+        start_response = client.post(
+            "/api/workout-sessions",
+            json={
+                "workout_plan_id": test_plan_and_day["plan_id"],
+                "plan_day_id": test_plan_and_day["day_id"],
+            },
+            headers=auth_headers,
+        )
+        session_id = start_response.json()["session_id"]
+
+        response = client.post(
+            f"/api/workout-sessions/{session_id}/sets",
+            json={
+                "workout_exercise_id": 999999,
+                "set_number": 1,
+                "weight": 185.0,
+                "reps": 10,
+            },
+            headers=auth_headers,
+        )
+        assert response.status_code == 404
+        assert response.json()["error"] == "Workout exercise not found"
 
 
 # ============================================================================
@@ -534,3 +755,69 @@ class TestActiveWorkoutBootstrapRoute:
             headers=auth_headers,
         )
         assert response.status_code in (404, 400)
+
+
+# ============================================================================
+# Dashboard Summary Tests
+# ============================================================================
+
+
+class TestGetDashboardSummaryRoute:
+    """Tests for GET /api/dashboard/summary endpoint."""
+
+    def test_summary_for_a_brand_new_user_is_all_zeros_and_nulls(self, client, auth_headers):
+        """A user with no history yet gets a clean empty state, never an error."""
+        response = client.get("/api/dashboard/summary", headers=auth_headers)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["weekly_stats"] == {"workout_count": 0, "total_volume": 0, "pr_count": 0}
+        assert len(data["weekly_activity"]) == 7
+        assert all(not day["has_workout"] for day in data["weekly_activity"])
+        assert data["random_exercise"] is None
+
+    def test_summary_reflects_a_finished_workout_logged_today(
+        self, client, auth_headers, test_plan_and_day, test_exercise_and_workout_exercise
+    ):
+        start_response = client.post(
+            "/api/workout-sessions",
+            json={
+                "workout_plan_id": test_plan_and_day["plan_id"],
+                "plan_day_id": test_plan_and_day["day_id"],
+            },
+            headers=auth_headers,
+        )
+        session_id = start_response.json()["session_id"]
+
+        client.post(
+            f"/api/workout-sessions/{session_id}/sets",
+            json={
+                "workout_exercise_id": test_exercise_and_workout_exercise["wo_exercise_id"],
+                "set_number": 1,
+                "weight": 100.0,
+                "reps": 10,
+            },
+            headers=auth_headers,
+        )
+        client.put(f"/api/workout-sessions/{session_id}/finish", headers=auth_headers)
+
+        response = client.get("/api/dashboard/summary", headers=auth_headers)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["weekly_stats"]["workout_count"] == 1
+        assert data["weekly_stats"]["total_volume"] == 1000
+        # First-ever set for this exercise is never a PR.
+        assert data["weekly_stats"]["pr_count"] == 0
+
+        active_days = [d for d in data["weekly_activity"] if d["has_workout"]]
+        assert len(active_days) == 1
+        assert active_days[0]["session_id"] == session_id
+
+        assert data["random_exercise"] is not None
+        assert data["random_exercise"]["exercise_id"] == test_exercise_and_workout_exercise["exercise_id"]
+
+    def test_summary_without_auth_fails(self, client):
+        """GET /api/dashboard/summary without auth returns 401."""
+        response = client.get("/api/dashboard/summary")
+        assert response.status_code == 401

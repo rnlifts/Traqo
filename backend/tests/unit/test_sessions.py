@@ -16,6 +16,7 @@ from src.modules.sessions.domain.exceptions import (
     WorkoutSessionNotFoundError,
     InvalidSetDataError,
 )
+from src.modules.workouts.domain.exceptions import WorkoutExerciseNotFoundError
 from src.modules.sessions.application.use_cases.start_workout import StartWorkout
 from src.modules.sessions.application.use_cases.quick_start_workout import QuickStartWorkout
 from src.modules.sessions.application.use_cases.add_workout_set import AddWorkoutSet
@@ -347,6 +348,39 @@ class TestAddWorkoutSet:
         with pytest.raises(SessionAlreadyFinishedError):
             use_case.execute(
                 user_id, session.id, wo_exercise.id, set_number=1, weight=185.0, reps=10
+            )
+
+    def test_add_set_nonexistent_workout_exercise_raises_domain_error(
+        self,
+        in_memory_plan_repo,
+        in_memory_day_repo,
+        in_memory_session_repo,
+        in_memory_set_repo,
+        in_memory_exercise_repo,
+        in_memory_workout_exercise_repo,
+        user_id,
+    ):
+        """AddWorkoutSet raises WorkoutExerciseNotFoundError (not a bare ValueError)
+        when workout_exercise_id doesn't resolve — so the route layer can map it to
+        a proper 404 instead of falling through to a generic 500."""
+        plan = in_memory_plan_repo.create(WorkoutPlan(user_id=user_id, name="Push"))
+        day = in_memory_day_repo.create(
+            PlanDay(workout_plan_id=plan.id, order_position=1, label="Day 1")
+        )
+        session = in_memory_session_repo.create(
+            WorkoutSession(user_id=user_id, workout_plan_id=plan.id, plan_day_id=day.id, started_at=now_utc())
+        )
+
+        use_case = AddWorkoutSet(
+            in_memory_session_repo,
+            in_memory_set_repo,
+            in_memory_exercise_repo,
+            in_memory_workout_exercise_repo,
+        )
+
+        with pytest.raises(WorkoutExerciseNotFoundError):
+            use_case.execute(
+                user_id, session.id, workout_exercise_id=999999, set_number=1, weight=185.0, reps=10
             )
 
 

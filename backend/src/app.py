@@ -1,9 +1,13 @@
+import logging
+
 from fastapi import FastAPI, HTTPException, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from src.config.settings import settings
+
+logger = logging.getLogger("traqo")
 
 from src.modules.auth.domain.exceptions import InvalidCredentialsError, UsernameAlreadyTakenError
 from src.modules.exercises.domain.exceptions import (
@@ -26,6 +30,7 @@ from src.modules.workouts.domain.exceptions import (
     PlanDayNotFoundError,
     UnauthorizedPlanDayAccessError,
     UnauthorizedWorkoutPlanAccessError,
+    WorkoutExerciseNotFoundError,
     WorkoutPlanHasSessionsError,
     WorkoutPlanNotFoundError,
     WeekHasSessionsError,
@@ -175,6 +180,14 @@ async def plan_day_not_found_handler(request, exc):
     )
 
 
+@app.exception_handler(WorkoutExerciseNotFoundError)
+async def workout_exercise_not_found_handler(request, exc):
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND,
+        content={"error": "Workout exercise not found"},
+    )
+
+
 @app.exception_handler(UnauthorizedPlanDayAccessError)
 async def unauthorized_plan_day_handler(request, exc):
     return JSONResponse(
@@ -273,6 +286,7 @@ async def http_exception_handler(request, exc):
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request, exc):
+    logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={"error": "Internal server error"},
@@ -293,10 +307,12 @@ from src.modules.sessions.presentation.routes import (
     sessions_router,
     get_workout_history_handler,
     get_exercise_progress_handler,
+    get_dashboard_summary_handler,
 )
 from src.modules.sessions.presentation.schemas import (
     WorkoutHistoryEntryResponse,
     ExerciseProgressResponse,
+    DashboardSummaryResponse,
 )
 from src.modules.workouts.presentation.routes import workouts_router
 from src.modules.sharing.presentation.routes import (
@@ -328,4 +344,12 @@ app.add_api_route(
     get_exercise_progress_handler,
     methods=["GET"],
     response_model=ExerciseProgressResponse,
+)
+
+# Register dashboard summary endpoint directly
+app.add_api_route(
+    "/api/dashboard/summary",
+    get_dashboard_summary_handler,
+    methods=["GET"],
+    response_model=DashboardSummaryResponse,
 )

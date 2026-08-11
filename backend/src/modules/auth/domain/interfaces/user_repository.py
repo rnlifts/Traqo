@@ -12,6 +12,16 @@ class UserRepository(ABC):
         pass
 
     @abstractmethod
+    def get_by_id(self, user_id: int) -> User | None:
+        """Retrieve a user by id. Returns None if not found."""
+        pass
+
+    @abstractmethod
+    def get_by_username_case_insensitive(self, username: str) -> User | None:
+        """Retrieve a user by username, ignoring case. Returns None if not found."""
+        pass
+
+    @abstractmethod
     def save(self, user: User) -> User:
         """Persist a user. Returns the saved user (with id set if new)."""
         pass

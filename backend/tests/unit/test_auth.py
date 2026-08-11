@@ -28,6 +28,15 @@ class InMemoryUserRepository(UserRepository):
                 return user
         return None
 
+    def get_by_id(self, user_id: int) -> User | None:
+        return self.users.get(user_id)
+
+    def get_by_username_case_insensitive(self, username: str) -> User | None:
+        for user in self.users.values():
+            if user.username.lower() == username.lower():
+                return user
+        return None
+
     def save(self, user: User) -> User:
         if user.id is None:
             user.id = self.next_id

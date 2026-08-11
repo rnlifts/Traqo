@@ -98,7 +98,7 @@ async def update_exercise(
     )
 
 
-@exercises_router.delete("/{exercise_id}", status_code=status.HTTP_200_OK)
+@exercises_router.delete("/{exercise_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_exercise(
     exercise_id: int,
     user_id: int = Depends(get_current_user_id),
@@ -108,4 +108,4 @@ async def delete_exercise(
     exercise_repository = ExerciseRepositoryImpl(db)
     use_case = DeleteExercise(exercise_repository)
     use_case.execute(exercise_id, user_id)
-    return {"message": "Exercise deleted"}
+    return None

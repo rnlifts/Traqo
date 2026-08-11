@@ -34,6 +34,12 @@ class PlanDayNotFoundError(WorkoutException):
     pass
 
 
+class WorkoutExerciseNotFoundError(WorkoutException):
+    """Raised when a workout_exercise (a specific plan-day-exercise instance) is not found."""
+
+    pass
+
+
 class UnauthorizedPlanDayAccessError(WorkoutException):
     """Raised when a user tries to access a plan day they don't own."""
 

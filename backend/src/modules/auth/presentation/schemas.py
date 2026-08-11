@@ -49,3 +49,36 @@ class LoginResponse(BaseModel):
         display_name: str
 
     user: User
+
+
+class BodyMetricsResponse(BaseModel):
+    """Computed BMI/BMR/maintenance calories."""
+
+    bmi: float
+    bmr: float
+    maintenance_calories: float
+
+
+class UserProfileResponse(BaseModel):
+    """A user's profile, with computed body metrics once it's complete."""
+
+    username: str
+    display_name: str
+    age: int | None
+    weight_kg: float | None
+    height_cm: float | None
+    gender: str | None
+    activity_level: str | None
+    is_complete: bool
+    body_metrics: BodyMetricsResponse | None
+
+
+class UpdateProfileRequest(BaseModel):
+    """Request to update profile fields. All fields optional/independently settable —
+    canonical metric units only (kg/cm); unit conversion happens on the frontend."""
+
+    age: int | None = Field(default=None, gt=0, le=120)
+    weight_kg: float | None = Field(default=None, gt=0, le=500)
+    height_cm: float | None = Field(default=None, gt=0, le=300)
+    gender: str | None = None
+    activity_level: str | None = None

@@ -27,9 +27,15 @@ def get_db() -> Session:
     """Dependency injection for database sessions.
 
     Each request gets its own session, closed after the request completes.
+    An unhandled exception explicitly rolls back any uncommitted work first —
+    relying on close()'s implicit rollback works too, but makes the intent
+    unclear and can mask partial-commit bugs.
     """
     db = SessionLocal()
     try:
         yield db
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()

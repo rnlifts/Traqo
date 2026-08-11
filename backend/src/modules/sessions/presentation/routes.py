@@ -26,7 +26,11 @@ from ..application.use_cases.get_exercise_progress import GetExerciseProgress
 from ..application.use_cases.get_workout_history import GetWorkoutHistory
 from ..application.use_cases.get_workout_session_detail import GetWorkoutSessionDetail
 from ..application.use_cases.discard_workout_session import DiscardWorkoutSession
+from ..application.use_cases.get_last_active_plan import GetLastActivePlan
+from ..application.use_cases.get_random_exercise_for_progress import GetRandomExerciseForProgress
 from ..application.use_cases.get_unresolved_session import GetUnresolvedSession
+from ..application.use_cases.get_weekly_activity import GetWeeklyActivity
+from ..application.use_cases.get_weekly_stats import GetWeeklyStats
 from ..application.use_cases.quick_start_workout import QuickStartWorkout
 from ..application.use_cases.start_workout import StartWorkout
 from ..infrastructure.repositories.workout_session_repository_impl import (
@@ -134,6 +138,35 @@ async def get_unresolved_session(
             }
         }
     return {"session": None}
+
+
+@sessions_router.get("/last-active-plan", response_model=dict)
+async def get_last_active_plan(
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """Get the plan the user most recently worked out on, for the dashboard hero card.
+
+    Only relevant when there's no unresolved session — the frontend checks
+    /unresolved first and only falls back to this if that returns null.
+    """
+    session_repo = WorkoutSessionRepositoryImpl(db)
+    plan_repo = WorkoutPlanRepositoryImpl(db)
+    day_repo = PlanDayRepositoryImpl(db)
+    use_case = GetLastActivePlan(session_repo, plan_repo, day_repo)
+    result = use_case.execute(user_id)
+
+    if result:
+        return {
+            "plan": {
+                "workout_plan_id": result.session.workout_plan_id,
+                "plan_name": result.plan_name,
+                "day_label": result.day_label,
+                "session_id": result.session.id,
+                "completed_at": result.session.completed_at,
+            }
+        }
+    return {"plan": None}
 
 
 @sessions_router.get("/{session_id}", response_model=WorkoutSessionDetailResponse)
@@ -426,5 +459,59 @@ async def get_exercise_progress_handler(
             best_volume_date=result.personal_records.best_volume_date,
             most_reps=result.personal_records.most_reps,
             most_reps_date=result.personal_records.most_reps_date,
+        ),
+    )
+
+
+async def get_dashboard_summary_handler(
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """Handler for the Dashboard's weekly stats + activity calendar + progress preview.
+
+    Combines three independent computations into one call (matching the
+    ActiveWorkoutBootstrap pattern) so the Dashboard doesn't need three separate
+    round trips. Each piece degrades independently to an empty/zero state rather
+    than failing — a user with no history yet gets zeros and nulls, never an error.
+    """
+    from .schemas import (
+        DashboardSummaryResponse,
+        WeeklyStatsResponse,
+        DayActivityResponse,
+        RandomExerciseResponse,
+    )
+
+    session_repo = WorkoutSessionRepositoryImpl(db)
+    set_repo = WorkoutSetRepositoryImpl(db)
+    exercise_repo = ExerciseRepositoryImpl(db)
+
+    exercise_progress_use_case = GetExerciseProgress(session_repo, set_repo, exercise_repo)
+
+    weekly_stats = GetWeeklyStats(session_repo, set_repo, exercise_progress_use_case).execute(user_id)
+    weekly_activity = GetWeeklyActivity(session_repo).execute(user_id)
+    random_exercise = GetRandomExerciseForProgress(set_repo, exercise_repo).execute(user_id)
+
+    return DashboardSummaryResponse(
+        weekly_stats=WeeklyStatsResponse(
+            workout_count=weekly_stats.workout_count,
+            total_volume=weekly_stats.total_volume,
+            pr_count=weekly_stats.pr_count,
+        ),
+        weekly_activity=[
+            DayActivityResponse(
+                day_label=day.day_label,
+                date=day.date,
+                has_workout=day.has_workout,
+                session_id=day.session_id,
+            )
+            for day in weekly_activity
+        ],
+        random_exercise=(
+            RandomExerciseResponse(
+                exercise_id=random_exercise.exercise_id,
+                exercise_name=random_exercise.exercise_name,
+            )
+            if random_exercise
+            else None
         ),
     )

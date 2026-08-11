@@ -325,7 +325,7 @@ class TestExercisesRoutes:
             f"/api/exercises/{exercise_id}",
             headers=auth_headers,
         )
-        assert response.status_code == 200
+        assert response.status_code == 204
 
         # Verify it's gone
         response = client.get("/api/exercises", headers=auth_headers)

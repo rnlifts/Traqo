@@ -56,6 +56,15 @@ class InMemoryUserRepository(UserRepository):
                 return user
         return None
 
+    def get_by_id(self, user_id: int) -> User | None:
+        return self.users.get(user_id)
+
+    def get_by_username_case_insensitive(self, username: str) -> User | None:
+        for user in self.users.values():
+            if user.username.lower() == username.lower():
+                return user
+        return None
+
     def save(self, user: User) -> User:
         if user.id is None:
             user.id = self.next_id
@@ -442,6 +451,17 @@ class InMemoryWorkoutSetRepository(WorkoutSetRepository):
             return (session.started_at if session else datetime.max, s.set_number)
 
         return sorted(matching_sets, key=sort_key)
+
+    def list_distinct_exercise_ids_by_user(self, user_id: int) -> list[int]:
+        """Return the distinct exercise ids the user has ever logged a finished set for."""
+        if not self.session_repository:
+            return []
+
+        finished_session_ids = {s.id for s in self.session_repository.list_finished_by_user(user_id)}
+        return list({
+            s.exercise_id for s in self.sets.values()
+            if s.workout_session_id in finished_session_ids
+        })
 
 
 class InMemoryPlanDayRepository(PlanDayRepository):

@@ -7,8 +7,12 @@ from ...domain.exceptions import (
 )
 from ...domain.interfaces.workout_session_repository import WorkoutSessionRepository
 from ...domain.interfaces.workout_set_repository import WorkoutSetRepository
-from src.modules.exercises.domain.exceptions import UnauthorizedExerciseAccessError
+from src.modules.exercises.domain.exceptions import (
+    ExerciseNotFoundError,
+    UnauthorizedExerciseAccessError,
+)
 from src.modules.exercises.domain.interfaces.exercise_repository import ExerciseRepository
+from src.modules.workouts.domain.exceptions import WorkoutExerciseNotFoundError
 from src.modules.workouts.domain.interfaces.workout_exercise_repository import (
     WorkoutExerciseRepository,
 )
@@ -80,6 +84,8 @@ class AddWorkoutSet:
             WorkoutSessionNotFoundError: If the session doesn't exist.
             UnauthorizedWorkoutSessionAccessError: If user doesn't own the session.
             SessionAlreadyFinishedError: If the session is already finished.
+            WorkoutExerciseNotFoundError: If the workout_exercise doesn't exist.
+            ExerciseNotFoundError: If the linked exercise doesn't exist.
             UnauthorizedExerciseAccessError: If the user doesn't own the exercise (unless skip_exercise_ownership_check=True or session.share_id is not None).
             InvalidSetDataError: If no values provided (all weight, reps, duration_seconds are null).
         """
@@ -102,7 +108,7 @@ class AddWorkoutSet:
         # 3. Load the workout exercise instance to get the actual exercise_id
         workout_exercise = self.workout_exercise_repository.get_by_id(workout_exercise_id)
         if not workout_exercise:
-            raise ValueError(f"Workout exercise {workout_exercise_id} not found")
+            raise WorkoutExerciseNotFoundError(f"Workout exercise {workout_exercise_id} not found")
 
         # 4. Validate exercise ownership (skip if requested or if session originated from a share, but always load exercise)
         exercise = self.exercise_repository.get_by_id(workout_exercise.exercise_id)
@@ -114,7 +120,7 @@ class AddWorkoutSet:
                 )
         else:
             if not exercise:
-                raise ValueError(f"Exercise {workout_exercise.exercise_id} not found")
+                raise ExerciseNotFoundError(f"Exercise {workout_exercise.exercise_id} not found")
 
         # 5. Permissive validation: a set needs at least one value (weight, reps, or duration)
         if weight is None and reps is None and duration_seconds is None:

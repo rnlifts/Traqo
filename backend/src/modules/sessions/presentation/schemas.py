@@ -171,3 +171,35 @@ class ActiveWorkoutBootstrapResponse(BaseModel):
     session: WorkoutSessionDetailResponse
     plan: WorkoutPlanDetailResponse | None  # null if workout_plan_id is null (deleted plan)
     exercises: list[ExerciseResponse]
+
+
+class WeeklyStatsResponse(BaseModel):
+    """This week's workout count, total volume, and PR count."""
+
+    workout_count: int
+    total_volume: float
+    pr_count: int
+
+
+class DayActivityResponse(BaseModel):
+    """One day's activity in the weekly calendar."""
+
+    day_label: str
+    date: datetime
+    has_workout: bool
+    session_id: int | None
+
+
+class RandomExerciseResponse(BaseModel):
+    """A randomly-chosen exercise the user has logged before, for the progress preview."""
+
+    exercise_id: int
+    exercise_name: str
+
+
+class DashboardSummaryResponse(BaseModel):
+    """Combined weekly stats + activity calendar + a random exercise pick, in one call."""
+
+    weekly_stats: WeeklyStatsResponse
+    weekly_activity: list[DayActivityResponse]
+    random_exercise: RandomExerciseResponse | None

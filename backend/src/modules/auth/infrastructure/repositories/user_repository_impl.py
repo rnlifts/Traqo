@@ -1,3 +1,4 @@
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ...domain.entities.user import User
@@ -19,6 +20,24 @@ class UserRepositoryImpl(UserRepository):
             return None
         return self._model_to_entity(model)
 
+    def get_by_id(self, user_id: int) -> User | None:
+        """Retrieve a user by id."""
+        model = self.session.query(UserModel).get(user_id)
+        if not model:
+            return None
+        return self._model_to_entity(model)
+
+    def get_by_username_case_insensitive(self, username: str) -> User | None:
+        """Retrieve a user by username, ignoring case."""
+        model = (
+            self.session.query(UserModel)
+            .filter(func.lower(UserModel.username) == username.lower())
+            .first()
+        )
+        if not model:
+            return None
+        return self._model_to_entity(model)
+
     def save(self, user: User) -> User:
         """Persist a user (create or update)."""
         if user.id:
@@ -27,6 +46,11 @@ class UserRepositoryImpl(UserRepository):
             model.username = user.username
             model.display_name = user.display_name
             model.password_hash = user.password_hash
+            model.age = user.age
+            model.weight_kg = user.weight_kg
+            model.height_cm = user.height_cm
+            model.gender = user.gender
+            model.activity_level = user.activity_level
         else:
             # Create new
             model = UserModel(
@@ -34,6 +58,11 @@ class UserRepositoryImpl(UserRepository):
                 display_name=user.display_name,
                 password_hash=user.password_hash,
                 created_at=user.created_at,
+                age=user.age,
+                weight_kg=user.weight_kg,
+                height_cm=user.height_cm,
+                gender=user.gender,
+                activity_level=user.activity_level,
             )
             self.session.add(model)
 
@@ -76,4 +105,9 @@ class UserRepositoryImpl(UserRepository):
             created_at=model.created_at,
             failed_login_attempts=model.failed_login_attempts,
             locked_until=model.locked_until,
+            age=model.age,
+            weight_kg=model.weight_kg,
+            height_cm=model.height_cm,
+            gender=model.gender,
+            activity_level=model.activity_level,
         )

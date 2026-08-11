@@ -1,11 +1,12 @@
 """Endpoints for share management (owner-only) and share access (public)."""
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from src.infrastructure.database import get_db
 from src.infrastructure.security.oauth2 import get_current_user_id, get_optional_user_id
-from src.modules.auth.infrastructure.models.user_model import UserModel
+from src.modules.auth.infrastructure.repositories.user_repository_impl import (
+    UserRepositoryImpl,
+)
 from src.modules.workouts.infrastructure.repositories.workout_plan_repository_impl import (
     WorkoutPlanRepositoryImpl,
 )
@@ -87,15 +88,6 @@ def _check_plan_ownership(plan_id: int, user_id: int, db: Session):
     return plan
 
 
-def _get_user_by_username_case_insensitive(username: str, db: Session) -> UserModel | None:
-    """Look up a user by username, case-insensitive."""
-    return (
-        db.query(UserModel)
-        .filter(func.lower(UserModel.username) == username.lower())
-        .first()
-    )
-
-
 @sharing_router.post("", response_model=ShareResponse, status_code=status.HTTP_201_CREATED)
 async def create_share(
     plan_id: int,
@@ -107,6 +99,7 @@ async def create_share(
     plan = _check_plan_ownership(plan_id, user_id, db)
 
     share_repo = PlanShareRepositoryImpl(db)
+    user_repo = UserRepositoryImpl(db)
     use_case = CreateOrUnrevokeShare(share_repo)
     share = use_case.execute(plan_id)
 
@@ -114,7 +107,7 @@ async def create_share(
     grants = share_repo.list_grants(share.id)
     grant_responses = []
     for grant in grants:
-        user = db.get(UserModel, grant.user_id)
+        user = user_repo.get_by_id(grant.user_id)
         if user:
             grant_responses.append(
                 ShareGrantResponse(
@@ -145,6 +138,7 @@ async def get_share(
     plan = _check_plan_ownership(plan_id, user_id, db)
 
     share_repo = PlanShareRepositoryImpl(db)
+    user_repo = UserRepositoryImpl(db)
     use_case = GetShare(share_repo)
 
     try:
@@ -157,7 +151,7 @@ async def get_share(
 
     grant_responses = []
     for grant in grants:
-        user = db.get(UserModel, grant.user_id)
+        user = user_repo.get_by_id(grant.user_id)
         if user:
             grant_responses.append(
                 ShareGrantResponse(
@@ -201,6 +195,7 @@ async def update_share(
         )
 
     share_repo = PlanShareRepositoryImpl(db)
+    user_repo = UserRepositoryImpl(db)
     use_case = UpdateShare(share_repo)
 
     try:
@@ -220,7 +215,7 @@ async def update_share(
     grants = share_repo.list_grants(share.id)
     grant_responses = []
     for grant in grants:
-        user = db.get(UserModel, grant.user_id)
+        user = user_repo.get_by_id(grant.user_id)
         if user:
             grant_responses.append(
                 ShareGrantResponse(
@@ -251,6 +246,7 @@ async def revoke_share(
     plan = _check_plan_ownership(plan_id, user_id, db)
 
     share_repo = PlanShareRepositoryImpl(db)
+    user_repo = UserRepositoryImpl(db)
     use_case = RevokeShare(share_repo)
 
     try:
@@ -265,7 +261,7 @@ async def revoke_share(
     grants = share_repo.list_grants(share.id)
     grant_responses = []
     for grant in grants:
-        user = db.get(UserModel, grant.user_id)
+        user = user_repo.get_by_id(grant.user_id)
         if user:
             grant_responses.append(
                 ShareGrantResponse(
@@ -304,7 +300,7 @@ async def add_grant(
         )
 
     # Look up user by username (case-insensitive)
-    target_user = _get_user_by_username_case_insensitive(req.username, db)
+    target_user = UserRepositoryImpl(db).get_by_username_case_insensitive(req.username)
     if not target_user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -345,7 +341,7 @@ async def remove_grant(
     plan = _check_plan_ownership(plan_id, user_id, db)
 
     # Look up user by username (case-insensitive)
-    target_user = _get_user_by_username_case_insensitive(username, db)
+    target_user = UserRepositoryImpl(db).get_by_username_case_insensitive(username)
     if not target_user:
         # 204 even if user not found (idempotent)
         return
@@ -430,7 +426,7 @@ async def resolve_and_access_shared_plan(
     )
 
     # Get plan owner's username
-    plan_owner = db.get(UserModel, plan.user_id)
+    plan_owner = UserRepositoryImpl(db).get_by_id(plan.user_id)
     plan_owner_username = plan_owner.username if plan_owner else "unknown"
 
     # Return the shared plan response
@@ -468,24 +464,17 @@ async def start_workout_via_share(
     share_repo = PlanShareRepositoryImpl(db)
     plan_repo = WorkoutPlanRepositoryImpl(db)
 
-    # Resolve access
-    access_resolver = ResolveShareAccess(share_repo)
-    try:
-        share, effective_permission = access_resolver.execute(
-            token, caller_user_id, plan_owner_user_id=None  # Will be set after plan fetch
-        )
-    except ShareAccessDeniedError:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have permission to access this share",
-        )
-    except ShareNotFoundError:
+    # Fetch the share and plan first so we know the real owner before resolving
+    # access — resolving with a placeholder owner would make the "is this caller
+    # the plan owner" check unable to ever match, which could wrongly deny the
+    # plan owner access to their own restricted-mode share link.
+    share = share_repo.get_by_token(token)
+    if not share or not share.is_active:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Share not found",
         )
 
-    # Get the plan
     plan = plan_repo.get_by_id(share.workout_plan_id)
     if not plan:
         raise HTTPException(
@@ -493,7 +482,8 @@ async def start_workout_via_share(
             detail="Plan not found",
         )
 
-    # Re-resolve with correct plan owner to verify permission
+    # Resolve access with the real plan owner
+    access_resolver = ResolveShareAccess(share_repo)
     try:
         share, effective_permission = access_resolver.execute(
             token, caller_user_id, plan_owner_user_id=plan.user_id
@@ -569,26 +559,18 @@ async def add_set_via_share(
     from src.modules.exercises.infrastructure.repositories.exercise_repository_impl import ExerciseRepositoryImpl
     from src.modules.sessions.application.use_cases.add_workout_set import AddWorkoutSet
 
-    # Resolve share and access
+    # Fetch the share and plan first so we know the real owner before resolving
+    # access — resolving with a placeholder owner would make the "is this caller
+    # the plan owner" check unable to ever match, which could wrongly deny the
+    # plan owner access to their own restricted-mode share link.
     share_repo = PlanShareRepositoryImpl(db)
-    access_resolver = ResolveShareAccess(share_repo)
-
-    try:
-        share, effective_permission = access_resolver.execute(
-            token, caller_user_id, plan_owner_user_id=None
-        )
-    except ShareAccessDeniedError:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have permission to access this share",
-        )
-    except ShareNotFoundError:
+    share = share_repo.get_by_token(token)
+    if not share or not share.is_active:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Share not found",
         )
 
-    # Get the plan and re-resolve with correct plan owner
     plan_repo = WorkoutPlanRepositoryImpl(db)
     plan = plan_repo.get_by_id(share.workout_plan_id)
     if not plan:
@@ -597,6 +579,8 @@ async def add_set_via_share(
             detail="Plan not found",
         )
 
+    # Resolve access with the real plan owner
+    access_resolver = ResolveShareAccess(share_repo)
     try:
         share, effective_permission = access_resolver.execute(
             token, caller_user_id, plan_owner_user_id=plan.user_id
@@ -700,26 +684,18 @@ async def finish_workout_via_share(
     from src.modules.sessions.infrastructure.repositories.workout_session_repository_impl import WorkoutSessionRepositoryImpl as SessionRepoImpl
     from src.modules.sessions.application.use_cases.finish_workout import FinishWorkout
 
-    # Resolve share and access
+    # Fetch the share and plan first so we know the real owner before resolving
+    # access — resolving with a placeholder owner would make the "is this caller
+    # the plan owner" check unable to ever match, which could wrongly deny the
+    # plan owner access to their own restricted-mode share link.
     share_repo = PlanShareRepositoryImpl(db)
-    access_resolver = ResolveShareAccess(share_repo)
-
-    try:
-        share, effective_permission = access_resolver.execute(
-            token, caller_user_id, plan_owner_user_id=None
-        )
-    except ShareAccessDeniedError:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have permission to access this share",
-        )
-    except ShareNotFoundError:
+    share = share_repo.get_by_token(token)
+    if not share or not share.is_active:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Share not found",
         )
 
-    # Get the plan and re-resolve with correct plan owner
     plan_repo = WorkoutPlanRepositoryImpl(db)
     plan = plan_repo.get_by_id(share.workout_plan_id)
     if not plan:
@@ -728,6 +704,8 @@ async def finish_workout_via_share(
             detail="Plan not found",
         )
 
+    # Resolve access with the real plan owner
+    access_resolver = ResolveShareAccess(share_repo)
     try:
         share, effective_permission = access_resolver.execute(
             token, caller_user_id, plan_owner_user_id=plan.user_id
@@ -789,6 +767,7 @@ async def list_shared_with_me(
     """
     share_repo = PlanShareRepositoryImpl(db)
     plan_repo = WorkoutPlanRepositoryImpl(db)
+    user_repo = UserRepositoryImpl(db)
     use_case = ListSharedWithMe(share_repo)
 
     pairs = use_case.execute(user_id)
@@ -798,7 +777,7 @@ async def list_shared_with_me(
         plan = plan_repo.get_by_id(share.workout_plan_id)
         if not plan:
             continue
-        owner = db.get(UserModel, plan.user_id)
+        owner = user_repo.get_by_id(plan.user_id)
         entries.append(
             SharedWithMeEntry(
                 plan_id=plan.id,

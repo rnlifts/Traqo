@@ -127,3 +127,34 @@ class WorkoutSetRepositoryImpl(WorkoutSetRepository):
             .all()
         )
         return [m.to_domain() for m in models]
+
+    def list_distinct_exercise_ids_by_user(self, user_id: int) -> list[int]:
+        """Return the distinct exercise ids the user has ever logged a finished set for."""
+        from ..models.workout_session_model import WorkoutSessionModel
+        from sqlalchemy import and_, or_
+
+        rows = (
+            self.session.query(WorkoutSetModel.exercise_id)
+            .join(
+                WorkoutSessionModel,
+                WorkoutSetModel.workout_session_id == WorkoutSessionModel.id,
+            )
+            .filter(
+                and_(
+                    WorkoutSessionModel.user_id == user_id,
+                    WorkoutSessionModel.completed_at.isnot(None),
+                )
+            )
+            .filter(
+                ~and_(
+                    WorkoutSessionModel.share_id.isnot(None),
+                    or_(
+                        WorkoutSessionModel.logged_by_user_id.is_(None),
+                        WorkoutSessionModel.logged_by_user_id != user_id,
+                    ),
+                )
+            )
+            .distinct()
+            .all()
+        )
+        return [row[0] for row in rows]
