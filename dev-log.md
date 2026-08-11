@@ -5685,3 +5685,971 @@ WEEKS"/"NULL DAYS" cosmetic bug when a plan's `total_units` is unset — still p
 low priority.
 
 Not pushed; production untouched.
+
+## 2026-08-07 — "Workout Preview" list + fix duplicate content on the shared-plan start flow ("two dashboards")
+
+Owner sent a UI mockup and asked for two related changes to how a workout is started
+(own plan, anonymous share link, and authenticated share recipient all included):
+1. Before starting, show a preview list of the day's exercises (name + set count only,
+   no reps/weight) instead of jumping straight to a bare "Begin" button. Owner picked
+   the title **"Workout Preview"** via a follow-up question.
+2. Fix a "two dashboards" bug on the shared-plan page (`/shared/:token`): for a share
+   recipient with `log`/`edit` permission, clicking "Start workout" revealed the
+   interactive week/day picker + Begin button, but the full day-by-day plan listing
+   that was already on the page stayed rendered underneath, unchanged — the same plan
+   content shown twice at once. Confirmed via owner-provided before/after screenshots;
+   an earlier hypothesis (duplicate nav/sidebar elements) was ruled out by DOM
+   inspection before the screenshots arrived.
+
+**Root cause of "two dashboards":** `SharedPlanPage.tsx` rendered the full day/week
+dump (`DayCard`) unconditionally, and separately rendered `ShareWorkoutStarter` (the
+picker) for any non-`view` permission — both at the same time, with no exclusivity
+between them.
+
+**Fix:**
+- New shared component `frontend/src/components/WorkoutPreviewList.tsx` — a read-only
+  numbered list (name + "N sets", explicitly never reps/weight), built entirely from
+  existing CSS classes (`.card`, `.field-group`, `.icon-badge`, `.field-group-value`),
+  no new CSS. Structurally compatible with both `WorkoutExercise` (own plans) and
+  `SharedPlanExercise` (shared plans) since both already expose `exercise_name`/
+  `target_sets`. 6 new tests.
+- `frontend/src/features/sharing/ShareWorkoutStarter.tsx`: removed the `showPicker`
+  gate — the week/day chips, the `WorkoutPreviewList`, and the Begin button are now all
+  visible immediately (no separate "Start workout" reveal click); removed the "Cancel"
+  button; Begin button text changed to `'Begin workout →'`.
+- `frontend/src/pages/SharedPlanPage.tsx`: the full day/week dump now renders **only**
+  for `permission === 'view'` visitors (who have no picker to interact with, so it's
+  the only way for them to see the plan). For `log`/`edit` permission, only
+  `ShareWorkoutStarter` renders — never both at once. This is the actual "two
+  dashboards" fix.
+- `frontend/src/pages/SessionSetupPage.tsx` (the own-plan flow): added the same
+  `WorkoutPreviewList` between the day/week picker and the Begin/Cancel buttons, reusing
+  the existing `getDisplayedDays()`/`selectedDayIndex` state — no gating logic needed
+  since this page never had the duplicate-listing problem.
+- Rewrote `ShareWorkoutStarter.test.tsx` (10 of 10 tests touched — old tests asserted
+  the removed gate/button text) and updated 3 stale assertions in
+  `SharedPlanPage.test.tsx` that checked for the old `'Start workout'` text.
+
+**Scoping decision, communicated to the owner:** built only the exercise-list preview
+described in words. Deliberately did **not** build the mockup's muscle-group tag,
+duration estimate, or plan-completion progress bar — none of that data or logic exists
+anywhere in the backend today, and building it would be substantial unscoped feature
+work.
+
+**Verified:**
+- Frontend: full suite 232/232 (was 223 — 9 net new: 6 `WorkoutPreviewList` + 2 new
+  `SessionSetupPage` preview tests, 1 net add in the `ShareWorkoutStarter` rewrite),
+  `tsc -b` clean.
+- Live browser, all three entry points, using a freshly seeded real plan (two users
+  registered through the actual UI, plan/day/exercise rows inserted directly since the
+  plan-builder's own "add exercise" endpoint hit an unrelated pre-existing
+  `net::ERR_FAILED` in this environment — flagged separately, not touched):
+  - **Own plan** (`SessionSetupPage`): "Workout Preview" card shows numbered exercises
+    with `"N sets"` only, no reps/weight text anywhere.
+  - **Anonymous, `view`-only share link**: full plan dump renders (single listing), no
+    picker, no Begin button — correct, since there's nothing to start.
+  - **Authenticated recipient with `log` permission**: exactly one dashboard — header,
+    day chips, one "Workout Preview" card, one "Begin workout →" button. Clicked Begin,
+    landed on the real Active Workout screen (`ActiveWorkout.tsx`), confirmed set-logging
+    UI renders correctly for both exercises.
+  - Test users/plan/share/session data cleaned up from `traqo_dev` afterward.
+
+Not pushed; production untouched.
+
+## 2026-08-07 — Dashboard hero card ("Continue Your Plan" / "Continue your workout" / first-workout prompt)
+
+Owner sent a UI mockup of a blue hero card on the Dashboard and asked for it, with one
+explicit simplification after scoping questions: **no progress bar, no day-count math**
+("Day 2 of 5", "3 of 5 workouts completed") — just show whichever plan the user most
+recently touched, full stop. Quick-start ("build as you go") plans count too, same as
+any other plan — dropped an earlier plan to exclude them after the owner said so
+directly.
+
+**Final behavior (three mutually exclusive states, in priority order):**
+1. Unresolved (in-progress, unfinished) session exists → "Continue Your Workout": plan
+   name + day label + start date, with **Resume / Mark as Finished / Discard** — this
+   replaces the old separate blue banner that lived below `PlanActionCards`; that
+   behavior is now folded into the hero card instead of existing twice.
+2. No unresolved session, but the user has at least one finished session ever (any plan
+   type) → "Continue Your Plan": most recently touched plan's name + day label, single
+   **Continue Now** button → navigates to that plan's day picker
+   (`/workout-plans/{id}/start`, i.e. `SessionSetupPage`) so the user picks a day
+   themselves — no auto-selected "next day" logic.
+3. Neither → "Ready for Your First Workout? 👋" with **Choose a Plan** (→
+   `/workout-plans`) and **Start Empty Workout** (same quick-start action as the
+   existing "Start Today" card).
+
+**Backend (new, since nothing today tracks "the plan the user is currently doing"):**
+- `backend/src/modules/sessions/application/use_cases/get_last_active_plan.py` — new
+  use case, deliberately mirrors `GetUnresolvedSession`'s shape. Reuses the *existing*
+  `WorkoutSessionRepository.list_finished_by_user()` (already ordered by `started_at`
+  descending, already correctly excludes anonymous-share-logged sessions from the
+  owner's view) and just takes `[0]` — no new repository method needed.
+- New route `GET /api/workout-sessions/last-active-plan` in
+  `sessions/presentation/routes.py`, placed before the `/{session_id}` int-param route
+  (same ordering requirement as `/unresolved`, or FastAPI matches the path as
+  `session_id="last-active-plan"` and 422s).
+- 5 new integration tests in `test_sessions_routes.py::TestGetLastActivePlanRoute`: no
+  sessions → null, returns most recent finished session's plan/day, correctly ignores
+  an in-progress/unfinished session, includes quick-start plans, 401 without auth.
+
+**Frontend:**
+- `frontend/src/api/workoutSessionsApi.ts`: new `LastActivePlan` type +
+  `getLastActivePlan()`.
+- New component `frontend/src/components/DashboardHero.tsx` — owns all three states
+  and the Resume/Finish/Discard logic that used to live inline in `Dashboard.tsx`
+  (moved, not duplicated). 9 new tests in `DashboardHero.test.tsx` covering all three
+  states plus every action (Resume navigates, Mark as Finished calls the API and clears
+  state, Discard requires confirmation, Continue Now navigates to the day picker, Choose
+  a Plan navigates to `/workout-plans`, Start Empty Workout quick-starts and navigates).
+- `frontend/src/pages/Dashboard.tsx`: now fetches `getLastActivePlan()` alongside the
+  existing history/unresolved-session calls (`Promise.all`), removed the old inline
+  banner entirely, renders `<DashboardHero>` above `<PlanActionCards>` (mockup order).
+  `Dashboard.test.tsx` rewritten — the banner-specific tests moved to
+  `DashboardHero.test.tsx`; Dashboard's own tests now just confirm it fetches all three
+  data sources in parallel and passes them through correctly (mocks `DashboardHero`).
+
+**Verified:**
+- Backend: 323 passed, 2 skipped (pre-existing/unrelated), no regressions.
+- Frontend: full suite 240/240 (was 232 — 9 new `DashboardHero` tests, net 4 in
+  `Dashboard.test.tsx` after replacing the old banner tests with hero-integration
+  tests), `tsc -b` clean.
+- Live browser, all three states, using a freshly registered real user with seeded
+  plan/day/session rows (direct DB inserts, since the plan-builder's own exercise-add
+  flow still hits the pre-existing unrelated `net::ERR_FAILED` noted last entry):
+  - **Empty state**: confirmed with a genuinely brand-new registered user — "Ready for
+    Your First Workout? 👋" with both buttons.
+  - **Continue Your Plan**: seeded one finished session, hero showed "Push Pull Legs ·
+    Push Day", clicked Continue Now, landed on `/workout-plans/25/start` correctly.
+  - **Continue Your Workout**: seeded an unresolved session, hero correctly prioritized
+    it over the finished-session state, showing Resume/Mark as Finished/Discard. Clicked
+    Resume → landed on the real Active Workout screen. Separately clicked Discard →
+    confirmed the dialog, confirmed the deletion, hero correctly fell back to the
+    "Continue Your Plan" state showing the next-most-recent finished session.
+  - **Environment note**: the dev backend needed a restart mid-verification — same
+    known `uvicorn` (no `--reload`) gotcha as before; the new route 422'd until
+    restarted, then worked immediately after. Restarted via
+    `Stop-Process`/relaunch of `run.py`, no code issue.
+  - Test user/plan/day/session data cleaned up from `traqo_dev` afterward.
+
+Not pushed; production untouched.
+
+## 2026-08-07 — Fix: hero card showed deleted plans, and starting one errored
+
+Owner reported the new "Continue Your Plan" hero card could show a plan that had since
+been deleted, and clicking it errored out. Two fixes.
+
+**Root cause**: `workout_sessions.workout_plan_id` uses `ON DELETE SET NULL` in
+production (migration `change_fks_to_set_null_001`, 2026-08-02 — deliberately chosen so
+deleting a plan preserves the user's logged history instead of cascading the delete).
+So after a plan is deleted, its sessions survive with `workout_plan_id = NULL`, not a
+dangling reference to a missing id. `GetLastActivePlan` (added this session) didn't
+account for that: it always returned the most recent finished session as-is, falling
+back to a `"Deleted Plan"` placeholder name but still handing back a `null`
+`workout_plan_id`. The frontend then built `/workout-plans/null/start` for the
+"Continue Now" button, which 404'd.
+
+**Fix 1 — filter deleted plans out at the source**
+(`backend/src/modules/sessions/application/use_cases/get_last_active_plan.py`):
+`execute()` now walks `list_finished_by_user()` in order and returns the first session
+whose plan still exists, skipping any that don't, instead of always taking `[0]`. If
+every finished session's plan has been deleted, correctly falls back to `None` (the
+empty state) rather than ever surfacing something unclickable. 2 new integration tests
+in `test_sessions_routes.py`: skips a deleted plan and falls back to the next valid
+one, and returns null when the *only* plan ever touched was deleted. Both simulate the
+`SET NULL` production behavior directly (nulling `workout_plan_id` via the test DB
+session) since the SQLite test schema — built from the SQLAlchemy models' bare
+`ForeignKey(...)` declarations with no explicit `ondelete` — doesn't replicate that
+migration-level behavior; a first attempt at these tests that called the actual
+`DELETE /api/workout-plans/{id}` endpoint hit SQLite's default FK `RESTRICT` and
+failed for the wrong reason, which is what surfaced this schema/migration mismatch.
+
+**Fix 2 — good error handling for any stale plan link, not just this card**
+(`frontend/src/pages/SessionSetupPage.tsx`, the day-picker/"start workout" page): the
+load-failure path was previously a single bare `error` string dumped in a generic
+`.error-message` div. Split into a dedicated `loadError: {status, message}` state,
+mirroring `SharedPlanPage`'s existing error-page pattern — a proper `.card` with a
+status-specific title ("Plan Not Found" for 404, "Access Denied" for 403, "Something
+Went Wrong" otherwise), a clear message, and a "Back to Plans" button. Also guards
+against a non-numeric `planId` in the URL (e.g. the literal `/workout-plans/null/start`
+this bug produced) without ever calling the API with garbage input. 5 new tests in
+`SessionSetupPage.test.tsx` covering the 404, 403, invalid-id, and "Back to Plans"
+navigation cases.
+
+**Verified:**
+- Backend: 325 passed, 2 skipped (pre-existing/unrelated).
+- Frontend: full suite 244/244, `tsc -b` clean.
+- Live browser: seeded two plans for a fresh user, finished a session on each, then
+  simulated deleting the more recent one exactly as production would (nulled the
+  session's `workout_plan_id`, then removed the plan row). Confirmed the hero correctly
+  fell back to showing the older, still-existing plan. Separately navigated directly to
+  the deleted plan's `/workout-plans/{id}/start` URL and confirmed the new "Plan Not
+  Found" error card renders (not a raw error), with a working "Back to Plans" button.
+  Needed another dev-backend restart mid-verification (same known `uvicorn` gotcha).
+  Test data cleaned up from `traqo_dev` afterward.
+
+Not pushed; production untouched.
+
+## 2026-08-08 — Dashboard hero visual polish + consolidate plan-creation actions into it
+
+Owner iterated on the hero card's look through several rounds (frontend-only, all in
+`frontend/src/components/DashboardHero.tsx`) — noted here as the final settled state
+rather than each intermediate step:
+- Background: solid rich blue diagonal gradient using the app's real `--accent` /
+  `--accent-hover` / `--accent-pressed` scale (not a lightened/pastel tint — an earlier
+  pastel version and a separately-tried unrelated-blue version were both rejected).
+- All hero text is white; ghost buttons (Resume/Mark as Finished/Discard, and the
+  empty-state secondary actions) are white-bordered/white-text; the one "primary" button
+  per state (Resume, Continue Now, Create Workout Plan) is solid white with blue text.
+- A soft light sweep (`heroShimmer` keyframe, injected once via the same
+  `document.createElement('style')` pattern `Toast.tsx` already established) loops
+  right-to-left across the card at low opacity (0.25) — an earlier brighter (0.9),
+  left-to-right version was too much.
+- A workout-silhouette image (`src/assets/workout.svg`) was tried, tuned (flattened to
+  a solid white shape via `filter: brightness(0) invert(1)` since the source SVG turned
+  out to be a full-color illustration, not a monochrome silhouette), and then removed
+  entirely at the owner's request — kept out of the final version, `paddingRight`/
+  `minHeight` reservations for it removed too.
+
+**Separately, consolidated plan-creation entry points**: the "Plan Everything Upfront" /
+"Start Small. Build Over Time" cards (`PlanActionCards`, still used as-is on the Plans
+page — not touched or removed there) were removed from the Dashboard entirely.
+Clarified with the owner first: the replacement buttons only need to live in the hero's
+*empty* state (brand-new user / nothing to continue) — returning users with something to
+continue don't get them duplicated onto the "Continue Your Plan"/"Continue Your Workout"
+states, matching how the page already worked. The empty state now has three buttons:
+**Create Workout Plan** (new, → `/workout-plans/new`, primary/white), **Choose a Plan**
+(existing, → `/workout-plans`, demoted to ghost), **Start Empty Workout** (existing
+quick-start action, ghost).
+
+**Responsive**: added a `@media (max-width: 640px)` block to the same injected
+`<style>` tag, targeting new `.dashboard-hero-content`/`.dashboard-hero-actions` classes
+(added alongside the existing inline styles, not replacing them) — below 640px the
+content stacks to a column and every button in the action row goes full-width
+(`flex: 1 1 auto`). Confirmed via computed styles at 375px (column, three equal-width
+245.6px buttons) and 768px (still row layout, unaffected).
+
+**Verified:**
+- Frontend: full suite 245/245 (net +1 over the last entry — 1 new `DashboardHero` test
+  for "Create Workout Plan", 1 existing empty-state test extended to also assert the
+  third button, 1 new `Dashboard.test.tsx` regression guard asserting the removed cards'
+  text no longer renders, offset by removing the now-dead `PlanActionCards` mock),
+  `tsc -b` clean.
+- Live browser: registered a fresh user, confirmed the two old cards are gone and all
+  three empty-state buttons render with the right labels; clicked "Create Workout Plan"
+  and confirmed it lands on the actual new-plan builder screen. Confirmed the responsive
+  breakpoint directly via computed styles at 375px and 768px viewport widths (real
+  screenshots weren't available in this session's browser pane, so verification here was
+  via `getComputedStyle`/`getBoundingClientRect` rather than visual capture). Test user
+  cleaned up from `traqo_dev` afterward.
+
+Not pushed; production untouched.
+
+## 2026-08-08 — Dashboard weekly KPIs, activity calendar, and progress preview
+
+Owner sent a mockup of a fuller Dashboard: weekly stat tiles, a Sun-Sat activity
+calendar, and an exercise progress chart. Before building, researched what already
+existed (via a research subagent) since this touches several areas that either
+partially exist or don't exist at all:
+- Per-exercise PR detection (`get_exercise_progress.py`) exists but is single-exercise
+  only — no cross-exercise "how many PRs this week" concept anywhere.
+- No "this week" / week-boundary concept exists anywhere in the codebase at all
+  (`docs/sprints.md` had planned a "Consistency Calendar" in Sprint 11 that was never
+  built — confirmed via grep, no leftover code).
+- The exercise-progress page/API/chart (`ExerciseProgressPage`, `progressApi`,
+  `TrendChart`) is fully built and reusable as-is.
+- `/workout-history/:sessionId` (session detail) is a real working route, reusable for
+  calendar-dot click-through.
+
+**Scope, confirmed with the owner before building:**
+- 3 KPI tiles only (Workouts / Volume / PRs this week) — dropped the mockup's 4th
+  "X/4 Completed" tile since it only makes sense for fixed-day plans, not periodized
+  ones, and wasn't explicitly asked for.
+- Week = Sunday-Saturday, used consistently for both the KPI tiles and the calendar.
+- Activity calendar: just a dot (workout) or dash (no workout) per day, no plan/day
+  labels — clicking a dot goes to that day's `/workout-history/{session_id}`.
+- Progress preview: a different random exercise can appear on every dashboard load —
+  reuses the existing `/exercises/:id/progress` page as the "View Progress"
+  destination rather than building a second one.
+- Mobile-first: built the layout for narrow screens outward, not the reverse.
+
+**Backend (all new, in `backend/src/modules/sessions/`):**
+- `application/week_bounds.py` — shared Sun-Sat boundary calculation (`current_week_bounds`),
+  used by both new use cases below so they can never define "this week" differently.
+- `application/use_cases/get_weekly_stats.py` — workout count, total volume
+  (Σ weight×reps across this week's sets, 0 for sets missing either value — never an
+  error), and PR count. PR detection **reuses `GetExerciseProgress`'s existing logic**
+  rather than reimplementing it — runs it once per exercise actually touched this week
+  (not every exercise the user owns), counts sets/session-entries flagged as any kind
+  of PR within the week window. A lookup failure for one exercise (e.g. deleted
+  mid-computation) is caught and skipped, isolated from the rest of the stats —
+  verified with a dedicated test.
+- `application/use_cases/get_weekly_activity.py` — 7-day Sun-Sat list; each day carries
+  `has_workout` + the *earliest* session that day (if more than one). A user with zero
+  sessions still gets a full 7-day list, all false — never an error.
+- `application/use_cases/get_random_exercise_for_progress.py` — picks a random
+  exercise from the user's logged history; shuffles and skips any exercise id whose
+  `Exercise` row is gone (defensive — in practice exercise deletion is blocked while
+  in use via `ExerciseInUseError`, so likely unreachable, but cheap insurance).
+- New repository method `WorkoutSetRepository.list_distinct_exercise_ids_by_user()`
+  (single query with the same anonymous-share exclusion filter used everywhere else)
+  — added to both the real SQLAlchemy impl and the in-memory test fake in
+  `tests/conftest.py` (required since it's an abstract method).
+- Combined into one endpoint, `GET /api/dashboard/summary`, following the existing
+  `ActiveWorkoutBootstrap` precedent of bundling several independent computations into
+  one call rather than three separate round trips — registered directly on `app`
+  (`app.add_api_route`) the same way `/api/workout-history` and
+  `/api/exercises/{id}/progress` already are, since it doesn't fit the
+  `/api/workout-sessions` prefix.
+- 19 new backend tests: 9 for `GetWeeklyStats` (empty week, workout-count scoping,
+  volume summing incl. malformed sets, PR counting incl. the isolated-failure case),
+  6 for `GetWeeklyActivity` (day ordering/dates, correct-day marking, earliest-session
+  tie-break, out-of-week exclusion), 4 for `GetRandomExerciseForProgress` (no history,
+  normal pick, skip-deleted, all-deleted), plus 3 integration tests for the combined
+  route (brand-new-user zeros, a real logged/finished workout reflected correctly
+  end-to-end, 401 without auth).
+
+**Frontend (all new):**
+- `frontend/src/api/dashboardApi.ts` — `getSummary()` + types.
+- `frontend/src/components/WeeklyStatsTiles.tsx` — 3 tiles in a `flex-wrap` row
+  (naturally mobile-first: wraps to 2+1 or 1+1+1 as the viewport narrows, confirmed at
+  375px). Volume formatted as `12.4k kg` above 1000, plain `250 kg` below.
+- `frontend/src/components/WeeklyActivityCalendar.tsx` — Sun-Sat row inside its own
+  `overflow-x: auto` card (a safety net on very narrow screens), a dot is a real
+  `<button>` (clickable, `aria-label`) only when `has_workout`, otherwise a plain dash.
+- `frontend/src/components/DashboardProgressPreview.tsx` — fetches
+  `progressApi.getExerciseProgress(exercise_id)` for whichever exercise the summary
+  picked, reuses the existing `TrendChart` with the same "best weight per session"
+  data-mapping the full Progress page's "Best Weight" tab already uses. Three
+  degraded states, all explicitly handled: no exercise yet ("log a few workouts..."),
+  fetch failure (friendly message, doesn't crash), loading.
+- `frontend/src/pages/Dashboard.tsx`: the summary fetch is a **separate** `try/catch`
+  from the existing hero/history fetch — a `/api/dashboard/summary` failure (or
+  slowness) never blocks the hero card or recent-workouts list, and vice versa.
+- 10 new component tests (3 `WeeklyStatsTiles`, 3 `WeeklyActivityCalendar`, 4
+  `DashboardProgressPreview` covering the empty/loaded/error states and the
+  View-Progress/dot-click navigation).
+
+**Verified:**
+- Backend: 347 passed, 2 skipped (pre-existing/unrelated) — was 325, +22 exactly
+  matching the new test count above.
+- Frontend: full suite 255/255 (was 245, +10), `tsc -b` clean.
+- Live browser: confirmed the true empty state for a brand-new user (all zeros, 7
+  dashes, "log a few workouts" prompt). Seeded two sessions on the same exercise (one
+  PR-breaking) and confirmed: KPI tiles showed 2 workouts / 650 kg / 2 PRs (a heavier
+  set correctly counts as *two* PRs — a weight/e1rm PR and a session volume PR, both
+  legitimately broken by the same set); the calendar showed two dots on the right
+  days, clicking one landed on that exact session's history page; the progress
+  preview showed the exercise with a star PR marker, and "View Progress" landed on the
+  real, already-built Progress page with matching data. Confirmed no horizontal page
+  overflow at 375px viewport width and that the 3 KPI tiles wrap cleanly (2+1) at that
+  width — via `getComputedStyle`/`getBoundingClientRect`, since screenshot capture
+  wasn't available in this session's browser pane. Needed a dev-backend restart
+  mid-verification for the new route to take effect (same known `uvicorn` gotcha noted
+  in prior entries). Test user and all seeded data cleaned up from `traqo_dev`
+  afterward.
+
+Not pushed; production untouched.
+
+## 2026-08-08 — Hero card content-sized height + two-column Dashboard layout on desktop
+
+Owner reported the blue hero card was forced too tall (`minHeight: 150px`, a leftover
+from when the card also reserved space for the now-removed silhouette image — never
+cleaned up) and asked for Recent Workouts to move into a right-hand sidebar on wider
+screens, with mobile keeping its existing single-column stacked layout unchanged.
+
+- `frontend/src/components/DashboardHero.tsx`: removed the stale `minHeight: '150px'`
+  entirely — the card now sizes purely to its content (padding tightened from `24px`
+  to `18px 24px` to match). Confirmed live: the single-button "Continue Your Plan"
+  state is now 88px tall (was artificially padded to 150px+ before).
+- `frontend/src/pages/Dashboard.tsx`: restructured into `.dashboard-main` (hero + the
+  weekly KPI/activity/progress widgets) and `.dashboard-sidebar` (Recent Workouts),
+  both wrapped in a new `.dashboard-layout` grid container.
+- `frontend/src/App.css`: `.dashboard-layout` — mobile-first single column
+  (`grid-template-columns: 1fr`) by default, matching the existing "Recent workouts
+  section is good on mobile" requirement (DOM order unchanged, so it still stacks
+  below everything else on narrow screens with no visual difference there); a
+  `@media (min-width: 900px)` override switches to `2fr 1fr` so the sidebar sits
+  beside the main content on desktop/tablet.
+- Extended `Dashboard.test.tsx`: mocked `dashboardApi` and the three weekly-widget
+  components (previously unmocked, which was silently firing real failing axios
+  calls in every test — harmless but noisy; now clean). Added tests for the summary
+  data actually reaching the three widgets, the summary fetch failing without taking
+  down the hero/recent-workouts (confirming the existing independent-fetch design),
+  and the `.dashboard-main`/`.dashboard-sidebar` structure itself.
+
+**Verified:**
+- Frontend: full suite 258/258 (was 255, +3 new `Dashboard.test.tsx` cases), `tsc -b`
+  clean.
+- Live browser at 1280px: confirmed the grid actually splits into two tracks
+  (`587px 293px`, roughly the intended 2:1 ratio) and that a real single-button hero
+  state renders at 88px instead of the old forced height. At 375-418px: confirmed a
+  single grid track, Recent Workouts stacking below the main column with no gap/overlap
+  issues, and no horizontal page overflow. Test users and seeded data cleaned up from
+  `traqo_dev` afterward.
+
+Not pushed; production untouched.
+
+## 2026-08-08 — User profile (age/weight/height/gender/activity level) + BMI/BMR/maintenance calories
+
+Owner sent a mockup wanting: dashboard boxes to visibly pop with shadows (they were
+blending into the background), a desktop-only right sidebar with a profile summary
+card + a body-stats card (BMI/BMR/maintenance calories) above Recent Workouts, a
+"Complete Profile"/"Edit" flow with flexible units (kg or lbs, cm or ft/in), and on
+mobile all of that moving to a dedicated "Profile" page reachable from the bottom nav
+instead of appearing inline on the dashboard. Researched first (`GetExerciseProgress`'s
+existing PR-detection reuse pattern, no prior Profile/Settings page, no `GET /me`
+endpoint — `currentUser` was localStorage-only, `UserRepository` had no `get_by_id`)
+before scoping and building.
+
+**Backend — new profile fields + BMI/BMR/maintenance-calorie calculation:**
+- `users` table: 5 new nullable columns via migration `add_user_profile_fields_001.py`
+  (`age`, `weight_kg`, `height_cm`, `gender`, `activity_level`) — canonical metric
+  storage only; unit conversion (lbs/ft-in) is entirely a frontend display concern,
+  the backend never sees or stores non-metric values. Applied to `traqo_dev`.
+- `User` entity gained a `has_complete_profile()` helper (all 5 fields non-null).
+- New pure module `domain/services/body_metrics.py`: Mifflin-St Jeor BMR formula
+  (male/female per the standard formula; any other gender value averages the two
+  offsets — a documented compromise since the formula itself only defines two), BMI,
+  and maintenance calories via 5 standard activity multipliers (sedentary 1.2 through
+  very_active 1.9). 8 unit tests.
+- New use cases `GetUserProfile` (returns `is_complete` + `body_metrics: None` for an
+  incomplete profile — never an error, just an empty state) and `UpdateUserProfile`
+  (validates age/weight/height are positive and gender/activity_level are recognized
+  values, raising `InvalidProfileFieldError` → 422). 11 unit tests.
+- `UserRepository` gained `get_by_id` (didn't exist before — only `get_by_username`),
+  added to the real impl and both in-memory test fakes (`tests/conftest.py` and
+  `tests/unit/test_auth.py`'s own copy).
+- New routes `GET /api/auth/me` and `PUT /api/auth/profile`. 6 integration tests.
+- Total new backend tests: 25 (347 → 372: 8 body-metrics + 11 use-case + 6 route tests).
+
+**Frontend:**
+- `frontend/src/utils/units.ts` — kg↔lbs, cm↔ft/in conversions (5 tests). Height
+  conversion carries a rounded 12" into the next foot rather than ever showing `4'12"`.
+- `frontend/src/pages/ProfilePage.tsx` (new route `/profile`) — view mode (personal
+  info card + body-stats card, "Edit"/"Complete Profile" button that's **always
+  visible**, never hidden once complete, per the owner's explicit requirement) and an
+  edit mode with independent unit toggles for weight (kg/lbs) and height (cm/ft-in).
+  Switching a unit toggle **converts the currently-typed value** rather than leaving a
+  stale number under the new unit label (e.g. typing 70 under "kg" then switching to
+  "lbs" shows 154.3, not a confusing bare "70"). 8 tests, including that lbs/ft-in
+  input converts to canonical kg/cm before the API call.
+- `frontend/src/components/ProfileCard.tsx` + `BodyStatsCard.tsx` — the two sidebar
+  boxes. Clicking "Complete Profile" on the card passes `navigate('/profile', {
+  state: { autoEdit: true } })`, which `ProfilePage` reads on mount to open straight
+  into the edit form — the first version required two clicks (navigate, then click
+  "Complete Profile" again); fixed after live-testing surfaced it. 4 + 5 tests.
+- `frontend/src/pages/Dashboard.tsx`: added a third independent fetch
+  (`authApi.getMe()`) alongside the existing hero/history and weekly-summary fetches —
+  same isolation principle, a profile-fetch failure doesn't block anything else.
+  Sidebar structure: `.dashboard-profile-widgets` (ProfileCard + BodyStatsCard,
+  `display: none` by default, `display: block` only at the existing ≥900px
+  `.dashboard-layout` breakpoint) sits above the always-visible Recent Workouts.
+- `frontend/src/components/Layout.tsx`: added a `Profile` entry to the single shared
+  `navItems` array (there's no existing "desktop-only"/"mobile-only" nav pattern in
+  this codebase — it appears in both the desktop sidebar and mobile bottom nav, which
+  is fine since the *page* is the mobile equivalent of the sidebar cards, not
+  redundant with them).
+- Shadow fix: `WeeklyStatsTiles`' individual tiles were plain bordered divs with no
+  `box-shadow` (the only dashboard box missing it — `WeeklyActivityCalendar` and
+  `DashboardProgressPreview` already used the shared `.card` class, which already
+  carries `var(--shadow-card)`). Added the same shared shadow variable to the tiles
+  for consistency rather than inventing a new one-off shadow.
+- Total new frontend tests: 27 (255 → 282, cumulative across this and the prior two
+  entries: 258 → 279 → 282; net across the whole profile feature: +21 in one batch
+  covering units/ProfileCard/BodyStatsCard/ProfilePage, +2 more fixing the Dashboard
+  mocks and adding autoEdit coverage after the two live-verification fixes below).
+
+**Verified:**
+- Backend: 372 passed, 2 skipped (pre-existing/unrelated).
+- Frontend: full suite 282/282, `tsc -b` clean.
+- Live browser: registered a fresh user, confirmed the empty-profile "Complete your
+  profile" prompt and the shadow now visible on a KPI tile via `getComputedStyle`.
+  Clicked "Complete Profile" from the dashboard sidebar — **first attempt landed on
+  the profile page's read-only view requiring a second click**, fixed via the
+  `autoEdit` navigation-state approach above, re-verified it now opens straight into
+  the edit form. Filled the form entirely through unit-converted fields (154.3 lbs,
+  5'9") and saved — confirmed the saved values came back correctly converted (70 kg,
+  175.3 cm), computed BMI 22.8 ("Normal" badge), BMR 1675.3, maintenance 2597 kcal,
+  and that both the dedicated `/profile` page and the dashboard sidebar cards show
+  identical data. Confirmed the `Profile` link is a real destination in both the
+  desktop sidebar nav and the mobile bottom nav, and that at 375-418px the dashboard
+  correctly hides the profile/body-stats sidebar cards (Recent Workouts only) while
+  `/profile` itself renders the full view. Needed a dev-backend restart mid-session
+  for the new routes to take effect (same known `uvicorn` gotcha). Test user cleaned
+  up from `traqo_dev` afterward.
+
+Not pushed; production untouched.
+
+## 2026-08-08 — Fix: share-access double-resolution bug could 403 a plan owner on their own restricted share link
+
+A senior code reviewer flagged that `start_workout_via_share`, `add_set_via_share`,
+and `finish_workout_via_share` (`backend/src/modules/sharing/presentation/routes.py`)
+each called `ResolveShareAccess.execute()` **twice**: once with
+`plan_owner_user_id=None` as a placeholder (before the plan was even fetched), then
+again with the real owner id once the plan was looked up — discarding the first
+result. Verified the claim by tracing the actual code, and it's worse than just a
+wasted query:
+
+`ResolveShareAccess`'s owner-check is `caller_user_id is not None and caller_user_id
+== plan_owner_user_id` — with `plan_owner_user_id=None`, this can never match for a
+real caller, so the placeholder call always falls through to the normal
+non-owner-permission logic. **For a `restricted`-mode share, that means: if the plan
+owner themselves calls one of these three endpoints via their own share link (fully
+authenticated), the placeholder call finds no self-grant (owners never grant
+themselves access — there's no reason to) and raises `ShareAccessDeniedError`,
+which the endpoint immediately turns into a 403 — before the plan is ever fetched
+and before the corrected second call (which *would* have recognized them as the
+owner and returned `'edit'`) ever runs.** The sibling `GET /{token}` endpoint
+(`resolve_and_access_shared_plan`) already does this correctly — fetch the share and
+plan first, resolve access exactly once — and has its own passing test proving owner
+access works there; no equivalent existed for the three POST endpoints, so this gap
+was unguarded.
+
+**Fix**: all three endpoints now fetch the share (`share_repo.get_by_token`) and plan
+first, then call `ResolveShareAccess.execute()` exactly once with the real
+`plan_owner_user_id`, matching the working `GET /{token}` pattern. Removes the
+redundant DB round-trip (each call does at least a `get_by_token`, plus
+`get_grant_for_user` for authenticated callers) as well as the correctness bug.
+
+**Added regression tests** (`test_sharing_logging_phase4.py`,
+`TestOwnerViaOwnRestrictedShareLink`, 3 tests: start/add-set/finish, all via a
+default `restricted`-mode share with no grants) — confirmed via negative control
+(`git stash` the fix, rerun, all 3 failed exactly as predicted; `git stash pop` to
+restore, all 3 passed).
+
+**Verified:**
+- Backend: 375 passed, 2 skipped (pre-existing/unrelated) — was 372, +3 exactly
+  matching the new regression tests.
+- Full sharing test suite (`test_sharing_logging_phase4.py`,
+  `test_sharing_access_routes.py`, `test_sharing_routes.py`): 70 passed.
+
+Not pushed; production untouched.
+
+## 2026-08-08 — Fix 4 more code-review findings (Clean Architecture leak, brittle YouTube parsing, DELETE status code, missing rollback)
+
+Same senior-reviewer pass as the share-access bug above; verified each claim against
+the actual code before fixing (one claim's specific example turned out to be wrong,
+even though the underlying concern was valid — noted below). A 5th finding
+("repositories commit individually — no unit-of-work") was confirmed as real and
+significant but deliberately deferred: it touches all 29 `commit()` call sites across
+8 repository files and changes the app's fundamental transaction behavior — too large
+and risky to bundle into a drive-by fix pass.
+
+**2.1 — Sharing routes reached into auth's infrastructure directly (valid, fixed).**
+`sharing/presentation/routes.py` imported `UserModel` and called `db.get(UserModel,
+...)` in 7 places, and had its own private case-insensitive username lookup
+(`_get_user_by_username_case_insensitive`) querying `UserModel` directly — a Clean
+Architecture violation (presentation layer reaching past its own module's
+application/domain layers into a different module's infrastructure). Fixed by adding
+`UserRepository.get_by_username_case_insensitive()` (mirroring the existing
+`get_by_id()`, which conveniently already existed from the profile-feature work) and
+switching every one of those 7 call sites to go through `UserRepositoryImpl` instead.
+Caught and fixed my own mistake mid-fix: a broad find-and-replace initially left
+`update_share`'s grant-listing loop calling `user_repo.get_by_id(...)` without ever
+instantiating `user_repo` in that function — caught by inspection before running
+anything, not by a test failure.
+
+**2.2 — YouTube thumbnail derivation used brittle string-index parsing (valid concern,
+but the reviewer's own example didn't reproduce).** `exercise_library/presentation/
+routes.py` had `derive_youtube_thumbnail()` doing manual `url.find("v=")` +
+hardcoded-offset slicing to extract a video id — genuinely business logic that
+doesn't belong in a routes file, and genuinely fragile. However, I actually ran the
+reviewer's cited failure case (`?v=dQw4w9WgXcQ&t=30`) and it does **not** break — the
+11-character slice happens to stop exactly before the `&`. Found a real failure mode
+instead: `?abv=1&v=dQw4w9WgXcQ` — `find("v=")` matches the `v=` hiding inside `abv=1`
+first and extracts garbage. Fixed by moving to a new
+`exercise_library/domain/services/youtube_thumbnail.py` using `urllib.parse`
+(`urlparse` + `parse_qs`) for real query-param parsing, with a guard against a `None`
+hostname on malformed URLs. 15 new unit tests, including the actual regression case
+found (param name ending in "v") rather than the reviewer's non-reproducing one.
+
+**2.3 — `DELETE /api/exercises/{id}` returned 200 instead of 204 (valid, fixed).**
+Confirmed via a full sweep of every DELETE route in the codebase: this was the
+**only** one returning 200 with a body — the other 6 (sessions, workouts, sharing)
+all correctly use 204. Frontend already discards the response body
+(`exercisesApi.delete(): Promise<void>`), so this was a zero-risk change. Updated the
+one integration test asserting `200` to `204`.
+
+**2.4 — `get_db()` had no explicit rollback on exception (valid, low-severity, fixed).**
+`SessionLocal.close()` already implicitly rolls back uncommitted work, so this wasn't
+a live data-corruption bug — just unclear intent that could mask partial-commit bugs
+later. Added an explicit `except Exception: db.rollback(); raise` before the existing
+`finally: db.close()`.
+
+**Deferred — 2.5, repository-level unit-of-work.** Confirmed real (29 `commit()`
+calls across 8 repository files) and confirmed it already causes real pain: found
+`QuickStartWorkout` has hand-written compensating-delete logic in its own
+`try/except` specifically because each repository call commits independently and
+can't be rolled back together as one transaction — the code's own comments say so
+explicitly. The reviewer's proposed fix (repos call `flush()`, `get_db` commits once
+at the end of the request) is architecturally correct but is a request-lifecycle
+change spanning every repository in the app — scoped out as its own future piece of
+work rather than folded into this pass.
+
+**Verified:**
+- Backend: 390 passed, 2 skipped (pre-existing/unrelated) — was 375, +15 exactly
+  matching the new `test_youtube_thumbnail.py` suite (2.1/2.3/2.4 didn't add new
+  test files, just updated one existing assertion and reused existing coverage that
+  already exercises the changed code paths).
+- `from src.app import app` import sanity-check passed after each of the 4 fixes.
+
+Not pushed; production untouched.
+
+## 2026-08-08 — Fix 2 more code-review findings (bare ValueError, silent 500s); 3.2 deferred
+
+Same reviewer pass, next batch. Verified before fixing.
+
+**3.1 — `add_workout_set` raised bare `ValueError`, invisible to any handler
+(valid, fixed).** Confirmed `add_workout_set.py:105` and `:117` raised plain
+`ValueError` for "workout exercise not found" and "exercise not found" — neither
+caught by any handler in `app.py`, so both fell through to the generic 500. Added
+`WorkoutExerciseNotFoundError` to `workouts/domain/exceptions.py` (didn't exist yet)
+for the first case; reused the existing `ExerciseNotFoundError` (already has a 404
+handler) for the second. Registered a new `WorkoutExerciseNotFoundError` → 404
+handler in `app.py`. New tests: 1 unit test (`WorkoutExerciseNotFoundError` raised,
+not `ValueError`) + 1 integration test (route returns 404 with the right error body,
+not 500) — both verified with a negative control (`git stash` the fix, reran: the
+unit test file failed to even import, since the exception no longer existed; the
+integration test's underlying `ValueError` propagated unhandled through
+`TestClient`, confirming the bug was real before the fix; `git stash pop` restored
+it, both pass).
+
+**3.3 — Catch-all exception handler had zero logging (valid, fixed).** Confirmed no
+`import logging` anywhere in `app.py` — an unhandled exception (like 3.1's bug)
+vanished with no stack trace, no error details, nothing. Added
+`logger = logging.getLogger("traqo")` and a `logger.exception(...)` call in
+`general_exception_handler` before it returns the 500 — verified directly by calling
+the handler function with a synthetic `RuntimeError` and confirming
+`ERROR:traqo:Unhandled exception on GET /api/test` prints to the console with the
+same `500` status code as before (API contract unchanged, only server-side
+visibility added).
+
+**3.2 — deferred, not fixed.** The underlying claim is real (`get_optional_user_id`
+does return `None` for both "no token" and "invalid/expired token", no
+distinction) — but the reviewer's proposed fix (raise 401 for an invalid-but-present
+token) would collide with something already deliberately built into this exact code.
+`get_optional_user_id` is used **only** by the sharing module's public share-link
+endpoints, and `resolve_and_access_shared_plan`'s own docstring already says: "403 is
+never returned as 401 to avoid triggering frontend session-clear redirects." Checked
+`frontend/src/api/client.ts` and confirmed why: a global axios interceptor
+force-clears localStorage and hard-redirects to `/login` on **any** 401, from any
+request. Applying the reviewer's fix as-written would mean anyone visiting a public
+share link with a stale/expired token sitting in their browser (from an unrelated
+past login) gets forcibly kicked to the login page — breaking a link that's supposed
+to work without logging in at all. A correct fix here needs to distinguish "invalid
+token" from "no token" *without* ever turning it into a hard 401 on these routes —
+that's a small design decision, not a mechanical one-line change, so it's deferred
+rather than folded into this pass.
+
+**Verified:**
+- `tests/unit/test_sessions.py` + `tests/integration/test_sessions_routes.py`: 48
+  passed together.
+- Full backend suite: 392 passed, 2 skipped (pre-existing/unrelated) — was 390, +2
+  exactly matching the two new tests above. No regressions.
+
+Not pushed; production untouched.
+
+## 2026-08-08 — Added `code-review-left/` for deferred review findings
+
+Created `code-review-left/` at the repo root to hold the two code-review findings
+confirmed valid but deliberately not fixed yet (2.5 and 3.2 above), each with a
+dedicated file capturing the full context (what was found, why it's real, why it
+wasn't fixed immediately, what a correct fix needs to consider, files involved) so
+either of these can be picked up later without re-deriving everything from scratch.
+See `code-review-left/README.md` for the index.
+
+Not pushed; production untouched.
+
+## 2026-08-09 — Dark theme (OS-preference default + manual toggle)
+
+Added dark mode across the app, combining an OS-preference default with a manual
+toggle button, per explicit request. Toggle placed in the Dashboard sidebar, top
+right, above the profile widgets.
+
+**Architecture:**
+- `frontend/src/contexts/ThemeContext.tsx` (new) — `ThemeProvider`/`useTheme()`.
+  Resolves initial theme from `localStorage` if the user has previously chosen one,
+  else from `window.matchMedia('(prefers-color-scheme: dark)')`. Applies the theme
+  via `document.documentElement.setAttribute('data-theme', theme)`. While no explicit
+  choice is stored, a `matchMedia` change listener keeps following the OS live; once
+  the user toggles, that choice is persisted and the OS is no longer followed.
+- `frontend/src/index.css` — added a `:root[data-theme="dark"] { ... }` override
+  block redefining ~20 base design tokens (backgrounds, ink/text, borders, status
+  colors, shadows, the `--customize`/`--custom-fill` purple pair). Left the ~40
+  back-compat alias tokens untouched — they reference the base tokens via `var(...)`,
+  so they cascade to the dark values automatically.
+- `frontend/src/components/ThemeToggle.tsx` + `.css` (new) — sun/moon icon button,
+  placed in a new `.dashboard-sidebar-toolbar` wrapper in `Dashboard.tsx`, right-
+  aligned above `.dashboard-profile-widgets`. Scoped to the same `@media (min-width:
+  900px)` breakpoint as the profile sidebar — like the Profile/Body Stats cards it
+  sits above, it is not shown on mobile (mobile dashboard has no sidebar at all).
+- `App.tsx` — wrapped the app in `<ThemeProvider>`, outermost among the existing
+  context providers.
+
+**Hardcoded-color cleanup:** replaced all hardcoded hex colors found outside
+`index.css` (13 files) with the matching CSS variable — `#721c24`/`#f8d7da`/
+`#f5c6cb` → `var(--danger)`/`var(--danger-soft)` (error-message family, previously
+unreadable against a dark background), and the Bootstrap-style
+`#007bff`/`#dc3545`/`#28a745`/`#17a2b8` → `var(--accent)`/`var(--danger)`/
+`var(--success)`/`var(--info)` for consistency. Left two literal colors unchanged
+intentionally: `PlanBuilder.tsx`'s `color: '#fff'` badge text (theme-agnostic white-
+on-solid-color) and `PlanActionCards.tsx`'s `#16a34a` hover-darken shade (not a
+dark-mode readability problem).
+
+**Tests (new):** `ThemeContext.test.tsx` (5 tests — OS-dark default, OS-light
+default, stored value overrides OS preference, toggle flips+persists to
+localStorage, hook throws outside provider) and `ThemeToggle.test.tsx` (2 tests —
+renders in light mode with correct a11y label, switches to dark on click and
+updates `document.documentElement`). `Dashboard.test.tsx` updated to mock
+`ThemeToggle` like its other child components.
+
+**Verified:**
+- `tsc -b`: clean.
+- Full frontend suite: 289 passed (was 282, +7 new tests), 0 failures.
+- Live in browser: registered a fresh user, confirmed the app defaulted to dark
+  (matching this environment's OS preference), clicked the toggle → flipped to
+  light and persisted to `localStorage`, reloaded the page → light theme survived.
+  Checked a real error state (duplicate-username validation on Register) in dark
+  mode — renders in the dark `--danger` red (`#f87171`) with proper contrast, no
+  hardcoded-color relic. Confirmed at mobile width (375px) that the toggle and the
+  rest of the profile sidebar are both hidden, consistent with the sidebar's
+  existing desktop-only scoping — this is a known consequence of the requested
+  placement, not a bug.
+
+Not pushed; production untouched.
+
+## 2026-08-09 — Dark theme follow-up: fixed two white-on-white regressions
+
+User caught two remaining unreadable-in-dark-mode spots that the hex-color grep
+missed because they weren't hardcoded literal hex — they were broken CSS variable
+usage:
+
+1. `ExerciseLibrarySidebar.tsx` (2 occurrences, exercise-library and custom-
+   exercises result cards) — used `backgroundColor: "var(--surface-secondary,
+   white)"`. `--surface-secondary` was never a real design-system token (the actual
+   token is `--bg-secondary`), so this always fell through to the literal `white`
+   fallback in every theme, light or dark. In dark mode the card text is styled with
+   `var(--text)`/`var(--text-h)` (dark-mode-light values), so it read as
+   near-invisible light-grey-on-white. Fixed by replacing both occurrences with
+   `var(--bg-secondary)`.
+2. `ConfirmDialog.tsx` (the "Leave without saving?" prompt and other app-wide
+   confirm dialogs) — `dialog` style hardcoded `backgroundColor: 'white'` directly
+   (not a var fallback), while its `title` had no explicit color and inherited the
+   theme-aware body color, and `boxShadow` was a hardcoded literal. In dark mode the
+   inherited title color is light (`--ink` dark-mode value), landing on a white box
+   — same white-on-white failure. Fixed: `dialog.backgroundColor` → `var(--surface)`,
+   `dialog.boxShadow` → `var(--shadow-modal)`, added explicit `title.color: var(--ink)`.
+
+Also swept for other instances of the same failure class (invalid/undefined CSS
+var-with-literal-fallback patterns, and any other hardcoded white backgrounds) —
+confirmed clean elsewhere. The one remaining literal `'white'` background
+(`DashboardHero.tsx`'s empty-state button) is intentional: a white button with
+`var(--accent)` text sitting on the hero's solid blue background, not a themed
+surface, so it doesn't need to change with theme.
+
+**Verified:**
+- Full frontend suite: 289 passed, 0 failures (no test file existed yet for
+  `ConfirmDialog`, so no regression risk there beyond visual/live check).
+- Live in browser, dark mode: exercise-library result cards now render on
+  `rgb(23, 32, 51)` (`--bg-secondary` dark) with `rgb(203, 213, 225)` text — correct
+  contrast. Confirm dialog now renders on `rgb(30, 41, 59)` (`--surface` dark) with
+  `rgb(241, 245, 249)` title text — correct contrast, matches the rest of the dark
+  UI instead of floating as a stray white card.
+
+Not pushed; production untouched.
+
+## 2026-08-09 — Nepali (ne) localization: infrastructure + Layout/Dashboard/auth pages
+
+Added a second language (Nepali), manual-toggle-only (no OS-locale auto-detection,
+per explicit request), covering the infrastructure plus the highest-traffic
+surfaces. Planned via `EnterPlanMode`/`ExitPlanMode` first since this was a genuine
+architectural decision — plan approved before any code was written; full plan
+history is in that turn's transcript.
+
+**Scope boundary, stated explicitly per the user's requirement:** this only
+localizes static frontend UI copy (nav, buttons, labels, messages). It does **not**
+translate anything from the backend — exercise names, muscle groups, equipment,
+user-generated content (plan names, display names, notes) all render exactly as the
+API returns them, regardless of the language toggle.
+
+**Architecture — hand-rolled `LanguageContext`, not `react-i18next`:** consistent
+with this app's existing zero-extra-dependency philosophy (`package.json` has only
+axios/react/react-router; `ThemeContext.tsx` from earlier this session is the same
+hand-rolled Context+localStorage pattern, not a theming library). Trade-off flagged
+to the user directly: `react-i18next` is the industry-standard choice and would
+matter more at scale (many languages, ICU plurals); for two languages with simple
+strings, the hand-rolled approach is lower-risk here, but worth revisiting if a
+senior reviewer prefers the library route.
+
+**New files:**
+- `frontend/src/i18n/en.ts` — nested translation dictionary (`nav`, `common`,
+  `login`, `register`, `dashboard` namespaces), `export type TranslationKeys =
+  typeof en`. Deliberately **not** `as const` — a plain object literal infers `string`
+  for leaf values, which is what lets `ne.ts` type-check against the *shape* without
+  being forced to match the literal English strings word-for-word (an earlier
+  `as const` attempt caused ~50 spurious `TS2322` errors for exactly this reason,
+  fixed by removing it).
+- `frontend/src/i18n/ne.ts` — Nepali dictionary, declared as `export const ne = {
+  ... } satisfies TranslationKeys` (not `: TranslationKeys`) — `satisfies` gives the
+  same completeness/typo checking but keeps `ne`'s own inferred type instead of
+  widening it, the more idiomatic TS 4.9+ pattern for this shape-check use case
+  (confirmed supported: this project is on `typescript ~6.0.2`). A header comment in
+  the file flags the specific judgment calls made for native-speaker review: "workout"
+  kept as the transliterated loanword "वर्कआउट" (common in real Nepali fitness apps),
+  numerals in placeholders kept as Arabic digits rather than Devanagari, and the
+  short ✓/✗ availability-check microcopy is a first draft.
+- `frontend/src/contexts/LanguageContext.tsx` — `LanguageProvider`/`useLanguage()`,
+  directly modeled on `ThemeContext.tsx`: resolves `localStorage['language']` on
+  mount (default `'en'`, no `matchMedia`), sets `document.documentElement.lang` on
+  change, `t` is the full current-language dictionary object (not a `t('key.path')`
+  lookup function) so consumers get TypeScript autocomplete + compile errors on
+  typos instead of a silent `undefined` at runtime.
+- `frontend/src/components/LanguageToggle.tsx` + `.css` — 🌐 + `EN`/`नेपाली` pill
+  button, same visual pattern as `ThemeToggle`.
+
+**Wiring:** `LanguageProvider` added to `App.tsx`'s provider stack (outermost,
+alongside `ThemeProvider`). `frontend/index.html`'s Google Fonts `<link>` extended to
+also load **Noto Sans Devanagari** (Inter has no Devanagari glyphs — without this,
+Nepali text would silently fall back to an inconsistent system font).
+`index.css`'s `--font-body`/`--font-heading` extended to `'Inter', 'Noto Sans
+Devanagari', sans-serif` so Latin still uses Inter and Devanagari renders via the
+new font.
+
+**Translated this pass:** `Layout.tsx` (nav labels, both Logout buttons, "User
+menu" aria-label, the unsaved-changes `ConfirmDialog`), `Dashboard.tsx` (welcome
+kicker, recent-workouts section, loading/empty states — the dashboard's child
+widgets like `DashboardHero`/`WeeklyStatsTiles`/`ProfileCard` are **explicitly
+deferred**, so Dashboard currently shows a mix of translated shell text and
+untranslated widget text under Nepali — a known, intentional gap, not silently
+left ambiguous), `LoginPage.tsx`, `RegisterPage.tsx` (full string catalog: labels,
+placeholders, validation messages, async username-availability states, button
+states, error banners, footer links). `RegisterPage.tsx`'s module-level
+`validateUsernameFormat` function (outside the component, so it has no hook access)
+now takes `t: TranslationKeys['register']` as a parameter instead of hardcoding
+English messages.
+
+**Caught and fixed before calling this done:** the `LanguageToggle` only lived
+inside `Layout.tsx`, which is authenticated-only — a first-time, logged-out visitor
+landing on `/login` or `/register` had no way to reach it at all (would only see
+Nepali if `localStorage['language']` happened to already be set from a prior
+session). Added a second `LanguageToggle` directly to both `LoginPage.tsx` and
+`RegisterPage.tsx` (top-right, above the `<h1>`) so the toggle is reachable before
+authentication too.
+
+**Tests (new):** `LanguageContext.test.tsx` (4 tests — defaults to English, stored
+value overrides default, `setLanguage` flips+persists+updates
+`document.documentElement.lang`, hook throws outside provider) and
+`LanguageToggle.test.tsx` (2 tests). Existing `Dashboard.test.tsx` and
+`RegisterPage.test.tsx` render helpers wrapped in `LanguageProvider` (same fix
+pattern as the dark-theme `ThemeToggle` mock earlier this session) — their
+English-string assertions needed no other changes since English is the default.
+
+**Verified:**
+- `npx tsc -b`: clean (confirms `ne.ts` satisfies `TranslationKeys` exactly).
+- Full frontend suite: 295 passed (was 289, +6 new tests), 0 failures.
+- Live in browser: toggled to Nepali from both the authenticated sidebar and the
+  logged-out Login page; confirmed `नेपाली`/`ड्यासबोर्ड`/etc. render via **Noto Sans
+  Devanagari** (checked `document.fonts` directly — `Noto Sans Devanagari 400
+  loaded`), not a fallback system font; confirmed `localStorage['language']` and
+  `<html lang>` persist across a full page reload; checked nav links, the sidebar
+  Logout button, and the Register submit button for text overflow under the longer
+  Nepali strings (`scrollWidth` vs `clientWidth`) — none found.
+
+## Explicitly deferred (not this pass)
+- The other ~47 `.tsx` files (Plan Builder, Active Workout, History, Sharing,
+  Profile, Exercise Library, `RegistrationSuccessDialog`, etc.) — same
+  dictionary/`useLanguage()` pattern extends cleanly to each in follow-up passes.
+- Native-speaker review of the Nepali strings — flagged inline in `ne.ts`'s header
+  comment so a reviewer knows exactly what to check first.
+
+Not pushed; production untouched.
+
+## 2026-08-09 — Nepali localization: full rollout across the remaining ~40 files
+
+Extended last pass's Nepali infrastructure to every remaining `.tsx` file with
+user-facing UI copy — the "explicitly deferred" list above is now done. Followed
+the same pattern throughout: `useLanguage()` + typed `t.<namespace>.<key>` lookups,
+new namespaces added to both `en.ts` and `ne.ts` per feature area, verified with
+`tsc -b` after each group before moving to the next.
+
+**Groups translated, in order:**
+1. **Dashboard child widgets** — `DashboardHero`, `WeeklyStatsTiles`,
+   `WeeklyActivityCalendar`, `DashboardProgressPreview`, `ProfileCard`,
+   `BodyStatsCard`, `PlanActionCards`, `WorkoutPreviewList`. Closes the "mixed
+   language Dashboard" gap flagged as a known limitation in the previous pass.
+2. **`RegistrationSuccessDialog.tsx`** — the post-registration credentials dialog,
+   previously out of scope.
+3. **Workout Plans feature** (the largest group) — `PlanBuilder.tsx` (2293 lines;
+   ~85 new dictionary keys — exercise cards, set-editing panel, rest-day toggle,
+   week rail, all three confirm dialogs), `PlanList.tsx`, `CreatePlanStep1.tsx`,
+   `ExerciseLibrarySidebar.tsx`, `CustomExerciseForm.tsx`, `ExercisePreviewPanel.tsx`,
+   `ExerciseWorkoutPreview.tsx`, `DurationInput.tsx`.
+4. **Sessions feature** — `ActiveWorkout.tsx` (1634 lines; manual timer, set-logging
+   panel, exit/discard confirmation, plan-name inline editor), `SessionDetail.tsx`,
+   `WorkoutHistory.tsx`.
+5. **Sharing feature** — `ShareDialog.tsx`, `ShareWorkoutStarter.tsx`,
+   `AnonymousWorkoutLogger.tsx` (the public/anonymous share-link logging flow).
+6. **`ExerciseProgress.tsx`** — PR badges, personal-records card, session history,
+   metric selector.
+7. **Remaining page wrappers** — `Home.tsx`, `WorkoutPlansPage.tsx` (no own text),
+   `CreatePlanPage.tsx`, `EditPlanPage.tsx`, `SessionSetupPage.tsx`,
+   `ActiveWorkoutPage.tsx`, `WorkoutHistoryPage.tsx`, `SessionDetailPage.tsx`,
+   `ExerciseProgressPage.tsx`, `SharedPlanPage.tsx`, `ProfilePage.tsx` (including
+   the 5 activity-level option labels and gender/unit selects in the edit form).
+8. **Generic components** — `Modal.tsx` ("Close modal" aria-label), `TrendChart.tsx`
+   (empty/single-point states, PR tooltip suffix). `Toast.tsx` needed no changes —
+   its `message` prop is always caller-supplied, already translated at every call
+   site from the groups above.
+
+**Design decisions carried through unchanged from the first pass:**
+- Cross-namespace reuse where exact English text repeats (e.g. `t.hero.discard*`
+  reused verbatim in `ActiveWorkout.tsx`'s exit-confirm dialog, `t.planBuilder.cancel`
+  reused across a dozen unrelated forms) — keeps the dictionary from duplicating the
+  same Nepali string under a dozen different keys.
+- Two `useState` default-prop patterns hit the same issue as `SessionDetail.tsx`
+  last pass: `ActiveWorkout.tsx`'s `planName`/`dayLabel` defaults ("Active
+  Workout"/"Workout") couldn't stay as JS default parameters once they needed
+  `t.*` (hooks aren't available in a destructuring default) — resolved the same
+  way: drop the default, compute `displayPlanName`/`displayDayLabel` in the
+  component body instead.
+- Scope boundary unchanged: only frontend UI copy. `SharedPlanPage.tsx`'s
+  `plan_owner_username`, exercise names/notes, and all other API-sourced fields
+  still render exactly as the backend returns them regardless of language.
+
+**Verified:**
+- `npx tsc -b`: clean after every group (9 checkpoints total).
+- Full frontend suite: 295 passed throughout — each group's existing tests that
+  broke from the new `useLanguage()` calls were fixed by adding the same
+  `vi.mock('.../LanguageContext', () => ({ useLanguage: () => ({ t: en, ... }) }))`
+  mock used for `Dashboard.test.tsx` in the first pass (14 test files needed this:
+  `ExerciseLibrarySidebar`, `CustomExerciseForm`, `ExercisePreviewPanel`,
+  `ExerciseWorkoutPreview`, `WorkoutPreviewList`, `PlanBuilder`, `PlanList`,
+  `ActiveWorkout`, `ShareDialog`, `ShareWorkoutStarter`, `AnonymousWorkoutLogger`,
+  `ActiveWorkoutPage`, `ProfilePage`, `SessionSetupPage`, `SharedPlanPage`, `Modal`,
+  plus the Dashboard-widget tests — `BodyStatsCard`, `DashboardHero`,
+  `DashboardProgressPreview`, `ProfileCard`, `WeeklyActivityCalendar`,
+  `WeeklyStatsTiles` — missed in the very first Dashboard-widgets group and caught
+  by the final full-suite run at the end of this pass).
+- Caught and fixed one straggler `Modal.tsx` "Close modal" aria-label that an
+  earlier `replace_all` silently missed — found via a final repo-wide grep for
+  `(aria-label|placeholder|title)="[A-Z]...` across all `.tsx` files before
+  declaring the pass done; that same sweep and a JSX-text-node sweep
+  (`>[A-Z]... <`) came back clean everywhere else.
+- Live in browser (Nepali toggled on): confirmed full Nepali rendering on
+  Dashboard (hero, weekly widgets, profile card), Plans list + "what would you
+  like to do today" cards, `CreatePlanStep1`, `PlanBuilder` (including the
+  Exercise Library sidebar tabs/search), Login, Register — all via
+  `document.body.innerText` inspection. Confirmed `<html lang>` and
+  `localStorage['language']` persist correctly through a login → logout → login
+  cycle. Checked mobile viewport (375px): bottom nav renders all four Nepali
+  labels (ड्यासबोर्ड / योजनाहरू / इतिहास / प्रोफाइल) with zero `scrollWidth >
+  clientWidth` overflow, same clean result on Register's buttons/links.
+- Dictionaries: `en.ts` 629 lines / `ne.ts` 639 lines, ~40 namespaces.
+
+## Still deferred (unchanged from before)
+- Native-speaker review of all Nepali strings — the judgment-call header comment
+  in `ne.ts` (loanword choices, numeral style, short-microcopy tone) still applies
+  to everything added in this pass too.
+
+Not pushed; production untouched.

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 interface RegistrationSuccessDialogProps {
   username: string;
@@ -11,35 +12,31 @@ export const RegistrationSuccessDialog: React.FC<RegistrationSuccessDialogProps>
   password,
 }) => {
   const navigate = useNavigate();
-  const [copyButtonText, setCopyButtonText] = useState('Copy Username');
+  const { t } = useLanguage();
+  const [copyButtonText, setCopyButtonText] = useState(t.registrationSuccess.copyUsername);
   const [copyConfirmation, setCopyConfirmation] = useState('');
   const [isDownloading, setIsDownloading] = useState(false);
 
   const handleCopyUsername = async () => {
     try {
       await navigator.clipboard.writeText(`@${username}`);
-      setCopyButtonText('✅ Copied!');
-      setCopyConfirmation('✅ Username copied to clipboard.');
+      setCopyButtonText(t.registrationSuccess.copied);
+      setCopyConfirmation(t.registrationSuccess.copiedConfirmation);
       setTimeout(() => {
-        setCopyButtonText('Copy Username');
+        setCopyButtonText(t.registrationSuccess.copyUsername);
         setCopyConfirmation('');
       }, 2000);
     } catch (err) {
       console.error('Failed to copy:', err);
-      setCopyButtonText("Couldn't copy — try selecting manually");
-      setTimeout(() => setCopyButtonText('Copy Username'), 2000);
+      setCopyButtonText(t.registrationSuccess.copyFailed);
+      setTimeout(() => setCopyButtonText(t.registrationSuccess.copyUsername), 2000);
     }
   };
 
   const handleDownloadCredentials = () => {
     setIsDownloading(true);
     try {
-      const fileContent = `Traqo Login Credentials
-
-Username: ${username}
-
-Your password is not included in this file — you already know it, and Traqo does not store or display it again after registration. Use the username above together with the password you created to log in.
-`;
+      const fileContent = `${t.registrationSuccess.downloadFileHeader}\n\n${t.registrationSuccess.downloadFileBody(username)}`;
 
       const blob = new Blob([fileContent], { type: 'text/plain' });
       const url = URL.createObjectURL(blob);
@@ -58,7 +55,7 @@ Your password is not included in this file — you already know it, and Traqo do
   };
 
   const handleContinueToLogin = () => {
-    const message = 'Your username and password are already filled in — just tap Login to continue.';
+    const message = `${t.login.prefilledBefore}${t.login.submit}${t.login.prefilledAfter}`;
     navigate('/login', { state: { username, password, message } });
   };
 
@@ -91,13 +88,13 @@ Your password is not included in this file — you already know it, and Traqo do
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
           <div style={{ fontSize: '32px', marginBottom: '16px' }}>🎉</div>
           <h2 style={{ margin: '0 0 12px 0', fontSize: '20px', fontWeight: 'bold', color: 'var(--text-h)' }}>
-            Account Created Successfully!
+            {t.registrationSuccess.title}
           </h2>
         </div>
 
         <div style={{ marginBottom: '28px', textAlign: 'center' }}>
           <p style={{ fontSize: '12px', fontWeight: '500', color: 'var(--text)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '12px' }}>
-            Your Login Username
+            {t.registrationSuccess.usernameLabel}
           </p>
           <div
             style={{
@@ -123,7 +120,7 @@ Your password is not included in this file — you already know it, and Traqo do
         </div>
 
         <p style={{ fontSize: '14px', color: 'var(--text)', lineHeight: '1.6', marginBottom: '24px', margin: '0 0 24px 0' }}>
-          You'll need this username every time you sign in to Traqo.
+          {t.registrationSuccess.needUsername}
         </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
@@ -164,7 +161,7 @@ Your password is not included in this file — you already know it, and Traqo do
             onMouseEnter={(e) => !isDownloading && (e.currentTarget.style.backgroundColor = 'var(--border)')}
             onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg)')}
           >
-            {isDownloading ? 'Downloading...' : 'Download Login Details'}
+            {isDownloading ? t.registrationSuccess.downloading : t.registrationSuccess.downloadDetails}
           </button>
 
           <button
@@ -183,12 +180,12 @@ Your password is not included in this file — you already know it, and Traqo do
             onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--accent-hover)')}
             onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'var(--accent)')}
           >
-            Continue to Login
+            {t.registrationSuccess.continueToLogin}
           </button>
         </div>
 
         <p style={{ fontSize: '12px', color: 'var(--text)', opacity: 0.7, lineHeight: '1.5', marginBottom: 0 }}>
-          Keep your login username somewhere safe. You'll need it whenever you sign in.
+          {t.registrationSuccess.keepSafe}
         </p>
       </div>
     </div>

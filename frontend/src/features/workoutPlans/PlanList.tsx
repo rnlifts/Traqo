@@ -11,11 +11,12 @@ import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { useToast } from "../../components/Toast";
 import { PlanActionCards } from "../../components/PlanActionCards";
 import { ShareDialog } from "../../features/sharing/ShareDialog";
+import { useLanguage } from "../../contexts/LanguageContext";
+import type { TranslationKeys } from "../../i18n/en";
 
-function planSummary(plan: WorkoutPlan): string {
+function planSummary(plan: WorkoutPlan, t: TranslationKeys['planList']): string {
   if (!plan.total_units) return "";
-  const unit = plan.unit_type === "weeks" ? "WEEK" : "DAY";
-  return `${plan.total_units} ${unit}${plan.total_units === 1 ? "" : "S"}`;
+  return plan.unit_type === "weeks" ? t.weekCount(plan.total_units) : t.dayCount(plan.total_units);
 }
 
 export default function PlanList() {
@@ -32,6 +33,7 @@ export default function PlanList() {
   const [sharedWithMeLoading, setSharedWithMeLoading] = useState(true);
   const navigate = useNavigate();
   const { Toast, showToast } = useToast();
+  const { t } = useLanguage();
 
   useEffect(() => {
     loadPlans();
@@ -45,7 +47,7 @@ export default function PlanList() {
       setPlans(data);
     } catch (err: any) {
       setError(
-        err.response?.data?.error || (err as Error).message || "Failed to load plans"
+        err.response?.data?.error || (err as Error).message || t.planList.loadFailed
       );
     } finally {
       setLoading(false);
@@ -79,19 +81,19 @@ export default function PlanList() {
     try {
       await deleteWorkoutPlan(planId);
       setError("");
-      showToast("Workout plan deleted successfully!", "success");
+      showToast(t.planList.deleteSuccess, "success");
       await loadPlans();
     } catch (err: any) {
       const errorMsg =
-        err.response?.data?.error || (err as Error).message || "Failed to delete plan";
+        err.response?.data?.error || (err as Error).message || t.planList.deleteFailed;
       setError(errorMsg);
     }
   }
 
   return (
     <div className="page-container">
-      <p className="kicker">Your ledger</p>
-      <h1 className="page-title">Workout Plans</h1>
+      <p className="kicker">{t.planList.kicker}</p>
+      <h1 className="page-title">{t.planList.title}</h1>
 
       {error && (
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }} className="error-message">
@@ -107,7 +109,7 @@ export default function PlanList() {
               padding: "0 0 0 12px",
               flex: "0 0 auto",
             }}
-            aria-label="Dismiss error"
+            aria-label={t.planList.dismissError}
           >
             ×
           </button>
@@ -116,9 +118,9 @@ export default function PlanList() {
 
       <PlanActionCards />
 
-      <p className="section-label">Saved plans</p>
+      <p className="section-label">{t.planList.savedPlans}</p>
       {loading ? (
-        <div className="loading">Loading workout plans...</div>
+        <div className="loading">{t.planList.loadingPlans}</div>
       ) : plans.length > 0 ? (
         <div className="plan-grid">
           {plans.map((plan) => (
@@ -126,26 +128,26 @@ export default function PlanList() {
               <button
                 className="delete-x"
                 onClick={() => handleDeletePlan(plan.id)}
-                aria-label="Delete plan"
+                aria-label={t.planList.deletePlan}
               >
                 ✕
               </button>
               <div className="name" onClick={() => navigate(`/workout-plans/${plan.id}/edit`)}>
                 {plan.name}
               </div>
-              {planSummary(plan) && <div className="meta">{planSummary(plan)}</div>}
+              {planSummary(plan, t.planList) && <div className="meta">{planSummary(plan, t.planList)}</div>}
               <div className="card-actions">
                 <button
                   className="btn-start"
                   onClick={() => navigate(`/workout-plans/${plan.id}/start`)}
                 >
-                  ▶ Start
+                  {t.planList.start}
                 </button>
                 <button
                   className="btn-edit"
                   onClick={() => navigate(`/workout-plans/${plan.id}/edit`)}
                 >
-                  Edit
+                  {t.planList.edit}
                 </button>
                 <button
                   className="btn-share"
@@ -154,19 +156,19 @@ export default function PlanList() {
                     setShareDialogOpen(true);
                   }}
                 >
-                  Share
+                  {t.planList.share}
                 </button>
               </div>
             </div>
           ))}
         </div>
       ) : (
-        <p className="empty-note">Nothing saved yet — plans you create will show up here.</p>
+        <p className="empty-note">{t.planList.noPlans}</p>
       )}
 
-      <p className="section-label">Shared with me</p>
+      <p className="section-label">{t.planList.sharedWithMe}</p>
       {sharedWithMeLoading ? (
-        <div className="loading">Loading shared plans...</div>
+        <div className="loading">{t.planList.loadingShared}</div>
       ) : sharedWithMe.length > 0 ? (
         <div className="plan-grid">
           {sharedWithMe.map((entry) => (
@@ -178,23 +180,23 @@ export default function PlanList() {
             >
               <div className="name">{entry.plan_name}</div>
               <div className="meta">
-                Shared by @{entry.owner_username} — {entry.permission}
+                {t.planList.sharedBy(entry.owner_username, entry.permission)}
               </div>
             </div>
           ))}
         </div>
       ) : (
         <p className="empty-note">
-          Nothing shared with you yet — plans someone grants you access to will show up here.
+          {t.planList.noShared}
         </p>
       )}
 
       <ConfirmDialog
         isOpen={deleteConfirm.isOpen}
-        title="Delete Workout Plan"
-        message="Are you sure you want to delete this workout plan? This will permanently delete the plan and all of its logged workout history. This cannot be undone."
-        confirmText="Delete"
-        cancelText="Cancel"
+        title={t.planList.deleteTitle}
+        message={t.planList.deleteMessage}
+        confirmText={t.planList.delete}
+        cancelText={t.planList.cancel}
         isDangerous={true}
         onConfirm={confirmDelete}
         onCancel={() => setDeleteConfirm({ isOpen: false, planId: null })}

@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BrowserRouter } from 'react-router-dom';
 import { RegisterPage } from './RegisterPage';
+import { LanguageProvider } from '../../contexts/LanguageContext';
 
 vi.mock('../../api/authApi', () => ({
   authApi: {
@@ -22,9 +23,11 @@ describe('RegisterPage', () => {
 
   const renderComponent = () => {
     return render(
-      <BrowserRouter>
-        <RegisterPage />
-      </BrowserRouter>
+      <LanguageProvider>
+        <BrowserRouter>
+          <RegisterPage />
+        </BrowserRouter>
+      </LanguageProvider>
     );
   };
 

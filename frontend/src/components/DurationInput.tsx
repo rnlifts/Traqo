@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { secondsToHMS, hmsToSeconds } from '../utils/duration';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface DurationInputProps {
   /** Total seconds (can be null for empty state) */
@@ -20,6 +21,7 @@ export const DurationInput: React.FC<DurationInputProps> = ({
   onChange,
   onRemove,
 }) => {
+  const { t } = useLanguage();
   // Track raw string inputs to allow empty intermediate states during editing
   const [hStr, setHStr] = useState('');
   const [mStr, setMStr] = useState('');
@@ -95,8 +97,8 @@ export const DurationInput: React.FC<DurationInputProps> = ({
           <button
             className="duration-remove"
             onClick={onRemove}
-            title="Remove duration"
-            aria-label="Remove duration"
+            title={t.durationInput.removeDuration}
+            aria-label={t.durationInput.removeDuration}
           >
             ✕
           </button>
@@ -104,9 +106,9 @@ export const DurationInput: React.FC<DurationInputProps> = ({
       </div>
 
       <div className="duration-labels">
-        <label>hr</label>
-        <label>min</label>
-        <label>sec</label>
+        <label>{t.durationInput.hr}</label>
+        <label>{t.durationInput.min}</label>
+        <label>{t.durationInput.sec}</label>
       </div>
     </div>
   );

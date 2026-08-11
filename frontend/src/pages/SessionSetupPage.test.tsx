@@ -3,6 +3,11 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BrowserRouter, useParams, useNavigate } from 'react-router-dom';
 import SessionSetupPage from './SessionSetupPage';
+import { en } from '../i18n/en';
+
+vi.mock('../contexts/LanguageContext', () => ({
+  useLanguage: () => ({ language: 'en', t: en, setLanguage: vi.fn() }),
+}));
 
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom');
@@ -48,7 +53,7 @@ const singleDayPlan = {
       label: 'Day 1',
       order_position: 1,
       is_rest: false,
-      exercises: [{ id: 1, plan_day_id: 55, exercise_id: 1, order_number: 1, target_sets: 3, target_reps: '10', target_weight: null, target_duration_seconds: null, has_reps: true, has_weight: true, has_duration: false, set_targets: [] }],
+      exercises: [{ id: 1, plan_day_id: 55, exercise_id: 1, exercise_name: 'Bench Press', order_number: 1, target_sets: 3, target_reps: '10', target_weight: null, target_duration_seconds: null, has_reps: true, has_weight: true, has_duration: false, set_targets: [] }],
     },
   ],
   weeks: null,
@@ -136,5 +141,94 @@ describe('SessionSetupPage (Task 84 prefetch)', () => {
     // here would break day resolution on the workout screen.
     const call = mockNavigate.mock.calls.find((c: any[]) => c[0] === '/workout-sessions/322');
     expect(call.length).toBe(1);
+  });
+
+  it('shows a "Workout Preview" of the selected day\'s exercises (sets only, no reps)', async () => {
+    const { workoutPlansApi } = await import('../api/workoutPlansApi');
+    const { exercisesApi } = await import('../api/exercisesApi');
+    (workoutPlansApi.getDetail as any).mockResolvedValue(singleDayPlan);
+    (exercisesApi.list as any).mockResolvedValue(exercisesFixture);
+
+    renderPage();
+
+    await screen.findByText('Workout Preview');
+    expect(screen.getByText('Bench Press')).toBeInTheDocument();
+    expect(screen.getByText('3 sets')).toBeInTheDocument();
+    expect(screen.queryByText(/10 reps/)).not.toBeInTheDocument();
+  });
+
+  it('does not show a "Workout Preview" for a quick-start day with no exercises yet', async () => {
+    const { workoutPlansApi } = await import('../api/workoutPlansApi');
+    const { exercisesApi } = await import('../api/exercisesApi');
+    (useParams as any).mockReturnValue({ planId: '8' });
+    (workoutPlansApi.getDetail as any).mockResolvedValue(quickStartPlan);
+    (exercisesApi.list as any).mockResolvedValue(exercisesFixture);
+
+    renderPage();
+
+    await screen.findByText('Quick Start');
+    expect(screen.queryByText('Workout Preview')).not.toBeInTheDocument();
+  });
+
+  describe('load errors', () => {
+    it('shows a "Plan Not Found" error page for a deleted/nonexistent plan (404)', async () => {
+      const { workoutPlansApi } = await import('../api/workoutPlansApi');
+      const { exercisesApi } = await import('../api/exercisesApi');
+      (workoutPlansApi.getDetail as any).mockRejectedValue({
+        response: { status: 404, data: { error: 'Plan not found' } },
+      });
+      (exercisesApi.list as any).mockResolvedValue(exercisesFixture);
+
+      renderPage();
+
+      await screen.findByText('Plan Not Found');
+      expect(screen.getByText(/no longer exists/i)).toBeInTheDocument();
+      // Must not crash into the day-picker UI with no plan data.
+      expect(screen.queryByRole('button', { name: /Begin workout/i })).not.toBeInTheDocument();
+    });
+
+    it('"Back to Plans" navigates away from the error page', async () => {
+      const user = userEvent.setup();
+      const { workoutPlansApi } = await import('../api/workoutPlansApi');
+      const { exercisesApi } = await import('../api/exercisesApi');
+      (workoutPlansApi.getDetail as any).mockRejectedValue({
+        response: { status: 404, data: { error: 'Plan not found' } },
+      });
+      (exercisesApi.list as any).mockResolvedValue(exercisesFixture);
+
+      renderPage();
+
+      const backButton = await screen.findByRole('button', { name: /Back to Plans/i });
+      await user.click(backButton);
+
+      expect(mockNavigate).toHaveBeenCalledWith('/workout-plans');
+    });
+
+    it('shows an "Access Denied" error page for a plan the user does not own (403)', async () => {
+      const { workoutPlansApi } = await import('../api/workoutPlansApi');
+      const { exercisesApi } = await import('../api/exercisesApi');
+      (workoutPlansApi.getDetail as any).mockRejectedValue({
+        response: { status: 403, data: { error: 'You do not own this plan' } },
+      });
+      (exercisesApi.list as any).mockResolvedValue(exercisesFixture);
+
+      renderPage();
+
+      await screen.findByText('Access Denied');
+    });
+
+    it('shows a not-found error page when the plan id in the URL is not a number', async () => {
+      const { workoutPlansApi } = await import('../api/workoutPlansApi');
+      const { exercisesApi } = await import('../api/exercisesApi');
+      (useParams as any).mockReturnValue({ planId: 'null' });
+      (workoutPlansApi.getDetail as any).mockResolvedValue(singleDayPlan);
+      (exercisesApi.list as any).mockResolvedValue(exercisesFixture);
+
+      renderPage();
+
+      await screen.findByText('Plan Not Found');
+      // Must never call the API with a garbage id.
+      expect(workoutPlansApi.getDetail).not.toHaveBeenCalled();
+    });
   });
 });

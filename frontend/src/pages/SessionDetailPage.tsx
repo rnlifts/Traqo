@@ -5,10 +5,12 @@ import { SessionDetail } from "../features/sessions/SessionDetail";
 import { resolveSessionDay } from "../features/sessions/sessionDayResolver";
 import { workoutSessionsApi } from "../api/workoutSessionsApi";
 import { getWorkoutPlanDetail, type WorkoutPlanDetail } from "../api/workoutPlansApi";
+import { useLanguage } from "../contexts/LanguageContext";
 
 export default function SessionDetailPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [sessionDetail, setSessionDetail] = useState<any>(null);
   const [planDetail, setPlanDetail] = useState<WorkoutPlanDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -20,7 +22,7 @@ export default function SessionDetailPage() {
 
   async function loadData() {
     if (!sessionId) {
-      setError("Session ID not provided");
+      setError(t.activeWorkoutPage.sessionIdMissing);
       setLoading(false);
       return;
     }
@@ -39,13 +41,13 @@ export default function SessionDetailPage() {
         setPlanDetail(null);
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || "Failed to load workout session");
+      setError(err.response?.data?.error || t.activeWorkoutPage.loadSessionFailed);
     } finally {
       setLoading(false);
     }
   }
 
-  if (loading) return <Layout><div className="loading">Loading session details...</div></Layout>;
+  if (loading) return <Layout><div className="loading">{t.sessionDetailPage.loadingSession}</div></Layout>;
   if (error)
     return (
       <Layout>
@@ -57,13 +59,13 @@ export default function SessionDetailPage() {
               style={{
                 background: "none",
                 border: "none",
-                color: "#721c24",
+                color: "var(--danger)",
                 fontSize: "20px",
                 cursor: "pointer",
                 padding: "0 0 0 12px",
                 flex: "0 0 auto",
               }}
-              aria-label="Dismiss error"
+              aria-label={t.planBuilder.dismissError}
             >
               ×
             </button>
@@ -73,7 +75,7 @@ export default function SessionDetailPage() {
             className="btn btn-secondary"
             style={{ marginTop: "16px" }}
           >
-            Back to History
+            {t.sessionDetailPage.backToHistory}
           </button>
         </div>
       </Layout>
@@ -84,13 +86,13 @@ export default function SessionDetailPage() {
       <Layout>
         <div className="page-container">
           <div className="empty-state">
-            <p>Session not found</p>
+            <p>{t.common2.sessionNotFound}</p>
           </div>
           <button
             onClick={() => navigate("/workout-history")}
             className="btn btn-secondary"
           >
-            Back to History
+            {t.sessionDetailPage.backToHistory}
           </button>
         </div>
       </Layout>
@@ -110,7 +112,7 @@ export default function SessionDetailPage() {
     dayLabel = resolved.dayLabel;
   } else {
     // Plan was deleted, use a default label
-    dayLabel = "Unknown Day";
+    dayLabel = t.sessionDetailPage.unknownDay;
   }
 
   if (!matchingDay && planDetail) {
@@ -121,19 +123,19 @@ export default function SessionDetailPage() {
             style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
             className="error-message"
           >
-            <span>Day not found for this workout session</span>
+            <span>{t.common2.dayNotFound}</span>
             <button
               onClick={() => setError(null)}
               style={{
                 background: "none",
                 border: "none",
-                color: "#721c24",
+                color: "var(--danger)",
                 fontSize: "20px",
                 cursor: "pointer",
                 padding: "0 0 0 12px",
                 flex: "0 0 auto",
               }}
-              aria-label="Dismiss error"
+              aria-label={t.planBuilder.dismissError}
             >
               ×
             </button>
@@ -143,7 +145,7 @@ export default function SessionDetailPage() {
             className="btn btn-secondary"
             style={{ marginTop: "16px" }}
           >
-            Back to History
+            {t.sessionDetailPage.backToHistory}
           </button>
         </div>
       </Layout>
@@ -158,14 +160,14 @@ export default function SessionDetailPage() {
           className="btn btn-secondary"
           style={{ marginBottom: "20px" }}
         >
-          ← Back to History
+          {t.sessionDetailPage.backToHistoryArrow}
         </button>
         <SessionDetail
           session={sessionDetail.session}
           sets={sessionDetail.sets}
           matchingDay={matchingDay}
           dayLabel={dayLabel}
-          planName={sessionDetail.session.plan_name || "Workout"}
+          planName={sessionDetail.session.plan_name || t.sessionDetail.defaultPlanName}
         />
       </div>
     </Layout>

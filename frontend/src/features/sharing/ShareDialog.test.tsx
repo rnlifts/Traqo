@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { ShareDialog } from './ShareDialog';
+import { en } from '../../i18n/en';
+
+vi.mock('../../contexts/LanguageContext', () => ({
+  useLanguage: () => ({ language: 'en', t: en, setLanguage: vi.fn() }),
+}));
 import * as sharingApi from '../../api/sharingApi';
 
 vi.mock('../../api/sharingApi');

@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { TrendChart, type TrendChartDataPoint } from "../../components/TrendChart";
 import type { ExerciseProgressResult } from "../../api/progressApi";
+import { useLanguage } from "../../contexts/LanguageContext";
 
 type MetricType = "est_1rm" | "volume" | "best_weight";
 
@@ -16,10 +17,11 @@ export const ExerciseProgress: React.FC<ExerciseProgressProps> = ({
   loading,
   error,
 }) => {
+  const { t } = useLanguage();
   const [selectedMetric, setSelectedMetric] = useState<MetricType>("est_1rm");
 
   if (loading) {
-    return <div className="loading">Loading progress data...</div>;
+    return <div className="loading">{t.progress.loading}</div>;
   }
 
   if (error) {
@@ -85,11 +87,11 @@ export const ExerciseProgress: React.FC<ExerciseProgressProps> = ({
   const getChartLabel = (): string => {
     switch (selectedMetric) {
       case "est_1rm":
-        return "Estimated 1RM (lbs)";
+        return t.progress.est1rmChartLabel;
       case "volume":
-        return "Volume (lbs)";
+        return t.progress.volumeChartLabel;
       case "best_weight":
-        return "Heaviest Weight (lbs)";
+        return t.progress.heaviestWeightChartLabel;
     }
   };
 
@@ -100,15 +102,15 @@ export const ExerciseProgress: React.FC<ExerciseProgressProps> = ({
     if (!isPR) return null;
     switch (category) {
       case "weight":
-        return "New personal record: heaviest weight";
+        return t.progress.prWeight;
       case "reps":
-        return "New personal record: most reps";
+        return t.progress.prReps;
       case "e1rm":
-        return "New personal record: best estimated 1RM";
+        return t.progress.prE1rm;
       case "volume":
-        return "New personal record: best session volume";
+        return t.progress.prVolume;
       default:
-        return "New personal record";
+        return t.progress.prGeneric;
     }
   };
 
@@ -143,9 +145,9 @@ export const ExerciseProgress: React.FC<ExerciseProgressProps> = ({
             alignItems: "center",
             gap: "4px",
           }}
-          aria-label={label || "PR"}
+          aria-label={label || t.progress.prFallback}
         >
-          ★ PR
+          {t.progress.prBadge}
         </span>
       );
     }
@@ -168,9 +170,9 @@ export const ExerciseProgress: React.FC<ExerciseProgressProps> = ({
             alignItems: "center",
             gap: "4px",
           }}
-          aria-label={label || "PR"}
+          aria-label={label || t.progress.prFallback}
         >
-          ★ PR
+          {t.progress.prBadge}
         </span>
       );
     }
@@ -193,9 +195,9 @@ export const ExerciseProgress: React.FC<ExerciseProgressProps> = ({
             alignItems: "center",
             gap: "4px",
           }}
-          aria-label={label || "PR"}
+          aria-label={label || t.progress.prFallback}
         >
-          ★ PR
+          {t.progress.prBadge}
         </span>
       );
     }
@@ -221,9 +223,9 @@ export const ExerciseProgress: React.FC<ExerciseProgressProps> = ({
           alignItems: "center",
           gap: "4px",
         }}
-        aria-label={label || "PR"}
+        aria-label={label || t.progress.prFallback}
       >
-        ★ PR
+        {t.progress.prBadge}
       </span>
     );
   };
@@ -239,7 +241,7 @@ export const ExerciseProgress: React.FC<ExerciseProgressProps> = ({
         data.personal_records.best_volume !== null ||
         data.personal_records.most_reps !== null) ? (
         <div className="card" style={{ marginBottom: "20px" }}>
-          <h3 style={{ marginTop: 0, marginBottom: "16px" }}>Personal Records</h3>
+          <h3 style={{ marginTop: 0, marginBottom: "16px" }}>{t.progress.personalRecords}</h3>
           <div
             style={{
               display: "grid",
@@ -250,7 +252,7 @@ export const ExerciseProgress: React.FC<ExerciseProgressProps> = ({
             {data.personal_records.heaviest_weight !== null && (
               <div style={{ textAlign: "center", padding: "12px", borderRadius: "16px", backgroundColor: "var(--surface)", border: "1px solid var(--border)" }}>
                 <p style={{ fontSize: "12px", color: "var(--text)", margin: "0 0 4px 0" }}>
-                  Heaviest Weight
+                  {t.progress.heaviestWeight}
                 </p>
                 <p style={{ fontSize: "20px", fontWeight: "bold", margin: "0 0 4px 0", color: "var(--accent)" }}>
                   {data.personal_records.heaviest_weight} lbs
@@ -264,7 +266,7 @@ export const ExerciseProgress: React.FC<ExerciseProgressProps> = ({
             {data.personal_records.best_estimated_1rm !== null && (
               <div style={{ textAlign: "center", padding: "12px", borderRadius: "16px", backgroundColor: "var(--surface)", border: "1px solid var(--border)" }}>
                 <p style={{ fontSize: "12px", color: "var(--text)", margin: "0 0 4px 0" }}>
-                  Best Est. 1RM
+                  {t.progress.bestEst1rm}
                 </p>
                 <p style={{ fontSize: "20px", fontWeight: "bold", margin: "0 0 4px 0", color: "var(--accent)" }}>
                   {data.personal_records.best_estimated_1rm} lbs
@@ -278,7 +280,7 @@ export const ExerciseProgress: React.FC<ExerciseProgressProps> = ({
             {data.personal_records.best_volume !== null && (
               <div style={{ textAlign: "center", padding: "12px", borderRadius: "16px", backgroundColor: "var(--surface)", border: "1px solid var(--border)" }}>
                 <p style={{ fontSize: "12px", color: "var(--text)", margin: "0 0 4px 0" }}>
-                  Best Volume
+                  {t.progress.bestVolume}
                 </p>
                 <p style={{ fontSize: "20px", fontWeight: "bold", margin: "0 0 4px 0", color: "var(--accent)" }}>
                   {data.personal_records.best_volume} lbs
@@ -292,7 +294,7 @@ export const ExerciseProgress: React.FC<ExerciseProgressProps> = ({
             {data.personal_records.most_reps !== null && (
               <div style={{ textAlign: "center", padding: "12px", borderRadius: "16px", backgroundColor: "var(--surface)", border: "1px solid var(--border)" }}>
                 <p style={{ fontSize: "12px", color: "var(--text)", margin: "0 0 4px 0" }}>
-                  Most Reps
+                  {t.progress.mostReps}
                 </p>
                 <p style={{ fontSize: "20px", fontWeight: "bold", margin: "0 0 4px 0", color: "var(--accent)" }}>
                   {data.personal_records.most_reps}
@@ -319,9 +321,9 @@ export const ExerciseProgress: React.FC<ExerciseProgressProps> = ({
               fontWeight: selectedMetric === metric ? "bold" : "normal",
             }}
           >
-            {metric === "est_1rm" && "Est. 1RM"}
-            {metric === "volume" && "Volume"}
-            {metric === "best_weight" && "Best Weight"}
+            {metric === "est_1rm" && t.progress.metricEst1rm}
+            {metric === "volume" && t.progress.metricVolume}
+            {metric === "best_weight" && t.progress.metricBestWeight}
           </button>
         ))}
       </div>
@@ -336,11 +338,11 @@ export const ExerciseProgress: React.FC<ExerciseProgressProps> = ({
 
       {/* Session List */}
       <div style={{ marginTop: "32px" }}>
-        <h3 style={{ marginBottom: "16px" }}>Session History</h3>
+        <h3 style={{ marginBottom: "16px" }}>{t.progress.sessionHistory}</h3>
 
         {data.sessions.length === 0 ? (
           <div className="empty-state">
-            <p>No logged sets yet.</p>
+            <p>{t.progress.noSetsLogged}</p>
           </div>
         ) : (
           <div style={{ display: "grid", gap: "12px" }}>
@@ -366,7 +368,7 @@ export const ExerciseProgress: React.FC<ExerciseProgressProps> = ({
                     {formatDate(session.date)}
                   </Link>
                   <div style={{ fontSize: "14px" }}>
-                    Volume: {session.volume.toFixed(1)} lbs
+                    {t.progress.volumeLine(session.volume.toFixed(1))}
                     {renderVolumePRBadge(session.is_volume_pr)}
                   </div>
                 </div>
@@ -393,7 +395,16 @@ export const ExerciseProgress: React.FC<ExerciseProgressProps> = ({
                       >
                         <div>
                           <span style={{ fontWeight: "500" }}>
-                            Set {set.set_number}: {set.weight !== null && set.reps !== null ? `${set.weight} × ${set.reps}` : set.weight !== null ? `${set.weight} lbs` : set.reps !== null ? `${set.reps} reps` : "not set"}
+                            {t.progress.setLine(
+                              set.set_number,
+                              set.weight !== null && set.reps !== null
+                                ? t.progress.setWeightReps(set.weight, set.reps)
+                                : set.weight !== null
+                                ? t.progress.setWeightOnly(set.weight)
+                                : set.reps !== null
+                                ? t.progress.setRepsOnly(set.reps)
+                                : t.progress.setNotSet
+                            )}
                           </span>
                           {renderPRBadge(
                             set.is_weight_pr,
@@ -409,7 +420,7 @@ export const ExerciseProgress: React.FC<ExerciseProgressProps> = ({
                               textAlign: "right",
                             }}
                           >
-                            Est. 1RM: {set.estimated_1rm} lbs
+                            {t.progress.est1rmLine(set.estimated_1rm)}
                           </div>
                         )}
                       </div>
@@ -441,12 +452,12 @@ export const ExerciseProgress: React.FC<ExerciseProgressProps> = ({
                         fontSize: "14px",
                       }}
                     >
-                      Best Set Est. 1RM:{" "}
+                      {t.progress.bestSetEst1rmLabel}{" "}
                       <strong>
                         {Math.max(...(e1rms as number[])).toFixed(
                           1
                         )}{" "}
-                        lbs
+                        {t.progress.lbs}
                       </strong>
                     </div>
                   ) : null;

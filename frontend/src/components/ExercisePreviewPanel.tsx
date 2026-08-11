@@ -1,5 +1,6 @@
 import React from "react";
 import { getYoutubeEmbedUrl } from "../utils/youtube";
+import { useLanguage } from "../contexts/LanguageContext";
 
 export interface ExercisePreviewPanelProps {
   selected: {
@@ -13,6 +14,7 @@ export const ExercisePreviewPanel: React.FC<ExercisePreviewPanelProps> = ({
   selected,
   fullWidth = false,
 }) => {
+  const { t } = useLanguage();
   const containerStyle: React.CSSProperties = {
     display: "flex",
     flexDirection: "column",
@@ -84,7 +86,7 @@ export const ExercisePreviewPanel: React.FC<ExercisePreviewPanelProps> = ({
       <div style={containerStyle}>
         <div style={placeholderStyle}>
           <div style={{ fontSize: "24px" }}>👁️</div>
-          <div>Click exercise to preview</div>
+          <div>{t.exercisePreview.clickToPreview}</div>
         </div>
       </div>
     );
@@ -118,7 +120,7 @@ export const ExercisePreviewPanel: React.FC<ExercisePreviewPanelProps> = ({
       <div style={emptyStateStyle}>
         <div style={{ fontSize: "20px" }}>🎬</div>
         <div style={{ fontSize: "11px", color: "var(--text-h)" }}>
-          No video available
+          {t.exercisePreview.noVideo}
         </div>
       </div>
     </div>

@@ -21,9 +21,9 @@ export const Toast: React.FC<ToastProps> = ({
   }, [duration, onClose]);
 
   const typeStyles = {
-    success: { backgroundColor: '#28a745', color: 'white' },
-    error: { backgroundColor: '#dc3545', color: 'white' },
-    info: { backgroundColor: '#17a2b8', color: 'white' },
+    success: { backgroundColor: 'var(--success)', color: 'white' },
+    error: { backgroundColor: 'var(--danger)', color: 'white' },
+    info: { backgroundColor: 'var(--info)', color: 'white' },
   };
 
   return (

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 interface PlanDraft {
   name: string;
@@ -12,6 +13,7 @@ interface CreatePlanStep1Props {
 }
 
 export const CreatePlanStep1 = ({ onContinue, onCancel }: CreatePlanStep1Props) => {
+  const { t } = useLanguage();
   const [name, setName] = useState('');
   const [unitType, setUnitType] = useState<'days' | 'weeks'>('days');
   const [totalUnits, setTotalUnits] = useState<number>(1); // Default to 1 day
@@ -55,7 +57,7 @@ export const CreatePlanStep1 = ({ onContinue, onCancel }: CreatePlanStep1Props) 
 
   const handleContinue = () => {
     if (name.trim() === '') {
-      setError('Please set up a name to continue.');
+      setError(t.createPlanStep1.nameError);
       return;
     }
 
@@ -63,14 +65,14 @@ export const CreatePlanStep1 = ({ onContinue, onCancel }: CreatePlanStep1Props) 
       // Custom weeks panel is open: validate custom input
       const weeks = parseInt(customWeeks, 10);
       if (!customWeeks || isNaN(weeks) || weeks < 1 || weeks > 52) {
-        setError('Please enter a valid custom length (1-52).');
+        setError(t.createPlanStep1.customWeeksError);
         return;
       }
       // Valid custom input: proceed
       setError(null);
       onContinue({ name: name.trim(), unitType: 'weeks', totalUnits: weeks });
     } else if (totalUnits === null || totalUnits <= 0) {
-      setError('Please select a length to continue.');
+      setError(t.createPlanStep1.lengthError);
       return;
     } else {
       // Predefined selection
@@ -81,13 +83,13 @@ export const CreatePlanStep1 = ({ onContinue, onCancel }: CreatePlanStep1Props) 
 
   return (
     <div className="page-container">
-      <p className="kicker">New plan</p>
-      <h1 className="page-title">Set it up</h1>
+      <p className="kicker">{t.createPlanStep1.kicker}</p>
+      <h1 className="page-title">{t.createPlanStep1.title}</h1>
 
       <div className="panel" style={{ maxWidth: '560px' }}>
         {error && <div className="error-message">{error}</div>}
         <label className="field-label" htmlFor="planName">
-          Plan name
+          {t.createPlanStep1.planNameLabel}
         </label>
         <input
           id="planName"
@@ -97,17 +99,17 @@ export const CreatePlanStep1 = ({ onContinue, onCancel }: CreatePlanStep1Props) 
             setName(e.target.value);
             setError(null);
           }}
-          placeholder="e.g. Off-season strength block"
+          placeholder={t.createPlanStep1.planNamePlaceholder}
           className="text-input"
         />
 
         <div style={{ marginTop: '24px' }}>
           <div>
             <h3 className="field-label" style={{ margin: '0 0 4px 0', fontSize: '16px', fontWeight: '600' }}>
-              Workout Schedule
+              {t.createPlanStep1.scheduleTitle}
             </h3>
             <p style={{ margin: '0 0 16px 0', fontSize: '14px', color: 'var(--text)', fontWeight: 'normal' }}>
-              How many days do you plan to work out each week?
+              {t.createPlanStep1.scheduleQuestion}
             </p>
           </div>
 
@@ -122,14 +124,14 @@ export const CreatePlanStep1 = ({ onContinue, onCancel }: CreatePlanStep1Props) 
                       onClick={() => handleSelectDays(day)}
                       className={`chip${selected ? ' selected' : ''}`}
                     >
-                      {day} Day{day > 1 ? 's' : ''}
+                      {t.createPlanStep1.dayLabel(day)}
                     </button>
                   );
                 })}
               </div>
 
               <p style={{ margin: '0 0 16px 0', fontSize: '13px', color: 'var(--text)', fontStyle: 'italic' }}>
-                This workout schedule repeats weekly.
+                {t.createPlanStep1.repeatsWeekly}
               </p>
 
               <div
@@ -166,7 +168,7 @@ export const CreatePlanStep1 = ({ onContinue, onCancel }: CreatePlanStep1Props) 
                     height: '18px',
                     flexShrink: 0,
                   }}
-                  aria-label="Create a multi-week training plan"
+                  aria-label={t.createPlanStep1.multiWeekCheckboxLabel}
                 />
                 <div>
                   <label
@@ -179,10 +181,10 @@ export const CreatePlanStep1 = ({ onContinue, onCancel }: CreatePlanStep1Props) 
                       display: 'block',
                     }}
                   >
-                    Create a multi-week training plan
+                    {t.createPlanStep1.multiWeekCheckboxLabel}
                   </label>
                   <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: 'var(--text)', lineHeight: '1.4' }}>
-                    Plan different workouts for each week.
+                    {t.createPlanStep1.multiWeekCheckboxDesc}
                   </p>
                 </div>
               </div>
@@ -193,14 +195,14 @@ export const CreatePlanStep1 = ({ onContinue, onCancel }: CreatePlanStep1Props) 
             <>
               <div style={{ marginBottom: '12px' }}>
                 <h3 style={{ margin: '0 0 4px 0', fontSize: '14px', fontWeight: '600', color: 'var(--text)' }}>
-                  Multi-week Training (Periodization)
+                  {t.createPlanStep1.periodizationTitle}
                 </h3>
               </div>
 
               <div className="chip-row" style={{ marginBottom: '12px' }}>
                 {[
-                  { label: '1 Week', weeks: 1 },
-                  { label: '4 Weeks', weeks: 4 },
+                  { label: t.createPlanStep1.oneWeek, weeks: 1 },
+                  { label: t.createPlanStep1.fourWeeks, weeks: 4 },
                 ].map((option) => {
                   const selected = unitType === 'weeks' && totalUnits === option.weeks && !showCustomWeeks;
                   return (
@@ -221,7 +223,7 @@ export const CreatePlanStep1 = ({ onContinue, onCancel }: CreatePlanStep1Props) 
                   }}
                   className={`chip${showCustomWeeks ? ' selected' : ''}`}
                 >
-                  Custom
+                  {t.createPlanStep1.custom}
                 </button>
               </div>
 
@@ -236,7 +238,7 @@ export const CreatePlanStep1 = ({ onContinue, onCancel }: CreatePlanStep1Props) 
                       setCustomWeeks(e.target.value);
                       setError(null);
                     }}
-                    placeholder="1-52"
+                    placeholder={t.createPlanStep1.customWeeksPlaceholder}
                     className="text-input"
                     style={{ maxWidth: '120px' }}
                   />
@@ -257,7 +259,7 @@ export const CreatePlanStep1 = ({ onContinue, onCancel }: CreatePlanStep1Props) 
                   marginBottom: '0',
                 }}
               >
-                ← Use single-week schedule instead
+                {t.createPlanStep1.useSingleWeek}
               </button>
             </>
           )}
@@ -265,14 +267,14 @@ export const CreatePlanStep1 = ({ onContinue, onCancel }: CreatePlanStep1Props) 
 
         <div className="step-actions">
           <button onClick={onCancel} className="btn-link">
-            Cancel
+            {t.createPlanStep1.cancel}
           </button>
           <button
             onClick={handleContinue}
             disabled={false}
             className={`btn btn-primary${!isValid ? ' soft-disabled' : ''}`}
           >
-            Continue →
+            {t.createPlanStep1.continue}
           </button>
         </div>
       </div>

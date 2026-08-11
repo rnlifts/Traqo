@@ -3,6 +3,7 @@ import type { Exercise, CreateExerciseRequest, UpdateExerciseRequest } from "../
 import { exercisesApi } from "../../api/exercisesApi";
 import { exerciseLibraryApi } from "../../api/exerciseLibraryApi";
 import { useToast } from "../../components/Toast";
+import { useLanguage } from "../../contexts/LanguageContext";
 
 interface CustomExerciseFormProps {
   mode: "create" | "edit";
@@ -24,6 +25,7 @@ export const CustomExerciseForm: React.FC<CustomExerciseFormProps> = ({
   onCancel,
 }) => {
   const { showToast } = useToast();
+  const { t } = useLanguage();
   const [name, setName] = useState(initialValues?.name || "");
   const [muscleGroup, setMuscleGroup] = useState(initialValues?.muscle_group || "");
   const [equipment, setEquipment] = useState(initialValues?.equipment || "");
@@ -44,11 +46,11 @@ export const CustomExerciseForm: React.FC<CustomExerciseFormProps> = ({
   // Update YouTube error when URL changes
   useEffect(() => {
     if (videoUrl && !validateYoutubeUrl(videoUrl)) {
-      setYoutubeError("YouTube URL must contain youtube.com/watch or youtu.be/");
+      setYoutubeError(t.customExerciseForm.youtubeInvalid);
     } else {
       setYoutubeError("");
     }
-  }, [videoUrl]);
+  }, [videoUrl, t]);
 
   // Load muscle groups and equipment options
   useEffect(() => {
@@ -61,12 +63,12 @@ export const CustomExerciseForm: React.FC<CustomExerciseFormProps> = ({
         setEquipmentOptions(equipment);
       } catch (error) {
         console.error("Failed to load options:", error);
-        showToast("Failed to load options", "error");
+        showToast(t.customExerciseForm.loadOptionsFailed, "error");
       }
     };
 
     loadOptions();
-  }, [showToast]);
+  }, [showToast, t]);
 
   const isFormValid = name.trim() && !youtubeError;
 
@@ -89,7 +91,7 @@ export const CustomExerciseForm: React.FC<CustomExerciseFormProps> = ({
       let exercise: Exercise;
       if (mode === "create") {
         exercise = await exercisesApi.create(request as CreateExerciseRequest);
-        showToast("Exercise created successfully", "success");
+        showToast(t.customExerciseForm.createSuccess, "success");
       } else {
         if (!initialValues?.id) {
           throw new Error("Exercise ID is required for edit mode");
@@ -98,13 +100,13 @@ export const CustomExerciseForm: React.FC<CustomExerciseFormProps> = ({
           initialValues.id,
           request as UpdateExerciseRequest
         );
-        showToast("Exercise updated successfully", "success");
+        showToast(t.customExerciseForm.updateSuccess, "success");
       }
 
       onSaved(exercise);
     } catch (error: any) {
       console.error("Failed to save exercise:", error);
-      const message = error?.response?.data?.error || error?.message || "Failed to save exercise";
+      const message = error?.response?.data?.error || error?.message || t.customExerciseForm.saveFailed;
       showToast(message, "error");
     } finally {
       setIsLoading(false);
@@ -114,12 +116,12 @@ export const CustomExerciseForm: React.FC<CustomExerciseFormProps> = ({
   return (
     <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
       <div>
-        <label className="field-label">Name *</label>
+        <label className="field-label">{t.customExerciseForm.nameLabel}</label>
         <input
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Exercise name"
+          placeholder={t.customExerciseForm.namePlaceholder}
           className="input-field"
           required
           disabled={isLoading}
@@ -127,12 +129,12 @@ export const CustomExerciseForm: React.FC<CustomExerciseFormProps> = ({
       </div>
 
       <div>
-        <label className="field-label">Muscle Group</label>
+        <label className="field-label">{t.customExerciseForm.muscleGroupLabel}</label>
         <input
           type="text"
           value={muscleGroup}
           onChange={(e) => setMuscleGroup(e.target.value)}
-          placeholder="e.g. chest, back, biceps"
+          placeholder={t.customExerciseForm.muscleGroupPlaceholder}
           className="input-field"
           disabled={isLoading}
           list="muscle-group-suggestions"
@@ -145,12 +147,12 @@ export const CustomExerciseForm: React.FC<CustomExerciseFormProps> = ({
       </div>
 
       <div>
-        <label className="field-label">Equipment</label>
+        <label className="field-label">{t.customExerciseForm.equipmentLabel}</label>
         <input
           type="text"
           value={equipment}
           onChange={(e) => setEquipment(e.target.value)}
-          placeholder="e.g. barbell, dumbbell, bodyweight"
+          placeholder={t.customExerciseForm.equipmentPlaceholder}
           className="input-field"
           disabled={isLoading}
           list="equipment-suggestions"
@@ -163,12 +165,12 @@ export const CustomExerciseForm: React.FC<CustomExerciseFormProps> = ({
       </div>
 
       <div>
-        <label className="field-label">YouTube Link</label>
+        <label className="field-label">{t.customExerciseForm.youtubeLabel}</label>
         <input
           type="text"
           value={videoUrl}
           onChange={(e) => setVideoUrl(e.target.value)}
-          placeholder="https://youtube.com/watch?v=... or https://youtu.be/..."
+          placeholder={t.customExerciseForm.youtubePlaceholder}
           className="input-field"
           disabled={isLoading}
           style={{
@@ -189,7 +191,11 @@ export const CustomExerciseForm: React.FC<CustomExerciseFormProps> = ({
           className="btn btn-primary"
           style={{ flex: 1 }}
         >
-          {isLoading ? "Saving..." : mode === "create" ? "Create Exercise" : "Update Exercise"}
+          {isLoading
+            ? t.customExerciseForm.saving
+            : mode === "create"
+            ? t.customExerciseForm.createExercise
+            : t.customExerciseForm.updateExercise}
         </button>
         <button
           type="button"
@@ -198,7 +204,7 @@ export const CustomExerciseForm: React.FC<CustomExerciseFormProps> = ({
           className="btn btn-secondary"
           style={{ flex: 1 }}
         >
-          Cancel
+          {t.customExerciseForm.cancel}
         </button>
       </div>
     </form>

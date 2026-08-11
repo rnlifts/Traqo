@@ -12,13 +12,18 @@ import { WorkoutHistoryPage } from './pages/WorkoutHistoryPage';
 import SessionDetailPage from './pages/SessionDetailPage';
 import ExerciseProgressPage from './pages/ExerciseProgressPage';
 import SharedPlanPage from './pages/SharedPlanPage';
+import ProfilePage from './pages/ProfilePage';
 import { AuthProvider } from './features/auth/AuthContext';
 import { UnsavedChangesProvider } from './contexts/UnsavedChangesContext';
+import { ThemeProvider } from './contexts/ThemeContext';
+import { LanguageProvider } from './contexts/LanguageContext';
 import { ProtectedRoute } from './routes/ProtectedRoute';
 import './App.css';
 
 function App() {
   return (
+    <LanguageProvider>
+    <ThemeProvider>
     <UnsavedChangesProvider>
       <AuthProvider>
         <BrowserRouter>
@@ -99,10 +104,20 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <ProfilePage />
+              </ProtectedRoute>
+            }
+          />
         </Routes>
       </BrowserRouter>
       </AuthProvider>
     </UnsavedChangesProvider>
+    </ThemeProvider>
+    </LanguageProvider>
   );
 }
 

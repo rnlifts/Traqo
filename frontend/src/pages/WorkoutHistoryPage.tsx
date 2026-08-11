@@ -3,8 +3,10 @@ import type { WorkoutHistoryEntry } from "../api/workoutSessionsApi";
 import { workoutSessionsApi } from "../api/workoutSessionsApi";
 import { WorkoutHistory } from "../features/sessions/WorkoutHistory";
 import { Layout } from "../components/Layout";
+import { useLanguage } from "../contexts/LanguageContext";
 
 export const WorkoutHistoryPage: React.FC = () => {
+  const { t } = useLanguage();
   const [entries, setEntries] = useState<WorkoutHistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -18,7 +20,7 @@ export const WorkoutHistoryPage: React.FC = () => {
         setEntries(data);
       } catch (err) {
         setError(
-          err instanceof Error ? err.message : "Failed to fetch workout history"
+          err instanceof Error ? err.message : t.workoutHistory.failedToFetch
         );
       } finally {
         setLoading(false);
@@ -31,8 +33,8 @@ export const WorkoutHistoryPage: React.FC = () => {
   return (
     <Layout>
       <div className="page-container">
-        <h1 className="page-title">Workout History</h1>
-        <p className="page-subtitle">View your past workouts and progress.</p>
+        <h1 className="page-title">{t.workoutHistory.pageTitle}</h1>
+        <p className="page-subtitle">{t.workoutHistory.pageSubtitle}</p>
         <WorkoutHistory entries={entries} loading={loading} error={error} />
       </div>
     </Layout>

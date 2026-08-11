@@ -5,6 +5,7 @@ import { workoutSessionsApi, type WorkoutSet } from "../api/workoutSessionsApi";
 import { getWorkoutPlanDetail, getPreviousPerformance, type PreviousPerformanceResponse, type WorkoutPlanDetail } from "../api/workoutPlansApi";
 import { resolveSessionDay } from "../features/sessions/sessionDayResolver";
 import { Layout } from "../components/Layout";
+import { useLanguage } from "../contexts/LanguageContext";
 
 interface Exercise {
   id: number;
@@ -16,6 +17,7 @@ export default function ActiveWorkoutPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useLanguage();
   const [session, setSession] = useState<any>(null);
   const [planDetail, setPlanDetail] = useState<WorkoutPlanDetail | null>(null);
   const [availableExercises, setAvailableExercises] = useState<Exercise[]>([]);
@@ -30,7 +32,7 @@ export default function ActiveWorkoutPage() {
 
   async function loadData() {
     if (!sessionId) {
-      setError("Session ID not provided");
+      setError(t.activeWorkoutPage.sessionIdMissing);
       setLoading(false);
       return;
     }
@@ -88,7 +90,7 @@ export default function ActiveWorkoutPage() {
         }
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || "Failed to load workout session");
+      setError(err.response?.data?.error || t.activeWorkoutPage.loadSessionFailed);
       setLoading(false);
     }
   }
@@ -103,12 +105,12 @@ export default function ActiveWorkoutPage() {
         const plan = await getWorkoutPlanDetail(session.workout_plan_id);
         setPlanDetail(plan);
       } catch (err: any) {
-        setError(err.response?.data?.error || "Failed to refresh plan details");
+        setError(err.response?.data?.error || t.activeWorkoutPage.refreshPlanFailed);
       }
     }
   };
 
-  if (loading) return <Layout><div style={{ padding: "20px" }}>Loading...</div></Layout>;
+  if (loading) return <Layout><div style={{ padding: "20px" }}>{t.sharing.loading}</div></Layout>;
   if (error) return (
     <Layout>
       <div style={{ padding: "20px" }}>
@@ -119,13 +121,13 @@ export default function ActiveWorkoutPage() {
             style={{
               background: 'none',
               border: 'none',
-              color: '#721c24',
+              color: 'var(--danger)',
               fontSize: '20px',
               cursor: 'pointer',
               padding: '0 0 0 12px',
               flex: '0 0 auto'
             }}
-            aria-label="Dismiss error"
+            aria-label={t.planBuilder.dismissError}
           >
             ×
           </button>
@@ -135,12 +137,12 @@ export default function ActiveWorkoutPage() {
           className="btn btn-secondary"
           style={{ marginTop: "16px" }}
         >
-          Back to Plans
+          {t.common2.backToPlans}
         </button>
       </div>
     </Layout>
   );
-  if (!session || !planDetail) return <Layout><div style={{ padding: "20px" }}>Session not found</div></Layout>;
+  if (!session || !planDetail) return <Layout><div style={{ padding: "20px" }}>{t.common2.sessionNotFound}</div></Layout>;
 
   // Resolve the day from the plan using the helper function
   const { matchingDay, dayLabel } = resolveSessionDay(planDetail, session.plan_day_id);
@@ -150,19 +152,19 @@ export default function ActiveWorkoutPage() {
       <Layout>
         <div style={{ padding: "20px" }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} className="error-message">
-            <span>Day not found for this workout session</span>
+            <span>{t.common2.dayNotFound}</span>
             <button
               onClick={() => setError(null)}
               style={{
                 background: 'none',
                 border: 'none',
-                color: '#721c24',
+                color: 'var(--danger)',
                 fontSize: '20px',
                 cursor: 'pointer',
                 padding: '0 0 0 12px',
                 flex: '0 0 auto'
               }}
-              aria-label="Dismiss error"
+              aria-label={t.planBuilder.dismissError}
             >
               ×
             </button>

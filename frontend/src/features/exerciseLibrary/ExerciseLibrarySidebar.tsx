@@ -6,6 +6,7 @@ import type { LibraryExercise } from "../../api/exerciseLibraryApi";
 import { CustomExerciseForm } from "./CustomExerciseForm";
 import { useToast } from "../../components/Toast";
 import { getYoutubeThumbnailUrl } from "../../utils/youtube";
+import { useLanguage } from "../../contexts/LanguageContext";
 
 export interface SelectedExerciseInfo {
   name: string;
@@ -36,6 +37,7 @@ export const ExerciseLibrarySidebar: React.FC<ExerciseLibrarySidebarProps> = ({
   onPreviewExercise,
 }) => {
   const { showToast } = useToast();
+  const { t } = useLanguage();
 
   // Tab state
   const [activeTab, setActiveTab] = useState<TabType>("library");
@@ -82,7 +84,7 @@ export const ExerciseLibrarySidebar: React.FC<ExerciseLibrarySidebarProps> = ({
       setCustomExercises(exercises);
     } catch (error) {
       console.error("Failed to load custom exercises:", error);
-      showToast("Failed to load custom exercises", "error");
+      showToast(t.exerciseLibrary.loadFailed, "error");
     } finally {
       setCustomLoading(false);
     }
@@ -161,10 +163,10 @@ export const ExerciseLibrarySidebar: React.FC<ExerciseLibrarySidebarProps> = ({
       // Clear the search query
       setSearchQuery("");
 
-      showToast(`Created "${titleCasedName}" - edit to add details`, "success");
+      showToast(t.exerciseLibrary.createdEditPrompt(titleCasedName), "success");
     } catch (error) {
       console.error("Failed to create custom exercise from search:", error);
-      showToast("Failed to create exercise", "error");
+      showToast(t.exerciseLibrary.createFailed, "error");
     }
   };
 
@@ -172,9 +174,9 @@ export const ExerciseLibrarySidebar: React.FC<ExerciseLibrarySidebarProps> = ({
     try {
       await exercisesApi.delete(exerciseId);
       setCustomExercises(customExercises.filter((e) => e.id !== exerciseId));
-      showToast("Exercise deleted", "success");
+      showToast(t.exerciseLibrary.deleted, "success");
     } catch (error: any) {
-      const message = error?.response?.data?.error || "Failed to delete exercise";
+      const message = error?.response?.data?.error || t.exerciseLibrary.deleteFailed;
       showToast(message, "error");
     }
   };
@@ -228,7 +230,7 @@ export const ExerciseLibrarySidebar: React.FC<ExerciseLibrarySidebarProps> = ({
             transition: "all 0.2s ease",
           }}
         >
-          Exercise Library
+          {t.exerciseLibrary.libraryTab}
         </button>
         <button
           onClick={() => setActiveTab("custom")}
@@ -244,7 +246,7 @@ export const ExerciseLibrarySidebar: React.FC<ExerciseLibrarySidebarProps> = ({
             transition: "all 0.2s ease",
           }}
         >
-          Custom Exercises
+          {t.exerciseLibrary.customTab}
         </button>
       </div>
 
@@ -254,7 +256,7 @@ export const ExerciseLibrarySidebar: React.FC<ExerciseLibrarySidebarProps> = ({
           {/* Search Input */}
           <input
             type="text"
-            placeholder="Search exercises..."
+            placeholder={t.exerciseLibrary.searchPlaceholder}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="input-field"
@@ -279,10 +281,10 @@ export const ExerciseLibrarySidebar: React.FC<ExerciseLibrarySidebarProps> = ({
                 <span style={{ fontSize: "16px", flexShrink: 0 }}>💡</span>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: "13px", fontWeight: "500", color: "var(--text)" }}>
-                    "{searchQuery}" not found
+                    {t.exerciseLibrary.notFound(searchQuery)}
                   </div>
                   <div style={{ fontSize: "12px", color: "var(--text-h)", marginTop: "2px" }}>
-                    Create a custom exercise to add it to your library
+                    {t.exerciseLibrary.createCustomPrompt}
                   </div>
                 </div>
               </div>
@@ -300,7 +302,7 @@ export const ExerciseLibrarySidebar: React.FC<ExerciseLibrarySidebarProps> = ({
                   width: "100%",
                 }}
               >
-                + Create New: "{searchQuery}"
+                {t.exerciseLibrary.createNew(searchQuery)}
               </button>
             </div>
           )}
@@ -309,7 +311,7 @@ export const ExerciseLibrarySidebar: React.FC<ExerciseLibrarySidebarProps> = ({
           {!initialLoading && muscleGroups.length > 0 && (
             <div style={{ marginBottom: "12px" }}>
               <div style={{ fontSize: "12px", fontWeight: "500", marginBottom: "8px", color: "var(--text-h)" }}>
-                Muscle Group
+                {t.exerciseLibrary.muscleGroup}
               </div>
               <div
                 style={{
@@ -333,7 +335,7 @@ export const ExerciseLibrarySidebar: React.FC<ExerciseLibrarySidebarProps> = ({
                     fontWeight: selectedMuscleGroup === null ? "600" : "400",
                   }}
                 >
-                  All
+                  {t.exerciseLibrary.all}
                 </button>
                 {muscleGroups.map((group) => (
                   <button
@@ -368,11 +370,11 @@ export const ExerciseLibrarySidebar: React.FC<ExerciseLibrarySidebarProps> = ({
               paddingTop: "12px",
             }}
           >
-            {loading && <div style={{ color: "var(--text-h)", fontSize: "13px" }}>Searching...</div>}
+            {loading && <div style={{ color: "var(--text-h)", fontSize: "13px" }}>{t.exerciseLibrary.searching}</div>}
 
             {!loading && results.length === 0 && (
               <div style={{ color: "var(--text-h)", fontSize: "13px" }}>
-                {searchQuery ? "No exercises found." : "Start typing to search."}
+                {searchQuery ? t.exerciseLibrary.noneFound : t.exerciseLibrary.startTyping}
               </div>
             )}
 
@@ -391,7 +393,7 @@ export const ExerciseLibrarySidebar: React.FC<ExerciseLibrarySidebarProps> = ({
                     padding: "10px",
                     border: "1px solid var(--border)",
                     borderRadius: "6px",
-                    backgroundColor: "var(--surface-secondary, white)",
+                    backgroundColor: "var(--bg-secondary)",
                     display: "flex",
                     gap: "10px",
                     alignItems: "flex-start",
@@ -473,7 +475,7 @@ export const ExerciseLibrarySidebar: React.FC<ExerciseLibrarySidebarProps> = ({
                         fontWeight: "500",
                       }}
                     >
-                      + Add
+                      {t.exerciseLibrary.add}
                     </button>
                   </div>
                 </div>
@@ -521,12 +523,12 @@ export const ExerciseLibrarySidebar: React.FC<ExerciseLibrarySidebarProps> = ({
                 }}
               >
                 {customLoading && (
-                  <div style={{ color: "var(--text-h)", fontSize: "13px" }}>Loading...</div>
+                  <div style={{ color: "var(--text-h)", fontSize: "13px" }}>{t.exerciseLibrary.loading}</div>
                 )}
 
                 {!customLoading && customExercises.length === 0 && (
                   <div style={{ color: "var(--text-h)", fontSize: "13px" }}>
-                    You haven't created any custom exercises yet.
+                    {t.exerciseLibrary.noCustomExercises}
                   </div>
                 )}
 
@@ -545,7 +547,7 @@ export const ExerciseLibrarySidebar: React.FC<ExerciseLibrarySidebarProps> = ({
                         padding: "10px",
                         border: "1px solid var(--border)",
                         borderRadius: "6px",
-                        backgroundColor: "var(--surface-secondary, white)",
+                        backgroundColor: "var(--bg-secondary)",
                         display: "flex",
                         gap: "10px",
                         alignItems: "flex-start",
@@ -627,7 +629,7 @@ export const ExerciseLibrarySidebar: React.FC<ExerciseLibrarySidebarProps> = ({
                               fontWeight: "500",
                             }}
                           >
-                            + Add
+                            {t.exerciseLibrary.add}
                           </button>
                           <button
                             onClick={() => {
@@ -645,7 +647,7 @@ export const ExerciseLibrarySidebar: React.FC<ExerciseLibrarySidebarProps> = ({
                               fontWeight: "500",
                             }}
                           >
-                            Edit
+                            {t.exerciseLibrary.edit}
                           </button>
                           <button
                             onClick={() => handleDeleteExercise(exercise.id)}
@@ -660,7 +662,7 @@ export const ExerciseLibrarySidebar: React.FC<ExerciseLibrarySidebarProps> = ({
                               fontWeight: "500",
                             }}
                           >
-                            Delete
+                            {t.exerciseLibrary.delete}
                           </button>
                         </div>
                       </div>
@@ -687,7 +689,7 @@ export const ExerciseLibrarySidebar: React.FC<ExerciseLibrarySidebarProps> = ({
                     width: "100%",
                   }}
                 >
-                  + Add Custom Exercise
+                  {t.exerciseLibrary.addCustomExercise}
                 </button>
               )}
             </>

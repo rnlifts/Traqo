@@ -4,14 +4,18 @@ import { workoutPlansApi, type WorkoutPlanDetail, type PlanDay } from '../api/wo
 import { workoutSessionsApi } from '../api/workoutSessionsApi';
 import { exercisesApi, type Exercise } from '../api/exercisesApi';
 import { useToast } from '../components/Toast';
+import { WorkoutPreviewList } from '../components/WorkoutPreviewList';
+import { useLanguage } from '../contexts/LanguageContext';
 
 export default function SessionSetupPage() {
   const { planId } = useParams<{ planId: string }>();
   const navigate = useNavigate();
   const { Toast, showToast } = useToast();
+  const { t } = useLanguage();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [loadError, setLoadError] = useState<{ status: number; message: string } | null>(null);
   const [planDetail, setPlanDetail] = useState<WorkoutPlanDetail | null>(null);
   const [availableExercises, setAvailableExercises] = useState<Exercise[]>([]);
 
@@ -27,8 +31,9 @@ export default function SessionSetupPage() {
   async function loadPlan() {
     try {
       setLoading(true);
-      if (!planId) {
-        setError('Plan ID is required');
+      setLoadError(null);
+      if (!planId || Number.isNaN(Number(planId))) {
+        setLoadError({ status: 404, message: t.sessionSetup.planNotFoundMessage });
         return;
       }
       // Fetch plan detail and exercises in parallel
@@ -38,10 +43,15 @@ export default function SessionSetupPage() {
       ]);
       setPlanDetail(detail);
       setAvailableExercises(exercises);
-      setError('');
     } catch (err: any) {
-      const errorMsg = err.response?.data?.error || (err as Error).message || 'Failed to load plan';
-      setError(errorMsg);
+      if (err.response?.status === 404) {
+        setLoadError({ status: 404, message: t.sessionSetup.planNotFoundMessage });
+      } else if (err.response?.status === 403) {
+        setLoadError({ status: 403, message: t.sessionSetup.accessDeniedMessage });
+      } else {
+        const errorMsg = err.response?.data?.error || (err as Error).message || t.sessionSetup.loadPlanFailed;
+        setLoadError({ status: 500, message: errorMsg });
+      }
     } finally {
       setLoading(false);
     }
@@ -65,18 +75,18 @@ export default function SessionSetupPage() {
   function getValidationState() {
     const days = getDisplayedDays();
     if (days.length === 0) {
-      return { isValid: false, message: 'No days available' };
+      return { isValid: false, message: t.sessionSetup.noDaysAvailable };
     }
 
     const selectedDay = days[selectedDayIndex];
     if (!selectedDay) {
-      return { isValid: false, message: 'Please select a day' };
+      return { isValid: false, message: t.sessionSetup.selectDay };
     }
 
     if (selectedDay.is_rest) {
       return {
         isValid: false,
-        message: `${selectedDay.label} is a rest day — pick another day, or edit the plan to add exercises here.`
+        message: t.sessionSetup.restDayMessage(selectedDay.label)
       };
     }
 
@@ -85,7 +95,7 @@ export default function SessionSetupPage() {
     if (!planDetail?.plan.is_quick_start && (!selectedDay.exercises || selectedDay.exercises.length === 0)) {
       return {
         isValid: false,
-        message: `No exercises added for ${selectedDay.label} yet — edit the plan first.`
+        message: t.sessionSetup.noExercisesMessage(selectedDay.label)
       };
     }
 
@@ -109,18 +119,18 @@ export default function SessionSetupPage() {
     try {
       const weekNumber = planDetail.plan.unit_type === 'weeks' ? selectedWeekIndex + 1 : undefined;
       const response = await workoutSessionsApi.startWorkout(Number(planId), selectedDay.id, weekNumber);
-      showToast('Workout started!', 'success');
+      showToast(t.sessionSetup.workoutStarted, 'success');
       // Pass prefetched plan and exercises to ActiveWorkoutPage to avoid refetching
       navigate(`/workout-sessions/${response.session_id}`, {
         state: { prefetchedPlanDetail: planDetail, prefetchedExercises: availableExercises },
       });
     } catch (err: any) {
       if (err.response?.status === 409) {
-        showToast("Finish or discard your unresolved workout before starting a new one", "error");
+        showToast(t.hero.unresolvedConflict, "error");
         navigate("/dashboard");
         return;
       }
-      const errorMsg = err.response?.data?.error || (err as Error).message || 'Failed to start workout';
+      const errorMsg = err.response?.data?.error || (err as Error).message || t.sharing.startWorkoutFailed;
       setError(errorMsg);
       setStartingSession(false);
     }
@@ -142,15 +152,15 @@ export default function SessionSetupPage() {
         await workoutPlansApi.deleteDay(Number(planId), newDay.id).catch(() => {});
         throw startErr;
       }
-      showToast('Workout started!', 'success');
+      showToast(t.sessionSetup.workoutStarted, 'success');
       navigate(`/workout-sessions/${response.session_id}`);
     } catch (err: any) {
       if (err.response?.status === 409) {
-        showToast("Finish or discard your unresolved workout before starting a new one", "error");
+        showToast(t.hero.unresolvedConflict, "error");
         navigate("/dashboard");
         return;
       }
-      const errorMsg = err.response?.data?.error || (err as Error).message || 'Failed to start a new workout';
+      const errorMsg = err.response?.data?.error || (err as Error).message || t.sessionSetup.startNewWorkoutFailed;
       setError(errorMsg);
       setLoggingNewToday(false);
     }
@@ -164,17 +174,27 @@ export default function SessionSetupPage() {
     return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   }
 
-  if (loading) return <div className="loading">Loading plan...</div>;
+  if (loading) return <div className="loading">{t.sessionSetup.loadingPlan}</div>;
 
-  if (!planDetail) {
+  if (loadError || !planDetail) {
     return (
       <div className="page-container">
         <div style={{ marginBottom: '20px' }}>
           <button onClick={() => navigate('/workout-plans')} className="btn btn-secondary">
-            ← Back
+            {t.planBuilder.back}
           </button>
         </div>
-        {error && <div className="error-message">{error}</div>}
+        <div className="card" style={{ textAlign: 'center' }}>
+          <h1 className="page-title" style={{ marginBottom: '12px' }}>
+            {loadError?.status === 404 ? t.sessionSetup.planNotFoundTitle : loadError?.status === 403 ? t.common2.accessDenied : t.common2.somethingWentWrong}
+          </h1>
+          <p style={{ fontSize: '16px', marginBottom: '12px', color: 'var(--text)' }}>
+            {loadError?.message || t.sessionSetup.somethingWentWrongMessage}
+          </p>
+          <button onClick={() => navigate('/workout-plans')} className="btn btn-primary">
+            {t.common2.backToPlans}
+          </button>
+        </div>
       </div>
     );
   }
@@ -197,7 +217,7 @@ export default function SessionSetupPage() {
     <div className="page-container">
       <div style={{ marginBottom: '20px' }}>
         <button onClick={() => navigate('/workout-plans')} className="btn btn-secondary">
-          ← Back
+          {t.planBuilder.back}
         </button>
       </div>
 
@@ -209,12 +229,12 @@ export default function SessionSetupPage() {
             style={{
               background: 'none',
               border: 'none',
-              color: '#721c24',
+              color: 'var(--danger)',
               fontSize: '20px',
               cursor: 'pointer',
               padding: '0 0 0 12px',
             }}
-            aria-label="Dismiss error"
+            aria-label={t.planBuilder.dismissError}
           >
             ×
           </button>
@@ -243,7 +263,7 @@ export default function SessionSetupPage() {
                 }}
                 className={`setup-chip ${idx === selectedWeekIndex ? 'active' : ''}`}
               >
-                Week {week.week_number}
+                {t.sharing.weekChip(week.week_number)}
               </button>
             ))}
           </div>
@@ -255,7 +275,7 @@ export default function SessionSetupPage() {
         <div style={{ marginBottom: '20px' }}>
           {isQuickStart && (
             <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: 'var(--text)' }}>
-              Repeat a previous day, or log something new:
+              {t.sessionSetup.repeatOrLogNew}
             </p>
           )}
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
@@ -287,11 +307,16 @@ export default function SessionSetupPage() {
                   cursor: loggingNewToday ? 'not-allowed' : 'pointer',
                 }}
               >
-                {loggingNewToday ? 'Starting...' : '+ Log new for today'}
+                {loggingNewToday ? t.sharing.starting : t.sessionSetup.logNewToday}
               </button>
             )}
           </div>
         </div>
+      )}
+
+      {/* Preview of the currently selected day's exercises */}
+      {selectedDay && !selectedDay.is_rest && selectedDay.exercises && selectedDay.exercises.length > 0 && (
+        <WorkoutPreviewList title={t.sharing.workoutPreviewTitle} exercises={selectedDay.exercises} />
       )}
 
       {/* Validation Message */}
@@ -323,14 +348,14 @@ export default function SessionSetupPage() {
             opacity: !validation.isValid || startingSession ? 0.6 : 1,
           }}
         >
-          {startingSession ? 'Starting...' : 'Begin workout →'}
+          {startingSession ? t.sharing.starting : t.sharing.beginWorkout}
         </button>
         <button
           onClick={() => navigate('/workout-plans')}
           className="btn btn-secondary"
           style={{ padding: '12px 24px', fontSize: '16px' }}
         >
-          Cancel
+          {t.planBuilder.cancel}
         </button>
       </div>
 

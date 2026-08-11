@@ -2,6 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import type { WorkoutHistoryEntry } from "../../api/workoutSessionsApi";
 import { CalendarIcon, ClipboardIcon, ClockIcon, ArrowRightIcon } from "../../components/icons";
+import { useLanguage } from "../../contexts/LanguageContext";
 
 interface WorkoutHistoryProps {
   entries: WorkoutHistoryEntry[];
@@ -16,14 +17,16 @@ export const WorkoutHistory: React.FC<WorkoutHistoryProps> = ({
   error,
   onDismissError,
 }) => {
+  const { t } = useLanguage();
+
   if (loading) {
-    return <div className="loading">Loading workout history...</div>;
+    return <div className="loading">{t.workoutHistory.loading}</div>;
   }
 
   if (error) {
     return (
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }} className="error-message">
-        <span>Error: {error}</span>
+        <span>{t.workoutHistory.errorPrefix(error)}</span>
         {onDismissError && (
           <button
             onClick={onDismissError}
@@ -36,7 +39,7 @@ export const WorkoutHistory: React.FC<WorkoutHistoryProps> = ({
               padding: "0 0 0 12px",
               flex: "0 0 auto",
             }}
-            aria-label="Dismiss error"
+            aria-label={t.workoutHistory.dismissError}
           >
             ×
           </button>
@@ -48,7 +51,7 @@ export const WorkoutHistory: React.FC<WorkoutHistoryProps> = ({
   if (entries.length === 0) {
     return (
       <div className="empty-state">
-        <p>No finished workouts yet. Start a workout to begin tracking!</p>
+        <p>{t.workoutHistory.empty}</p>
       </div>
     );
   }
@@ -62,7 +65,7 @@ export const WorkoutHistory: React.FC<WorkoutHistoryProps> = ({
               <CalendarIcon size={18} />
             </span>
             <div>
-              <p className="field-group-label">Date</p>
+              <p className="field-group-label">{t.workoutHistory.dateLabel}</p>
               <p className="field-group-value">{new Date(entry.date).toLocaleDateString()}</p>
             </div>
           </div>
@@ -72,7 +75,7 @@ export const WorkoutHistory: React.FC<WorkoutHistoryProps> = ({
               <ClipboardIcon size={18} />
             </span>
             <div>
-              <p className="field-group-label">Workout</p>
+              <p className="field-group-label">{t.workoutHistory.workoutLabel}</p>
               <p className="field-group-value">{entry.workout}</p>
             </div>
           </div>
@@ -82,7 +85,7 @@ export const WorkoutHistory: React.FC<WorkoutHistoryProps> = ({
               <ClockIcon size={18} />
             </span>
             <div>
-              <p className="field-group-label">Duration</p>
+              <p className="field-group-label">{t.workoutHistory.durationLabel}</p>
               <p className="field-group-value">{entry.duration}</p>
             </div>
           </div>
@@ -92,9 +95,9 @@ export const WorkoutHistory: React.FC<WorkoutHistoryProps> = ({
               to={`/workout-history/${entry.session_id}`}
               className="btn btn-primary"
               style={{ whiteSpace: "nowrap" }}
-              aria-label={`View details for ${entry.workout} on ${new Date(entry.date).toLocaleDateString()}`}
+              aria-label={t.workoutHistory.viewDetailsAria(entry.workout, new Date(entry.date).toLocaleDateString())}
             >
-              View Details
+              {t.workoutHistory.viewDetails}
               <ArrowRightIcon size={15} />
             </Link>
           )}

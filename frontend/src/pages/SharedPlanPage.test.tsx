@@ -2,6 +2,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { SharedPlanPage } from './SharedPlanPage';
+import { en } from '../i18n/en';
+
+vi.mock('../contexts/LanguageContext', () => ({
+  useLanguage: () => ({ language: 'en', t: en, setLanguage: vi.fn() }),
+}));
 import * as sharingApi from '../api/sharingApi';
 
 vi.mock('../api/sharingApi');
@@ -260,8 +265,8 @@ describe('SharedPlanPage', () => {
       expect(screen.getByText('Test Plan')).toBeInTheDocument();
     });
 
-    // ShareWorkoutStarter should render the Start workout button
-    expect(screen.getByText('Start workout')).toBeInTheDocument();
+    // ShareWorkoutStarter should render its Begin workout button
+    expect(screen.getByText('Begin workout →')).toBeInTheDocument();
   });
 
   it('renders ShareWorkoutStarter when permission is edit', async () => {
@@ -282,8 +287,8 @@ describe('SharedPlanPage', () => {
       expect(screen.getByText('Weekly Plan')).toBeInTheDocument();
     });
 
-    // ShareWorkoutStarter should render the Start workout button
-    expect(screen.getByText('Start workout')).toBeInTheDocument();
+    // ShareWorkoutStarter should render its Begin workout button
+    expect(screen.getByText('Begin workout →')).toBeInTheDocument();
   });
 
   it('does not render ShareWorkoutStarter when permission is view', async () => {
@@ -303,8 +308,8 @@ describe('SharedPlanPage', () => {
       expect(screen.getByText('Test Plan')).toBeInTheDocument();
     });
 
-    // Start workout button should not be visible for view-only permission
-    expect(screen.queryByText('Start workout')).not.toBeInTheDocument();
+    // Begin workout button should not be visible for view-only permission
+    expect(screen.queryByText('Begin workout →')).not.toBeInTheDocument();
   });
 
   describe('Edit plan button (Phase 5c)', () => {

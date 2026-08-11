@@ -3,10 +3,12 @@ import { useParams, useNavigate } from "react-router-dom";
 import { Layout } from "../components/Layout";
 import { ExerciseProgress } from "../features/progress/ExerciseProgress";
 import { progressApi, type ExerciseProgressResult } from "../api/progressApi";
+import { useLanguage } from "../contexts/LanguageContext";
 
 export default function ExerciseProgressPage() {
   const { exerciseId } = useParams<{ exerciseId: string }>();
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [data, setData] = useState<ExerciseProgressResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -17,7 +19,7 @@ export default function ExerciseProgressPage() {
 
   async function loadData() {
     if (!exerciseId) {
-      setError("Exercise ID not provided");
+      setError(t.exerciseProgressPage.idNotProvided);
       setLoading(false);
       return;
     }
@@ -26,7 +28,7 @@ export default function ExerciseProgressPage() {
       const progressData = await progressApi.getExerciseProgress(Number(exerciseId));
       setData(progressData);
     } catch (err: any) {
-      setError(err.response?.data?.error || "Failed to load exercise progress");
+      setError(err.response?.data?.error || t.exerciseProgressPage.loadFailed);
     } finally {
       setLoading(false);
     }
@@ -40,7 +42,7 @@ export default function ExerciseProgressPage() {
           className="btn btn-secondary"
           style={{ marginBottom: "20px" }}
         >
-          ← Back to Exercises
+          {t.exerciseProgressPage.backToExercises}
         </button>
         <ExerciseProgress data={data!} loading={loading} error={error} />
       </div>

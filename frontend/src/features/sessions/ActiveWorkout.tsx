@@ -14,6 +14,7 @@ import { getYoutubeThumbnailUrl } from "../../utils/youtube";
 import { ExerciseWorkoutPreview } from "../../components/ExerciseWorkoutPreview";
 import { Modal } from "../../components/Modal";
 import { ExerciseLibrarySidebar, type SelectedExerciseInfo } from "../exerciseLibrary/ExerciseLibrarySidebar";
+import { useLanguage } from "../../contexts/LanguageContext";
 
 interface Exercise {
   id: number;
@@ -65,12 +66,15 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
   previousPerformance = null,
   planId,
   dayId,
-  planName = "Active Workout",
-  dayLabel = "Workout",
+  planName,
+  dayLabel,
   isQuickStart = false,
   onPlanDetailRefresh,
 }) => {
   const { setHasUnsavedChanges } = useUnsavedChanges();
+  const { t } = useLanguage();
+  const displayPlanName = planName ?? t.activeWorkout.defaultWorkoutName;
+  const displayDayLabel = dayLabel ?? t.sessionDetail.defaultPlanName;
   const navigate = useNavigate();
   const [loggedSets, setLoggedSets] = useState<WorkoutSet[]>(initialSets);
   const [error, setError] = useState<string | null>(null);
@@ -85,7 +89,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
 
   // Rename plan state
   const [isRenamingPlan, setIsRenamingPlan] = useState(false);
-  const [editingPlanName, setEditingPlanName] = useState(planName);
+  const [editingPlanName, setEditingPlanName] = useState(displayPlanName);
   const [renamingPlan, setRenamingPlan] = useState(false);
 
   // Add exercise state (library sidebar)
@@ -222,7 +226,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
 
   const buildTargetLine = (we: WorkoutExercise, setNumber: number = 1): string | null => {
     const parts: string[] = [];
-    if (we.target_sets !== null) parts.push(`${we.target_sets} sets`);
+    if (we.target_sets !== null) parts.push(t.sessionDetail.setsCount(we.target_sets));
 
     // Look up per-set override for this set
     const setOverride = we.set_targets?.find((st) => st.set_number === setNumber);
@@ -230,27 +234,27 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
     // Gate by has_* flags and use per-set override with fallback to main row
     if (we.has_reps) {
       const reps = setOverride?.target_reps ?? we.target_reps;
-      if (reps !== null) parts.push(`${reps} reps`);
+      if (reps !== null) parts.push(t.sessionDetail.repsCount(reps));
     }
     if (we.has_weight) {
       const weight = setOverride?.target_weight ?? we.target_weight;
-      if (weight !== null) parts.push(`${weight} lbs`);
+      if (weight !== null) parts.push(t.sessionDetail.lbsWeight(weight));
     }
     if (we.has_duration) {
       const durationSeconds = setOverride?.target_duration_seconds ?? we.target_duration_seconds;
       if (durationSeconds !== null) {
         const hms = secondsToHMS(durationSeconds);
         const durationParts: string[] = [];
-        if (hms.h > 0) durationParts.push(`${hms.h}h`);
-        if (hms.m > 0) durationParts.push(`${hms.m}m`);
-        if (hms.s > 0) durationParts.push(`${hms.s}s`);
+        if (hms.h > 0) durationParts.push(t.activeWorkout.durationH(hms.h));
+        if (hms.m > 0) durationParts.push(t.activeWorkout.durationM(hms.m));
+        if (hms.s > 0) durationParts.push(t.activeWorkout.durationS(hms.s));
         if (durationParts.length > 0) parts.push(durationParts.join(" "));
       }
     }
 
     if (parts.length === 0) return null;
 
-    return "Target: " + parts.join(" × ");
+    return t.sessionDetail.targetPrefix + parts.join(" × ");
   };
 
   const formatSessionDate = (dateString: string): string => {
@@ -267,13 +271,13 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
       .map((s) => {
         let format = '';
         if (s.weight !== null && s.reps !== null) {
-          format = `${s.weight} lbs × ${s.reps}`;
+          format = t.activeWorkout.prevWeightReps(s.weight, s.reps);
         } else if (s.weight !== null) {
-          format = `${s.weight} lbs`;
+          format = t.activeWorkout.prevWeightOnly(s.weight);
         } else if (s.reps !== null) {
-          format = `${s.reps} reps`;
+          format = t.activeWorkout.prevRepsOnly(s.reps);
         } else if (s.duration_seconds !== null) {
-          format = `${s.duration_seconds}s`;
+          format = t.activeWorkout.prevDurationOnly(s.duration_seconds);
         }
         return format;
       })
@@ -282,7 +286,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
 
     if (!previousPerformance?.session_date) return null;
     const dateLabel = formatSessionDate(previousPerformance.session_date);
-    return `Last time (${dateLabel}): ${setsFormatted}`;
+    return t.activeWorkout.lastTime(dateLabel, setsFormatted);
   };
 
   // Get the pip count for an exercise
@@ -395,7 +399,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
     const hasDuration = panelDuration !== null && panelDuration > 0;
 
     if (!hasWeight && !hasReps && !hasDuration) {
-      setError("At least one of weight, reps, or duration is required");
+      setError(t.activeWorkout.validationRequired);
       return;
     }
 
@@ -437,7 +441,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
       closeSetPanel();
       setError(null);
     } catch (err: any) {
-      setError(err.response?.data?.error || "Failed to log set");
+      setError(err.response?.data?.error || t.activeWorkout.logSetFailed);
     } finally {
       setLoading(false);
     }
@@ -469,7 +473,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
       closeSetPanel();
       setError(null);
     } catch (err: any) {
-      setError(err.response?.data?.error || "Failed to delete set");
+      setError(err.response?.data?.error || t.activeWorkout.deleteSetFailed);
     } finally {
       setLoading(false);
     }
@@ -488,10 +492,10 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
       await workoutSessionsApi.discardSession(session.id);
       setShowExitConfirm(false);
       setDiscardConfirm(false);
-      showToast("Workout discarded.", "success");
+      showToast(t.hero.discardedToast, "success");
       navigate("/dashboard");
     } catch (err: any) {
-      setError(err.response?.data?.error || "Failed to discard workout");
+      setError(err.response?.data?.error || t.hero.discardFailed);
     }
   };
 
@@ -501,10 +505,10 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
     setError(null);
     try {
       await workoutSessionsApi.finishWorkout(session.id);
-      showToast("Workout finished!", "success");
+      showToast(t.hero.finishedToast, "success");
       setWorkoutFinished(true);
     } catch (err: any) {
-      setError(err.response?.data?.error || "Failed to finish workout");
+      setError(err.response?.data?.error || t.hero.finishFailed);
       setFinishing(false);
     }
   };
@@ -517,12 +521,12 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
       await updateWorkoutPlan(planId, editingPlanName);
       setIsRenamingPlan(false);
       setError(null);
-      showToast("Plan name updated!", "success");
+      showToast(t.activeWorkout.planNameUpdated, "success");
       if (onPlanDetailRefresh) {
         await onPlanDetailRefresh();
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || "Failed to update plan name");
+      setError(err.response?.data?.error || t.activeWorkout.updatePlanNameFailed);
     } finally {
       setRenamingPlan(false);
     }
@@ -554,13 +558,13 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
       await addExerciseToDay(planId, dayId, exerciseId, 1, undefined, undefined, undefined, true, true, false);
 
       setError(null);
-      showToast(`${exerciseInfo.name} added!`, 'success');
+      showToast(t.activeWorkout.exerciseAdded(exerciseInfo.name), 'success');
 
       if (onPlanDetailRefresh) {
         await onPlanDetailRefresh();
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || "Failed to add exercise");
+      setError(err.response?.data?.error || t.activeWorkout.addExerciseFailed);
     } finally {
       pendingAddsRef.current.delete(key);
     }
@@ -601,7 +605,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
             gap: "20px",
           }}
         >
-          <h2 style={{ fontSize: "32px", margin: "20px 0" }}>Workout complete!</h2>
+          <h2 style={{ fontSize: "32px", margin: "20px 0" }}>{t.activeWorkout.workoutComplete}</h2>
           <div
             style={{
               display: "grid",
@@ -613,7 +617,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
           >
             <div style={{ textAlign: "center" }}>
               <p style={{ margin: "0 0 8px 0", fontSize: "14px", color: "var(--text)" }}>
-                Exercises completed
+                {t.activeWorkout.exercisesCompleted}
               </p>
               <p style={{ margin: 0, fontSize: "28px", fontWeight: "bold" }}>
                 {exercisesWithAllSetsDone}/{totalExercises}
@@ -621,7 +625,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
             </div>
             <div style={{ textAlign: "center" }}>
               <p style={{ margin: "0 0 8px 0", fontSize: "14px", color: "var(--text)" }}>
-                Sets logged
+                {t.activeWorkout.setsLogged}
               </p>
               <p style={{ margin: 0, fontSize: "28px", fontWeight: "bold" }}>
                 {doneSets}/{totalSets}
@@ -633,7 +637,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
             className="btn btn-primary"
             style={{ padding: "12px 24px", fontSize: "16px" }}
           >
-            Done
+            {t.planBuilder.done}
           </button>
         </div>
         {Toast}
@@ -673,9 +677,9 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                 letterSpacing: "0.5px",
               }}
             >
-              {planName}
+              {displayPlanName}
             </p>
-            <h1 style={{ margin: 0, fontSize: "28px" }}>{dayLabel}</h1>
+            <h1 style={{ margin: 0, fontSize: "28px" }}>{displayDayLabel}</h1>
           </div>
           <button
             onClick={() => setShowExitConfirm(true)}
@@ -687,9 +691,9 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
               cursor: "pointer",
               textDecoration: "underline",
             }}
-            aria-label="Exit workout"
+            aria-label={t.activeWorkout.exitWorkout}
           >
-            ‹ Exit
+            {t.activeWorkout.exitLink}
           </button>
         </div>
 
@@ -731,7 +735,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
           }}
         >
           <span style={{ color: "var(--danger)", fontSize: "14px", flex: 1, fontWeight: "500" }}>
-            Save your progress and exit, or discard this workout?
+            {t.activeWorkout.exitBannerMessage}
           </span>
           <div style={{ display: "flex", gap: "8px" }}>
             <button
@@ -739,21 +743,21 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
               className="btn btn-secondary"
               style={{ padding: "8px 12px", fontSize: "13px" }}
             >
-              Keep going
+              {t.activeWorkout.keepGoing}
             </button>
             <button
               onClick={handleSaveAndExit}
               className="btn btn-primary"
               style={{ padding: "8px 12px", fontSize: "13px" }}
             >
-              Save & Exit
+              {t.activeWorkout.saveAndExit}
             </button>
             <button
               onClick={() => setDiscardConfirm(true)}
               className="btn btn-danger"
               style={{ padding: "8px 12px", fontSize: "13px" }}
             >
-              Discard
+              {t.hero.discard}
             </button>
           </div>
         </div>
@@ -761,10 +765,10 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
 
       <ConfirmDialog
         isOpen={discardConfirm}
-        title="Discard Workout"
-        message="This will permanently delete today's logged sets for this workout. This can't be undone."
-        confirmText="Discard"
-        cancelText="Cancel"
+        title={t.hero.discardTitle}
+        message={t.hero.discardMessage}
+        confirmText={t.hero.discard}
+        cancelText={t.hero.cancel}
         isDangerous
         onConfirm={handleDiscard}
         onCancel={() => setDiscardConfirm(false)}
@@ -783,7 +787,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
             padding: "10px 16px",
           }}
         >
-          <span aria-hidden="true">⏱</span> Use Timer
+          <span aria-hidden="true">⏱</span> {t.activeWorkout.useTimer}
         </button>
       ) : (
         <div
@@ -796,7 +800,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <span aria-hidden="true" style={{ fontSize: "18px" }}>⏱</span>
-              <strong style={{ fontSize: "15px" }}>Timer</strong>
+              <strong style={{ fontSize: "15px" }}>{t.activeWorkout.timerLabel}</strong>
               <span
                 style={{
                   fontSize: "10px",
@@ -808,7 +812,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                   textTransform: "uppercase",
                 }}
               >
-                Manual
+                {t.activeWorkout.manual}
               </span>
             </div>
             <button
@@ -816,14 +820,14 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                 setTimerExpanded(false);
                 resetTimer();
               }}
-              aria-label="Close timer"
+              aria-label={t.activeWorkout.closeTimer}
               style={{ background: "none", border: "none", cursor: "pointer", fontSize: "18px", color: "var(--text-h)" }}
             >
               ×
             </button>
           </div>
           <p style={{ margin: "0 0 12px 0", fontSize: "13px", color: "var(--text)" }}>
-            Set your time and start for each set
+            {t.activeWorkout.timerHint}
           </p>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px", flexWrap: "wrap" }}>
             <div style={{ fontSize: "32px", fontWeight: "bold", fontVariantNumeric: "tabular-nums" }}>
@@ -832,7 +836,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
             <button
               onClick={toggleTimerRunning}
               disabled={!timerRunning && timerSeconds <= 0}
-              aria-label={timerRunning ? "Pause timer" : "Start timer"}
+              aria-label={timerRunning ? t.activeWorkout.pauseTimer : t.activeWorkout.startTimer}
               className="btn btn-primary"
               style={{
                 width: "48px",
@@ -860,7 +864,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
               +5:00
             </button>
             <button onClick={resetTimer} className="btn btn-secondary" style={{ padding: "6px 12px", fontSize: "13px" }}>
-              <span aria-hidden="true">↺</span> Reset
+              <span aria-hidden="true">↺</span> {t.activeWorkout.reset}
             </button>
           </div>
         </div>
@@ -882,13 +886,13 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
             style={{
               background: "none",
               border: "none",
-              color: "#721c24",
+              color: "var(--danger)",
               fontSize: "20px",
               cursor: "pointer",
               padding: "0 0 0 12px",
               flex: "0 0 auto",
             }}
-            aria-label="Dismiss error"
+            aria-label={t.planBuilder.dismissError}
           >
             ×
           </button>
@@ -901,11 +905,11 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
         <div style={{ display: "grid", gap: "20px", flex: 1 }}>
           {planExercises.length === 0 ? (
             <div className="empty-state">
-              <p>No exercises in this plan</p>
+              <p>{t.activeWorkout.noExercisesInPlan}</p>
             </div>
           ) : (
             planExercises.map((we) => {
-            const exerciseName = we.exercise_name || exerciseNames[we.exercise_id] || `Exercise ${we.exercise_id}`;
+            const exerciseName = we.exercise_name || exerciseNames[we.exercise_id] || t.sessionDetail.exerciseFallback(we.exercise_id);
             const exerciseSets = getExerciseSets(we.id);
             const currentSetNumber = activePanelExerciseId === we.id && activePanelSetNumber !== null ? activePanelSetNumber : 1;
             const targetLine = buildTargetLine(we, currentSetNumber);
@@ -945,7 +949,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                       handlePreviewClick();
                     }
                   }}
-                  aria-label={`Preview ${exerciseName}`}
+                  aria-label={t.activeWorkout.previewAria(exerciseName)}
                 >
                   {/* Thumbnail */}
                   <div
@@ -994,7 +998,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                         fontWeight: 600,
                       }}
                     >
-                      Watch demo ▶
+                      {t.activeWorkout.watchDemo}
                     </span>
                   </div>
                 </div>
@@ -1057,20 +1061,20 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                           isLogged
                             ? (() => {
                                 const loggedSet = exerciseSets.find((s) => s.set_number === setNumber);
-                                if (!loggedSet) return `Set ${setNumber}, not logged`;
+                                if (!loggedSet) return t.activeWorkout.pipNotLogged(setNumber);
                                 let format = '';
                                 if (loggedSet.weight !== null && loggedSet.reps !== null) {
                                   format = `${loggedSet.weight} lbs × ${loggedSet.reps} reps`;
                                 } else if (loggedSet.weight !== null) {
-                                  format = `${loggedSet.weight} lbs`;
+                                  format = t.activeWorkout.prevWeightOnly(loggedSet.weight);
                                 } else if (loggedSet.reps !== null) {
-                                  format = `${loggedSet.reps} reps`;
+                                  format = t.activeWorkout.prevRepsOnly(loggedSet.reps);
                                 } else if (loggedSet.duration_seconds !== null) {
-                                  format = `${loggedSet.duration_seconds}s`;
+                                  format = t.activeWorkout.prevDurationOnly(loggedSet.duration_seconds);
                                 }
-                                return `Set ${setNumber}, logged: ${format}, tap to edit`;
+                                return t.activeWorkout.pipLoggedAria(setNumber, format);
                               })()
-                            : `Set ${setNumber}, not logged`
+                            : t.activeWorkout.pipNotLogged(setNumber)
                         }
                         onMouseEnter={() => setHoveredPip(`pip-${setNumber}`)}
                         onMouseLeave={() => setHoveredPip(null)}
@@ -1095,7 +1099,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                           transform: hoveredPip === `pip-${setNumber}` ? "translateY(-2px)" : "translateY(0)",
                         }}
                       >
-                        <span>{isLogged ? `Set ${setNumber}` : `Log Set ${setNumber}`}</span>
+                        <span>{isLogged ? t.activeWorkout.pipLabel(setNumber) : t.activeWorkout.logSetPipLabel(setNumber)}</span>
                         {isLogged && <span>✓</span>}
                       </button>
                     );
@@ -1105,7 +1109,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                   {isQuickStart && (
                     <button
                       onClick={() => openSetPanel(we.id, Math.max(pipCount, exerciseSets.length) + 1)}
-                      aria-label={`Add extra set`}
+                      aria-label={t.activeWorkout.addExtraSetAria}
                       onMouseEnter={() => setHoveredPip("add-set")}
                       onMouseLeave={() => setHoveredPip(null)}
                       style={{
@@ -1151,7 +1155,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                         color: "var(--text-h)",
                       }}
                     >
-                      Set {activePanelSetNumber}
+                      {t.activeWorkout.setHeading(activePanelSetNumber)}
                     </p>
 
                     {/* Inline error for this panel */}
@@ -1171,13 +1175,13 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                           style={{
                             background: "none",
                             border: "none",
-                            color: "#721c24",
+                            color: "var(--danger)",
                             fontSize: "20px",
                             cursor: "pointer",
                             padding: "0 0 0 12px",
                             flex: "0 0 auto",
                           }}
-                          aria-label="Dismiss error"
+                          aria-label={t.planBuilder.dismissError}
                         >
                           ×
                         </button>
@@ -1195,7 +1199,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                         <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", marginBottom: "12px" }}>
                           {showWeight ? (
                             <div className="field-cell">
-                              <span className="cell-label">Weight (lbs)</span>
+                              <span className="cell-label">{t.activeWorkout.weightLbsLabel}</span>
                               <div className="field-with-badge">
                                 <input
                                   id={`weight-${we.id}-${activePanelSetNumber}`}
@@ -1218,7 +1222,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                                       }
                                     }}
                                     className="field-remove-badge"
-                                    title="Remove weight"
+                                    title={t.activeWorkout.removeWeight}
                                   >
                                     ✕
                                   </button>
@@ -1228,7 +1232,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                           ) : (
                             isConfigurable && (
                               <div className="field-cell">
-                                <span className="cell-label">Weight</span>
+                                <span className="cell-label">{t.planBuilder.weightLabel}</span>
                                 <button
                                   onClick={async () => {
                                     if (!planId || !dayId) return;
@@ -1241,21 +1245,21 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                                   }}
                                   className="field-restore-chip"
                                 >
-                                  + Weight
+                                  {t.planBuilder.weightChipAdd}
                                 </button>
                               </div>
                             )
                           )}
                           {showReps ? (
                             <div className="field-cell">
-                              <span className="cell-label">Reps</span>
+                              <span className="cell-label">{t.planBuilder.repsLabel}</span>
                               <div className="field-with-badge">
                                 <input
                                   id={`reps-${we.id}-${activePanelSetNumber}`}
                                   type="text"
                                   value={panelReps}
                                   onChange={(e) => setPanelReps(e.target.value)}
-                                  placeholder="e.g. 10 or 10-12"
+                                  placeholder={t.planBuilder.repsPlaceholder}
                                   className="input-field"
                                 />
                                 {isConfigurable && (
@@ -1270,7 +1274,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                                       }
                                     }}
                                     className="field-remove-badge"
-                                    title="Remove reps"
+                                    title={t.activeWorkout.removeReps}
                                   >
                                     ✕
                                   </button>
@@ -1280,7 +1284,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                           ) : (
                             isConfigurable && (
                               <div className="field-cell">
-                                <span className="cell-label">Reps</span>
+                                <span className="cell-label">{t.planBuilder.repsLabel}</span>
                                 <button
                                   onClick={async () => {
                                     if (!planId || !dayId) return;
@@ -1293,14 +1297,14 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                                   }}
                                   className="field-restore-chip"
                                 >
-                                  + Reps
+                                  {t.planBuilder.repsChipAdd}
                                 </button>
                               </div>
                             )
                           )}
                           {showDuration ? (
                             <div className="field-cell">
-                              <span className="cell-label">Duration</span>
+                              <span className="cell-label">{t.planBuilder.durationLabel}</span>
                               <DurationInput
                                 value={panelDuration}
                                 onChange={setPanelDuration}
@@ -1322,7 +1326,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                           ) : (
                             isConfigurable && (
                               <div className="field-cell">
-                                <span className="cell-label">Duration</span>
+                                <span className="cell-label">{t.planBuilder.durationLabel}</span>
                                 <button
                                   onClick={async () => {
                                     if (!planId || !dayId) return;
@@ -1335,7 +1339,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                                   }}
                                   className="field-restore-chip"
                                 >
-                                  + Duration
+                                  {t.planBuilder.durationChipAdd}
                                 </button>
                               </div>
                             )
@@ -1359,7 +1363,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                           padding: 0,
                         }}
                       >
-                        + Add a note
+                        {t.activeWorkout.addNote}
                       </button>
                     )}
 
@@ -1370,7 +1374,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                           type="text"
                           value={panelNotes}
                           onChange={(e) => setPanelNotes(e.target.value)}
-                          placeholder="Optional notes"
+                          placeholder={t.activeWorkout.notesPlaceholder}
                           className="input-field"
                           style={{ padding: "6px 8px", fontSize: "13px" }}
                         />
@@ -1398,7 +1402,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                               opacity: loading ? 0.6 : 1,
                             }}
                           >
-                            {loading ? "Saving..." : "Save changes"}
+                            {loading ? t.activeWorkout.savingChanges : t.activeWorkout.saveChanges}
                           </button>
                           <button
                             onClick={handleDeleteSet}
@@ -1413,7 +1417,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                               opacity: loading ? 0.6 : 1,
                             }}
                           >
-                            {loading ? "Deleting..." : "Delete set"}
+                            {loading ? t.activeWorkout.deleting : t.activeWorkout.deleteSet}
                           </button>
                         </>
                       ) : (
@@ -1427,7 +1431,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                             opacity: loading ? 0.6 : 1,
                           }}
                         >
-                          {loading ? "Logging..." : "✓ Log set"}
+                          {loading ? t.activeWorkout.logging : t.activeWorkout.logSet}
                         </button>
                       )}
                       <button
@@ -1439,7 +1443,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                           fontSize: "13px",
                         }}
                       >
-                        Cancel
+                        {t.planBuilder.cancel}
                       </button>
                     </div>
                   </div>
@@ -1482,7 +1486,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                 }}
               >
                 <div style={{ fontSize: "32px" }}>👁️</div>
-                <div>Click exercise to preview</div>
+                <div>{t.exercisePreview.clickToPreview}</div>
               </div>
             )}
           </div>
@@ -1491,7 +1495,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
 
       {/* Plan name editor */}
       <div style={{ marginBottom: "20px", display: "flex", alignItems: "center", gap: "8px" }}>
-        <span style={{ fontSize: "12px", color: "var(--text)", textTransform: "uppercase" }}>Plan name:</span>
+        <span style={{ fontSize: "12px", color: "var(--text)", textTransform: "uppercase" }}>{t.activeWorkout.planNameLabel}</span>
         {isRenamingPlan ? (
           <>
             <input
@@ -1508,28 +1512,28 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
               className="btn btn-primary"
               style={{ padding: "6px 12px", fontSize: "13px" }}
             >
-              {renamingPlan ? "Saving..." : "Save"}
+              {renamingPlan ? t.planBuilder.saving : t.planBuilder.save}
             </button>
             <button
               onClick={() => {
                 setIsRenamingPlan(false);
-                setEditingPlanName(planName);
+                setEditingPlanName(displayPlanName);
               }}
               className="btn btn-secondary"
               style={{ padding: "6px 12px", fontSize: "13px" }}
             >
-              Cancel
+              {t.planBuilder.cancel}
             </button>
           </>
         ) : (
           <>
-            <span style={{ fontSize: "14px", fontWeight: "bold" }}>{planName}</span>
+            <span style={{ fontSize: "14px", fontWeight: "bold" }}>{displayPlanName}</span>
             <button
               onClick={() => setIsRenamingPlan(true)}
               className="btn"
               style={{ padding: "6px 12px", fontSize: "13px" }}
             >
-              Rename
+              {t.planBuilder.rename}
             </button>
           </>
         )}
@@ -1543,7 +1547,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
             className="btn"
             style={{ width: "100%", marginBottom: "12px", padding: "8px 12px" }}
           >
-            + Add Exercise
+            {t.planBuilder.addExercise}
           </button>
         </div>
       )}
@@ -1553,7 +1557,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
         <Modal
           isOpen={true}
           onClose={() => setShowExercisePicker(false)}
-          title="Add Exercise"
+          title={t.planBuilder.addExerciseModalTitle}
           fullScreen={true}
         >
           <ExerciseLibrarySidebar
@@ -1590,16 +1594,16 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
         className="btn btn-success"
         style={{ width: "100%", opacity: finishing ? 0.6 : 1, padding: "12px", marginBottom: "20px" }}
       >
-        {finishing ? "Finishing..." : "Finish Workout"}
+        {finishing ? t.activeWorkout.finishing : t.activeWorkout.finishWorkout}
       </button>
 
       {/* Finish confirmation dialog */}
       <ConfirmDialog
         isOpen={finishConfirm}
-        title="Finish Workout"
-        message="Are you sure you want to finish this workout? You won't be able to add more sets after finishing."
-        confirmText="Finish"
-        cancelText="Cancel"
+        title={t.activeWorkout.finishWorkout}
+        message={t.activeWorkout.finishConfirmMessage}
+        confirmText={t.activeWorkout.finish}
+        cancelText={t.planBuilder.cancel}
         isDangerous={false}
         onConfirm={handleFinishWorkout}
         onCancel={() => setFinishConfirm(false)}

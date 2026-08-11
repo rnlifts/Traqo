@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { sharingApi } from '../../api/sharingApi';
 import type { SharedPlanExercise } from '../../api/sharingApi';
 import { useToast } from '../../components/Toast';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 interface LoggedSet {
   set_id: number;
@@ -33,6 +34,7 @@ export const AnonymousWorkoutLogger: React.FC<Props> = ({
   exercises,
 }) => {
   const { showToast } = useToast();
+  const { t } = useLanguage();
   const [exerciseStates, setExerciseStates] = useState<Map<number, ExerciseState>>(
     new Map(
       exercises.map((ex) => [
@@ -63,10 +65,10 @@ export const AnonymousWorkoutLogger: React.FC<Props> = ({
         }}
       >
         <h2 style={{ fontSize: '24px', marginBottom: '12px', color: 'var(--success)' }}>
-          Workout complete
+          {t.sharing.workoutComplete}
         </h2>
         <p style={{ fontSize: '16px', color: 'var(--text)', marginBottom: '20px' }}>
-          Thanks for logging your workout!
+          {t.sharing.thanksForLogging}
         </p>
       </div>
     );
@@ -81,7 +83,7 @@ export const AnonymousWorkoutLogger: React.FC<Props> = ({
 
     // Validate: at least one of weight/reps must be provided
     if (!weight && !reps) {
-      showToast('Please enter weight or reps', 'error');
+      showToast(t.sharing.enterWeightOrReps, 'error');
       return;
     }
 
@@ -116,12 +118,12 @@ export const AnonymousWorkoutLogger: React.FC<Props> = ({
       finalStates.set(exerciseId, updatedState);
       setExerciseStates(finalStates);
 
-      showToast(`Set ${response.set_number} logged!`, 'success');
+      showToast(t.sharing.setLogged(response.set_number), 'success');
     } catch (err: any) {
       const errorMsg =
         err.response?.data?.error ||
         (err as Error).message ||
-        'Failed to log set';
+        t.activeWorkout.logSetFailed;
       showToast(errorMsg, 'error');
 
       const errorStates = new Map(newStates);
@@ -135,13 +137,13 @@ export const AnonymousWorkoutLogger: React.FC<Props> = ({
     setFinishing(true);
     try {
       await sharingApi.finishWorkoutViaShare(token, sessionId);
-      showToast('Workout finished!', 'success');
+      showToast(t.hero.finishedToast, 'success');
       setCompleted(true);
     } catch (err: any) {
       const errorMsg =
         err.response?.data?.error ||
         (err as Error).message ||
-        'Failed to finish workout';
+        t.hero.finishFailed;
       showToast(errorMsg, 'error');
       setFinishing(false);
     }
@@ -149,7 +151,7 @@ export const AnonymousWorkoutLogger: React.FC<Props> = ({
 
   return (
     <div style={{ marginTop: '24px' }}>
-      <h2 style={{ fontSize: '20px', marginBottom: '20px' }}>Log your sets</h2>
+      <h2 style={{ fontSize: '20px', marginBottom: '20px' }}>{t.sharing.logYourSets}</h2>
 
       {exercises.map((exercise) => {
         const state = exerciseStates.get(exercise.exercise_id);
@@ -188,11 +190,11 @@ export const AnonymousWorkoutLogger: React.FC<Props> = ({
                     marginBottom: '4px',
                   }}
                 >
-                  Weight
+                  {t.planBuilder.weightLabel}
                 </label>
                 <input
                   type="number"
-                  placeholder="lbs"
+                  placeholder={t.sharing.weightLbsPlaceholder}
                   value={state.weight}
                   onChange={(e) => {
                     const newStates = new Map(exerciseStates);
@@ -223,11 +225,11 @@ export const AnonymousWorkoutLogger: React.FC<Props> = ({
                     marginBottom: '4px',
                   }}
                 >
-                  Reps
+                  {t.planBuilder.repsLabel}
                 </label>
                 <input
                   type="number"
-                  placeholder="reps"
+                  placeholder={t.sharing.repsPlaceholder}
                   value={state.reps}
                   onChange={(e) => {
                     const newStates = new Map(exerciseStates);
@@ -258,11 +260,11 @@ export const AnonymousWorkoutLogger: React.FC<Props> = ({
                     marginBottom: '4px',
                   }}
                 >
-                  Notes
+                  {t.sharing.notesLabel}
                 </label>
                 <input
                   type="text"
-                  placeholder="notes"
+                  placeholder={t.sharing.notesPlaceholder}
                   value={state.notes}
                   onChange={(e) => {
                     const newStates = new Map(exerciseStates);
@@ -295,7 +297,7 @@ export const AnonymousWorkoutLogger: React.FC<Props> = ({
                   whiteSpace: 'nowrap',
                 }}
               >
-                {state.logging ? 'Logging...' : 'Log set'}
+                {state.logging ? t.activeWorkout.logging : t.sharing.logSet}
               </button>
             </div>
 
@@ -309,7 +311,7 @@ export const AnonymousWorkoutLogger: React.FC<Props> = ({
                     color: 'var(--text-muted)',
                   }}
                 >
-                  Logged sets:
+                  {t.sharing.loggedSetsLabel}
                 </p>
                 <ul
                   style={{
@@ -326,7 +328,7 @@ export const AnonymousWorkoutLogger: React.FC<Props> = ({
                         color: 'var(--text)',
                       }}
                     >
-                      Set {set.set_number}
+                      {t.activeWorkout.pipLabel(set.set_number)}
                       {set.weight && <span> • {set.weight}lbs</span>}
                       {set.reps && <span> • {set.reps}reps</span>}
                       {set.notes && <span> • {set.notes}</span>}
@@ -352,7 +354,7 @@ export const AnonymousWorkoutLogger: React.FC<Props> = ({
             opacity: finishing ? 0.6 : 1,
           }}
         >
-          {finishing ? 'Finishing...' : 'Finish workout'}
+          {finishing ? t.activeWorkout.finishing : t.sharing.finishWorkoutButton}
         </button>
       </div>
     </div>

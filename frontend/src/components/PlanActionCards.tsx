@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { workoutSessionsApi } from '../api/workoutSessionsApi';
 import { useToast } from './Toast';
 import { ClipboardIcon, DumbbellIcon, ArrowRightIcon } from './icons';
+import { useLanguage } from '../contexts/LanguageContext';
 
 export const PlanActionCards: React.FC = () => {
   const navigate = useNavigate();
   const { Toast, showToast } = useToast();
+  const { t } = useLanguage();
   const [quickStarting, setQuickStarting] = useState(false);
 
   const handleQuickStart = async () => {
@@ -16,12 +18,12 @@ export const PlanActionCards: React.FC = () => {
       navigate(`/workout-sessions/${response.session_id}`);
     } catch (err: any) {
       if (err.response?.status === 409) {
-        showToast('Finish or discard your unresolved workout before starting a new one', 'error');
+        showToast(t.planActionCards.unresolvedConflict, 'error');
         navigate('/dashboard');
         return;
       }
       const errorMsg =
-        err.response?.data?.error || (err as Error).message || 'Failed to start quick workout';
+        err.response?.data?.error || (err as Error).message || t.planActionCards.startFailed;
       showToast(errorMsg, 'error');
       setQuickStarting(false);
     }
@@ -49,7 +51,7 @@ export const PlanActionCards: React.FC = () => {
   return (
     <>
       <h2 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--text)', marginBottom: '16px', marginTop: '24px' }}>
-        What would you like to do today?
+        {t.planActionCards.question}
       </h2>
 
       <div className="plan-action-cards-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
@@ -66,10 +68,10 @@ export const PlanActionCards: React.FC = () => {
             </div>
             <div style={{ flex: 1 }}>
               <h3 style={{ margin: '0 0 4px 0', fontSize: '16px', fontWeight: '600', color: 'var(--text-h)' }}>
-                Plan Everything Upfront
+                {t.planActionCards.planUpfrontTitle}
               </h3>
               <p style={{ margin: 0, fontSize: '13px', color: 'var(--text)', lineHeight: '1.4' }}>
-                Create your complete workout routine before you start training.
+                {t.planActionCards.planUpfrontDesc}
               </p>
             </div>
           </div>
@@ -98,7 +100,7 @@ export const PlanActionCards: React.FC = () => {
               e.currentTarget.style.backgroundColor = 'var(--accent)';
             }}
           >
-            Create Plan
+            {t.planActionCards.createPlan}
             <ArrowRightIcon size={16} />
           </button>
         </div>
@@ -116,10 +118,10 @@ export const PlanActionCards: React.FC = () => {
             </div>
             <div style={{ flex: 1 }}>
               <h3 style={{ margin: '0 0 4px 0', fontSize: '16px', fontWeight: '600', color: 'var(--text-h)' }}>
-                Start Small. Build Over Time ⭐
+                {t.planActionCards.startSmallTitle}
               </h3>
               <p style={{ margin: 0, fontSize: '13px', color: 'var(--text)', lineHeight: '1.4' }}>
-                Log today's workout and build your routine one session at a time.
+                {t.planActionCards.startSmallDesc}
               </p>
             </div>
           </div>
@@ -154,7 +156,7 @@ export const PlanActionCards: React.FC = () => {
               }
             }}
           >
-            {quickStarting ? 'Starting…' : 'Start Today'}
+            {quickStarting ? t.planActionCards.starting : t.planActionCards.startToday}
             {!quickStarting && <ArrowRightIcon size={16} />}
           </button>
         </div>

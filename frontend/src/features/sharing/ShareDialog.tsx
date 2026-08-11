@@ -4,6 +4,7 @@ import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { useToast } from '../../components/Toast';
 import { sharingApi } from '../../api/sharingApi';
 import type { WorkoutShare, ShareGrant } from '../../api/sharingApi';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 interface ShareDialogProps {
   isOpen: boolean;
@@ -25,6 +26,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
   const [grantError, setGrantError] = useState('');
   const [confirmRevoke, setConfirmRevoke] = useState(false);
   const { Toast, showToast } = useToast();
+  const { t } = useLanguage();
 
   useEffect(() => {
     if (isOpen) {
@@ -99,15 +101,15 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
     const url = `${window.location.origin}/shared/${share.token}`;
     try {
       await navigator.clipboard.writeText(url);
-      showToast('Link copied', 'success');
+      showToast(t.sharing.linkCopied, 'success');
     } catch (err) {
-      showToast('Failed to copy link', 'error');
+      showToast(t.sharing.copyLinkFailed, 'error');
     }
   }
 
   async function handleGrantAccess() {
     if (!username.trim()) {
-      setGrantError('Username is required');
+      setGrantError(t.sharing.usernameRequired);
       return;
     }
     setGrantError('');
@@ -118,9 +120,9 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
       setPermission('view');
     } catch (err: any) {
       if (err.response?.status === 404) {
-        setGrantError('User not found');
+        setGrantError(t.sharing.userNotFound);
       } else {
-        setGrantError('Failed to grant access');
+        setGrantError(t.sharing.grantFailed);
       }
     }
   }
@@ -148,18 +150,18 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
 
   return (
     <>
-      <Modal isOpen={isOpen} onClose={onClose} title="Share Plan">
-        {loading && <div className="loading">Loading...</div>}
+      <Modal isOpen={isOpen} onClose={onClose} title={t.sharing.modalTitle}>
+        {loading && <div className="loading">{t.sharing.loading}</div>}
 
         {!loading && !shareExists && (
           <div style={{ textAlign: 'center' }}>
-            <p>Create a share link to share this plan with others.</p>
+            <p>{t.sharing.createPrompt}</p>
             <button
               onClick={handleCreateShare}
               className="btn-primary"
               style={{
                 padding: '10px 20px',
-                backgroundColor: '#007bff',
+                backgroundColor: 'var(--accent)',
                 color: 'white',
                 border: 'none',
                 borderRadius: '4px',
@@ -167,7 +169,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
                 fontSize: '14px',
               }}
             >
-              Create share link
+              {t.sharing.createLink}
             </button>
           </div>
         )}
@@ -194,7 +196,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
                   onClick={handleCopyLink}
                   style={{
                     padding: '8px 16px',
-                    backgroundColor: '#007bff',
+                    backgroundColor: 'var(--accent)',
                     color: 'white',
                     border: 'none',
                     borderRadius: '4px',
@@ -202,7 +204,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
                     fontSize: '14px',
                   }}
                 >
-                  Copy
+                  {t.sharing.copy}
                 </button>
               </div>
             </div>
@@ -210,7 +212,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
             {/* Mode Toggle */}
             <div>
               <label style={{ display: 'block', marginBottom: '10px', fontWeight: '600' }}>
-                Who can access?
+                {t.sharing.whoCanAccess}
               </label>
               <div style={{ display: 'flex', gap: '20px' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -221,7 +223,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
                     checked={share.mode === 'restricted'}
                     onChange={() => handleModeChange('restricted')}
                   />
-                  Restricted (only invited users)
+                  {t.sharing.restricted}
                 </label>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <input
@@ -231,7 +233,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
                     checked={share.mode === 'anyone'}
                     onChange={() => handleModeChange('anyone')}
                   />
-                  Anyone with the link
+                  {t.sharing.anyoneWithLink}
                 </label>
               </div>
             </div>
@@ -248,8 +250,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
                   color: 'var(--text-muted)',
                 }}
               >
-                Anyone with this link can <strong>view</strong> the plan. To let someone
-                log workouts or edit it, grant their username access below.
+                {t.sharing.anyoneNoticeBefore}<strong>{t.sharing.anyoneNoticeViewWord}</strong>{t.sharing.anyoneNoticeAfter}
               </div>
             )}
 
@@ -262,12 +263,12 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
               }}
             >
               <label style={{ display: 'block', marginBottom: '10px', fontWeight: '600' }}>
-                Grant access to a user
+                {t.sharing.grantAccessTo}
               </label>
               <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
                 <input
                   type="text"
-                  placeholder="Username"
+                  placeholder={t.sharing.usernamePlaceholder}
                   value={username}
                   onChange={(e) => {
                     setUsername(e.target.value);
@@ -292,15 +293,15 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
                     borderRadius: '4px',
                   }}
                 >
-                  <option value="view">View</option>
-                  <option value="log">Log</option>
-                  <option value="edit">Edit</option>
+                  <option value="view">{t.sharing.viewOption}</option>
+                  <option value="log">{t.sharing.logOption}</option>
+                  <option value="edit">{t.sharing.editOption}</option>
                 </select>
                 <button
                   onClick={handleGrantAccess}
                   style={{
                     padding: '8px 16px',
-                    backgroundColor: '#28a745',
+                    backgroundColor: 'var(--success)',
                     color: 'white',
                     border: 'none',
                     borderRadius: '4px',
@@ -308,13 +309,13 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
                     fontSize: '14px',
                   }}
                 >
-                  Share
+                  {t.planList.share}
                 </button>
               </div>
               {grantError && (
                 <div
                   style={{
-                    color: '#dc3545',
+                    color: 'var(--danger)',
                     fontSize: '12px',
                     marginBottom: '10px',
                   }}
@@ -328,7 +329,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
             {grants.length > 0 && (
               <div>
                 <label style={{ display: 'block', marginBottom: '10px', fontWeight: '600' }}>
-                  Shared with
+                  {t.sharing.sharedWith}
                 </label>
                 <div
                   style={{
@@ -358,7 +359,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
                         onClick={() => handleRemoveGrant(grant.username)}
                         style={{
                           padding: '6px 12px',
-                          backgroundColor: '#dc3545',
+                          backgroundColor: 'var(--danger)',
                           color: 'white',
                           border: 'none',
                           borderRadius: '4px',
@@ -366,7 +367,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
                           fontSize: '12px',
                         }}
                       >
-                        Remove
+                        {t.sharing.remove}
                       </button>
                     </div>
                   ))}
@@ -380,7 +381,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
                 onClick={() => setConfirmRevoke(true)}
                 style={{
                   padding: '10px 20px',
-                  backgroundColor: '#dc3545',
+                  backgroundColor: 'var(--danger)',
                   color: 'white',
                   border: 'none',
                   borderRadius: '4px',
@@ -388,7 +389,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
                   fontSize: '14px',
                 }}
               >
-                Stop sharing
+                {t.sharing.stopSharing}
               </button>
             </div>
           </div>
@@ -397,10 +398,10 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
 
       <ConfirmDialog
         isOpen={confirmRevoke}
-        title="Stop Sharing"
-        message="Are you sure you want to revoke this share link? Anyone with the link will no longer be able to access this plan."
-        confirmText="Stop sharing"
-        cancelText="Cancel"
+        title={t.sharing.stopSharingTitle}
+        message={t.sharing.revokeMessage}
+        confirmText={t.sharing.stopSharing}
+        cancelText={t.planBuilder.cancel}
         isDangerous={true}
         onConfirm={handleRevokeShare}
         onCancel={() => setConfirmRevoke(false)}

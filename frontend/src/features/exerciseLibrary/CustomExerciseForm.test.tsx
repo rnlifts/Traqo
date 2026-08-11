@@ -3,6 +3,11 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CustomExerciseForm } from './CustomExerciseForm';
 import type { Exercise } from '../../api/exercisesApi';
+import { en } from '../../i18n/en';
+
+vi.mock('../../contexts/LanguageContext', () => ({
+  useLanguage: () => ({ language: 'en', t: en, setLanguage: vi.fn() }),
+}));
 
 vi.mock('../../api/exercisesApi', () => ({
   exercisesApi: {

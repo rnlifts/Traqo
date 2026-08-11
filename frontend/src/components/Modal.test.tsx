@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { Modal } from "./Modal";
+import { en } from "../i18n/en";
+
+vi.mock("../contexts/LanguageContext", () => ({
+  useLanguage: () => ({ language: "en", t: en, setLanguage: vi.fn() }),
+}));
 
 describe("Modal", () => {
   describe("Visibility", () => {

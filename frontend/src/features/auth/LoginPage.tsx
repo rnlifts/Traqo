@@ -2,11 +2,14 @@ import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate, Link } from "react-router-dom";
 import { authApi } from "../../api/authApi";
 import { useAuth } from "./AuthContext";
+import { useLanguage } from "../../contexts/LanguageContext";
+import { LanguageToggle } from "../../components/LanguageToggle";
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { login } = useAuth();
+  const { t } = useLanguage();
 
   const [username, setUsername] = useState(
     (location.state as any)?.username || ""
@@ -69,9 +72,7 @@ export const LoginPage: React.FC = () => {
         setIsRateLimited(true);
         setError(null);
       } else {
-        setError(
-          err.response?.data?.error || "Login failed. Please try again."
-        );
+        setError(err.response?.data?.error || t.login.genericError);
       }
     } finally {
       setLoading(false);
@@ -80,7 +81,10 @@ export const LoginPage: React.FC = () => {
 
   return (
     <div style={{ maxWidth: "400px", margin: "50px auto", padding: "20px" }}>
-      <h1>Login</h1>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "12px" }}>
+        <LanguageToggle />
+      </div>
+      <h1>{t.login.title}</h1>
 
       {message && (
         <div style={{
@@ -93,21 +97,21 @@ export const LoginPage: React.FC = () => {
           fontSize: '14px',
           lineHeight: '1.5'
         }}>
-          Your username and password are already filled in — just tap <strong>Login</strong> to continue.
+          {t.login.prefilledBefore}<strong>{t.login.submit}</strong>{t.login.prefilledAfter}
         </div>
       )}
 
       <form onSubmit={handleSubmit}>
         <div style={{ marginBottom: "15px" }}>
           <label htmlFor="username" style={{ display: "block", marginBottom: "5px" }}>
-            Username:
+            {t.login.usernameLabel}
           </label>
           <input
             id="username"
             type="text"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            placeholder="Your username"
+            placeholder={t.login.usernamePlaceholder}
             required
             className="input-field"
           />
@@ -115,14 +119,14 @@ export const LoginPage: React.FC = () => {
 
         <div style={{ marginBottom: "15px" }}>
           <label htmlFor="password" style={{ display: "block", marginBottom: "5px" }}>
-            Password:
+            {t.login.passwordLabel}
           </label>
           <input
             id="password"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="Your password"
+            placeholder={t.login.passwordPlaceholder}
             required
             className="input-field"
           />
@@ -130,16 +134,16 @@ export const LoginPage: React.FC = () => {
 
         {isRateLimited && rateLimitCountdown !== null && (
           <div style={{
-            backgroundColor: '#f8d7da',
-            border: '1px solid #f5c6cb',
-            color: '#721c24',
+            backgroundColor: 'var(--danger-soft)',
+            border: '1px solid var(--danger)',
+            color: 'var(--danger)',
             padding: '12px',
             borderRadius: '6px',
             marginBottom: '15px',
             fontSize: '14px',
             lineHeight: '1.5'
           }}>
-            Too many attempts — try again in {formatCountdown(rateLimitCountdown)}
+            {t.login.tooManyAttempts(formatCountdown(rateLimitCountdown))}
           </div>
         )}
 
@@ -151,13 +155,13 @@ export const LoginPage: React.FC = () => {
               style={{
                 background: 'none',
                 border: 'none',
-                color: '#721c24',
+                color: 'var(--danger)',
                 fontSize: '20px',
                 cursor: 'pointer',
                 padding: '0 0 0 12px',
                 flex: '0 0 auto'
               }}
-              aria-label="Dismiss error"
+              aria-label={t.login.dismissError}
             >
               ×
             </button>
@@ -174,14 +178,14 @@ export const LoginPage: React.FC = () => {
             cursor: loading || isRateLimited ? 'not-allowed' : 'pointer',
           }}
         >
-          {isRateLimited ? `Locked (${formatCountdown(rateLimitCountdown)})` : loading ? "Logging in..." : "Login"}
+          {isRateLimited ? t.login.locked(formatCountdown(rateLimitCountdown)) : loading ? t.login.loggingIn : t.login.submit}
         </button>
       </form>
 
       <p style={{ marginTop: "15px", textAlign: "center" }}>
-        Don't have an account?{" "}
-        <Link to="/register" style={{ color: "#007bff", textDecoration: "none" }}>
-          Register
+        {t.login.noAccount}
+        <Link to="/register" style={{ color: "var(--accent)", textDecoration: "none" }}>
+          {t.login.registerLink}
         </Link>
       </p>
     </div>

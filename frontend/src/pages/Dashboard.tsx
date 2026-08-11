@@ -1,31 +1,42 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../features/auth/AuthContext";
+import { useLanguage } from "../contexts/LanguageContext";
 import { Layout } from "../components/Layout";
-import { useToast } from "../components/Toast";
-import { ConfirmDialog } from "../components/ConfirmDialog";
-import { PlanActionCards } from "../components/PlanActionCards";
-import type { WorkoutHistoryEntry, WorkoutSession } from "../api/workoutSessionsApi";
+import { DashboardHero } from "../components/DashboardHero";
+import { WeeklyStatsTiles } from "../components/WeeklyStatsTiles";
+import { WeeklyActivityCalendar } from "../components/WeeklyActivityCalendar";
+import { DashboardProgressPreview } from "../components/DashboardProgressPreview";
+import { ProfileCard } from "../components/ProfileCard";
+import { BodyStatsCard } from "../components/BodyStatsCard";
+import { ThemeToggle } from "../components/ThemeToggle";
+import type { WorkoutHistoryEntry, WorkoutSession, LastActivePlan } from "../api/workoutSessionsApi";
 import { workoutSessionsApi } from "../api/workoutSessionsApi";
+import { dashboardApi, type DashboardSummary } from "../api/dashboardApi";
+import { authApi, type UserProfile } from "../api/authApi";
 
 export const Dashboard: React.FC = () => {
   const { currentUser } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
-  const { Toast, showToast } = useToast();
   const [recentWorkouts, setRecentWorkouts] = useState<WorkoutHistoryEntry[]>([]);
   const [unresolvedSession, setUnresolvedSession] = useState<WorkoutSession | null>(null);
+  const [lastActivePlan, setLastActivePlan] = useState<LastActivePlan | null>(null);
   const [loading, setLoading] = useState(true);
-  const [discardConfirm, setDiscardConfirm] = useState(false);
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [historyData, sessionData] = await Promise.all([
+        const [historyData, sessionData, lastActivePlanData] = await Promise.all([
           workoutSessionsApi.getWorkoutHistory(),
           workoutSessionsApi.getUnresolvedSession(),
+          workoutSessionsApi.getLastActivePlan(),
         ]);
         setRecentWorkouts(historyData.slice(0, 3));
         setUnresolvedSession(sessionData);
+        setLastActivePlan(lastActivePlanData);
       } catch (error) {
         console.error("Failed to load dashboard data:", error);
       } finally {
@@ -33,7 +44,31 @@ export const Dashboard: React.FC = () => {
       }
     };
 
+    // Fetched independently of the block above: a failure here (or slowness) must
+    // never block the hero card / recent workouts from rendering, and vice versa.
+    const fetchSummary = async () => {
+      try {
+        const data = await dashboardApi.getSummary();
+        setSummary(data);
+      } catch (error) {
+        console.error("Failed to load dashboard summary:", error);
+      }
+    };
+
+    // Also independent: the desktop sidebar profile widgets shouldn't block or be
+    // blocked by anything else on the page.
+    const fetchProfile = async () => {
+      try {
+        const data = await authApi.getMe();
+        setProfile(data);
+      } catch (error) {
+        console.error("Failed to load profile:", error);
+      }
+    };
+
     fetchData();
+    fetchSummary();
+    fetchProfile();
   }, []);
 
   const formatDate = (dateString: string) => {
@@ -49,107 +84,65 @@ export const Dashboard: React.FC = () => {
     <Layout>
       <div className="page-container">
         <div style={{ marginBottom: '24px' }}>
-          <p className="kicker">Welcome back</p>
+          <p className="kicker">{t.dashboard.welcomeBack}</p>
           <h1 className="page-title">{currentUser?.display_name}</h1>
         </div>
 
-        <PlanActionCards />
+        <div className="dashboard-layout">
+          <div className="dashboard-main">
+            {!loading && (
+              <DashboardHero
+                unresolvedSession={unresolvedSession}
+                lastActivePlan={lastActivePlan}
+                onUnresolvedSessionChange={setUnresolvedSession}
+              />
+            )}
 
-        {unresolvedSession && (
-          <div style={{
-            backgroundColor: 'var(--info-soft, #dbeafe)',
-            border: '1px solid var(--info, #3b82f6)',
-            borderRadius: '8px',
-            padding: '16px',
-            marginBottom: '24px',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-          }}>
-            <div>
-              <strong>You have an unfinished workout</strong>
-              <p style={{ marginTop: '4px', fontSize: '14px', color: 'var(--text-h)' }}>
-                <strong>{unresolvedSession.plan_name}</strong> ({unresolvedSession.day_label || 'Day'})
-                {' · '} started {new Date(unresolvedSession.started_at).toLocaleDateString()}
-              </p>
-            </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button
-                className="btn btn-secondary"
-                onClick={() => navigate(`/workout-sessions/${unresolvedSession.id}`)}
-              >
-                Resume
-              </button>
-              <button
-                className="btn btn-primary"
-                onClick={async () => {
-                  try {
-                    await workoutSessionsApi.finishWorkout(unresolvedSession.id);
-                    setUnresolvedSession(null);
-                    showToast('Workout marked as finished!', 'success');
-                  } catch (error) {
-                    console.error('Failed to finish workout:', error);
-                    showToast('Failed to finish workout', 'error');
-                  }
-                }}
-              >
-                Mark as Finished
-              </button>
-              <button
-                className="btn btn-danger"
-                onClick={() => setDiscardConfirm(true)}
-              >
-                Discard
-              </button>
-            </div>
+            {summary && (
+              <>
+                <WeeklyStatsTiles stats={summary.weekly_stats} />
+                <WeeklyActivityCalendar days={summary.weekly_activity} />
+                <DashboardProgressPreview randomExercise={summary.random_exercise} />
+              </>
+            )}
           </div>
-        )}
 
-        <ConfirmDialog
-          isOpen={discardConfirm}
-          title="Discard Workout"
-          message="This will permanently delete today's logged sets for this workout. This can't be undone."
-          confirmText="Discard"
-          cancelText="Cancel"
-          isDangerous
-          onConfirm={async () => {
-            if (!unresolvedSession) return;
-            try {
-              await workoutSessionsApi.discardSession(unresolvedSession.id);
-              setUnresolvedSession(null);
-              setDiscardConfirm(false);
-              showToast('Workout discarded.', 'success');
-            } catch (error) {
-              console.error('Failed to discard workout:', error);
-              showToast('Failed to discard workout', 'error');
-            }
-          }}
-          onCancel={() => setDiscardConfirm(false)}
-        />
+          <div className="dashboard-sidebar">
+            <div className="dashboard-sidebar-toolbar">
+              <ThemeToggle />
+            </div>
 
-        <p className="section-label">Recent workouts</p>
-        {loading ? (
-          <div className="loading">Loading workout history...</div>
-        ) : recentWorkouts.length > 0 ? (
-          <div className="history-list">
-            {recentWorkouts.map((workout, idx) => (
-              <div
-                key={idx}
-                className="history-row"
-                onClick={() => workout.session_id && navigate(`/workout-history/${workout.session_id}`)}
-              >
-                <div className="h-left">
-                  <strong>{workout.workout}</strong>
-                  <div className="h-date">{formatDate(workout.date)}</div>
-                </div>
-                <div className="h-stat">{workout.duration}</div>
+            {profile && (
+              <div className="dashboard-profile-widgets">
+                <ProfileCard profile={profile} />
+                {profile.body_metrics && <BodyStatsCard bodyMetrics={profile.body_metrics} />}
               </div>
-            ))}
+            )}
+
+            <p className="section-label">{t.dashboard.recentWorkouts}</p>
+            {loading ? (
+              <div className="loading">{t.dashboard.loadingHistory}</div>
+            ) : recentWorkouts.length > 0 ? (
+              <div className="history-list">
+                {recentWorkouts.map((workout, idx) => (
+                  <div
+                    key={idx}
+                    className="history-row"
+                    onClick={() => workout.session_id && navigate(`/workout-history/${workout.session_id}`)}
+                  >
+                    <div className="h-left">
+                      <strong>{workout.workout}</strong>
+                      <div className="h-date">{formatDate(workout.date)}</div>
+                    </div>
+                    <div className="h-stat">{workout.duration}</div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="empty-note">{t.dashboard.noWorkouts}</p>
+            )}
           </div>
-        ) : (
-          <p className="empty-note">No workouts yet — start one from a plan to see it here.</p>
-        )}
-        {Toast}
+        </div>
       </div>
     </Layout>
   );

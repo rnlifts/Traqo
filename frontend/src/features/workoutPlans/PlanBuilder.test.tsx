@@ -3,6 +3,11 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BrowserRouter } from 'react-router-dom';
 import { PlanBuilder } from './PlanBuilder';
+import { en } from '../../i18n/en';
+
+vi.mock('../../contexts/LanguageContext', () => ({
+  useLanguage: () => ({ language: 'en', t: en, setLanguage: vi.fn() }),
+}));
 import * as exercisesApiModule from '../../api/exercisesApi';
 import { customizeWeek, updateExerciseInDay, updateDay, removeExerciseFromDay, addExerciseToDay, replaceSetTargets } from '../../api/workoutPlansApi';
 import client from '../../api/client';

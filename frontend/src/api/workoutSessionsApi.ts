@@ -69,6 +69,14 @@ export interface WorkoutHistoryEntry {
   duration: string;
 }
 
+export interface LastActivePlan {
+  workout_plan_id: number;
+  plan_name: string;
+  day_label: string | null;
+  session_id: number;
+  completed_at: string | null;
+}
+
 export interface ActiveWorkoutBootstrap {
   session: WorkoutSessionDetailResponse;
   plan: WorkoutPlanDetail | null;
@@ -149,6 +157,13 @@ export const workoutSessionsApi = {
       "/workout-sessions/unresolved"
     );
     return response.data.session;
+  },
+
+  async getLastActivePlan(): Promise<LastActivePlan | null> {
+    const response = await client.get<{ plan: LastActivePlan | null }>(
+      "/workout-sessions/last-active-plan"
+    );
+    return response.data.plan;
   },
 
   async discardSession(sessionId: number): Promise<void> {

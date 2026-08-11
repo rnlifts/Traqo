@@ -2,24 +2,28 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../features/auth/AuthContext';
 import { useUnsavedChanges } from '../contexts/UnsavedChangesContext';
+import { useLanguage } from '../contexts/LanguageContext';
 import { ConfirmDialog } from './ConfirmDialog';
-import { GridIcon, ClipboardIcon, HistoryIcon, LogoutIcon } from './icons';
+import { LanguageToggle } from './LanguageToggle';
+import { GridIcon, ClipboardIcon, HistoryIcon, LogoutIcon, UserIcon } from './icons';
 
 interface LayoutProps {
   children: React.ReactNode;
 }
-
-const navItems = [
-  { path: '/dashboard', label: 'Dashboard', Icon: GridIcon },
-  { path: '/workout-plans', label: 'Plans', Icon: ClipboardIcon },
-  { path: '/workout-history', label: 'History', Icon: HistoryIcon },
-];
 
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { logout, currentUser } = useAuth();
   const { hasUnsavedChanges } = useUnsavedChanges();
+  const { t } = useLanguage();
+
+  const navItems = [
+    { path: '/dashboard', label: t.nav.dashboard, Icon: GridIcon },
+    { path: '/workout-plans', label: t.nav.plans, Icon: ClipboardIcon },
+    { path: '/workout-history', label: t.nav.history, Icon: HistoryIcon },
+    { path: '/profile', label: t.nav.profile, Icon: UserIcon },
+  ];
   const [dropdownOpen, setDropdownOpen] = useState(false); // Avatar dropdown on mobile
   const [pendingNavTarget, setPendingNavTarget] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -65,7 +69,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           <button
             onClick={() => setDropdownOpen(!dropdownOpen)}
             className="avatar-btn"
-            aria-label="User menu"
+            aria-label={t.nav.userMenu}
             style={{
               width: '40px',
               height: '40px',
@@ -107,6 +111,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                   @{currentUser?.username}
                 </div>
               </div>
+              <div style={{ padding: '8px 16px', borderBottom: '1px solid var(--border)' }}>
+                <LanguageToggle />
+              </div>
               <button
                 onClick={() => {
                   handleLogout();
@@ -128,7 +135,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 }}
               >
                 <span style={{ fontSize: '16px' }}>⎋</span>
-                Logout
+                {t.nav.logout}
               </button>
             </div>
           )}
@@ -165,9 +172,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               </div>
             </div>
           </div>
+          <LanguageToggle />
           <button onClick={handleLogout} className="sidebar-logout">
             <LogoutIcon size={16} />
-            Logout
+            {t.nav.logout}
           </button>
         </div>
       </aside>
@@ -192,10 +200,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
       <ConfirmDialog
         isOpen={pendingNavTarget !== null}
-        title="Leave without saving?"
-        message="You're in the middle of creating a plan. Leaving now will lose your progress."
-        confirmText="Leave"
-        cancelText="Stay"
+        title={t.common.leaveWithoutSaving}
+        message={t.common.leaveMessage}
+        confirmText={t.common.leave}
+        cancelText={t.common.stay}
         isDangerous={true}
         onConfirm={() => {
           if (pendingNavTarget) {

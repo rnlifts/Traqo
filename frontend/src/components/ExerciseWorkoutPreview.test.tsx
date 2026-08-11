@@ -1,6 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { ExerciseWorkoutPreview } from "./ExerciseWorkoutPreview";
+import { en } from "../i18n/en";
+
+vi.mock("../contexts/LanguageContext", () => ({
+  useLanguage: () => ({ language: "en", t: en, setLanguage: vi.fn() }),
+}));
 
 describe("ExerciseWorkoutPreview", () => {
   describe("Exercise name", () => {

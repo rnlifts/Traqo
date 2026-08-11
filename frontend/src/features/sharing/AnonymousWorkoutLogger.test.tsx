@@ -2,6 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { AnonymousWorkoutLogger } from './AnonymousWorkoutLogger';
+import { en } from '../../i18n/en';
+
+vi.mock('../../contexts/LanguageContext', () => ({
+  useLanguage: () => ({ language: 'en', t: en, setLanguage: vi.fn() }),
+}));
 import * as sharingApi from '../../api/sharingApi';
 import type { SharedPlanExercise } from '../../api/sharingApi';
 

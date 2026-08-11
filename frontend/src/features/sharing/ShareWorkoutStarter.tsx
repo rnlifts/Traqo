@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { sharingApi } from '../../api/sharingApi';
 import type { SharedPlanResponse } from '../../api/sharingApi';
 import { AnonymousWorkoutLogger } from './AnonymousWorkoutLogger';
+import { WorkoutPreviewList } from '../../components/WorkoutPreviewList';
 import { useToast } from '../../components/Toast';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 interface Props {
   data: SharedPlanResponse;
@@ -13,8 +15,8 @@ interface Props {
 export const ShareWorkoutStarter: React.FC<Props> = ({ data, token }) => {
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const { t } = useLanguage();
 
-  const [showPicker, setShowPicker] = useState(false);
   const [selectedWeekIndex, setSelectedWeekIndex] = useState(0);
   const [selectedDayIndex, setSelectedDayIndex] = useState(0);
   const [starting, setStarting] = useState(false);
@@ -48,7 +50,7 @@ export const ShareWorkoutStarter: React.FC<Props> = ({ data, token }) => {
     if (!selectedDay) return;
 
     if (selectedDay.is_rest) {
-      showToast('Cannot start a workout on a rest day', 'error');
+      showToast(t.sharing.restDayError, 'error');
       return;
     }
 
@@ -72,17 +74,16 @@ export const ShareWorkoutStarter: React.FC<Props> = ({ data, token }) => {
           sessionId: response.session_id,
           exercises: selectedDay.exercises,
         });
-        setShowPicker(false);
       }
     } catch (err: any) {
       if (err.response?.status === 403) {
-        setError('Permission denied. Share may have been revoked or downgraded.');
-        showToast('Permission denied', 'error');
+        setError(t.sharing.permissionDeniedMessage);
+        showToast(t.sharing.permissionDenied, 'error');
       } else {
         const errorMsg =
           err.response?.data?.error ||
           (err as Error).message ||
-          'Failed to start workout';
+          t.sharing.startWorkoutFailed;
         setError(errorMsg);
         showToast(errorMsg, 'error');
       }
@@ -105,120 +106,96 @@ export const ShareWorkoutStarter: React.FC<Props> = ({ data, token }) => {
   const hasMultipleWeeks = isWeeksType && data.weeks && data.weeks.length > 1;
   const displayedDays = getDisplayedDays();
   const showDayPicker = displayedDays.length > 0;
+  const selectedDay = displayedDays[selectedDayIndex];
 
   return (
     <div style={{ marginTop: '24px' }}>
-      {!showPicker ? (
-        <div style={{ textAlign: 'center' }}>
-          <button
-            onClick={() => setShowPicker(true)}
-            className="btn btn-success"
-            style={{
-              padding: '12px 24px',
-              fontSize: '16px',
-            }}
-          >
-            Start workout
-          </button>
-        </div>
-      ) : (
+      {error && (
         <div
           style={{
-            padding: '16px',
-            backgroundColor: 'var(--bg-hover)',
-            borderRadius: '8px',
-            marginBottom: '20px',
+            padding: '12px 16px',
+            backgroundColor: 'var(--danger-soft)',
+            border: '1px solid var(--danger)',
+            borderRadius: '4px',
+            color: 'var(--danger)',
+            marginBottom: '16px',
+            fontSize: '14px',
           }}
         >
-          {error && (
-            <div
-              style={{
-                padding: '12px 16px',
-                backgroundColor: '#f8d7da',
-                border: '1px solid #f5c6cb',
-                borderRadius: '4px',
-                color: '#721c24',
-                marginBottom: '16px',
-                fontSize: '14px',
-              }}
-            >
-              {error}
-            </div>
-          )}
+          {error}
+        </div>
+      )}
 
-          {/* Week Chips */}
-          {hasMultipleWeeks && (
-            <div style={{ marginBottom: '16px' }}>
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                {data.weeks?.map((week, idx) => (
-                  <button
-                    key={week.week_number}
-                    onClick={() => {
-                      setSelectedWeekIndex(idx);
-                      setSelectedDayIndex(0);
-                    }}
-                    className={`setup-chip ${idx === selectedWeekIndex ? 'active' : ''}`}
-                  >
-                    Week {week.week_number}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Day Chips */}
-          {showDayPicker && (
-            <div style={{ marginBottom: '16px' }}>
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                {displayedDays.map((day, idx) => (
-                  <button
-                    key={day.id}
-                    onClick={() => setSelectedDayIndex(idx)}
-                    className={`setup-chip ${idx === selectedDayIndex ? 'active' : ''} ${
-                      day.is_rest ? 'is-rest' : ''
-                    }`}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      opacity: day.is_rest ? 0.5 : 1,
-                      cursor: day.is_rest ? 'not-allowed' : 'pointer',
-                    }}
-                    disabled={day.is_rest}
-                  >
-                    {day.label}
-                    {day.is_rest && <span style={{ fontSize: '8px' }}>●</span>}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Begin Button */}
-          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-            <button
-              onClick={handleBeginWorkout}
-              disabled={starting}
-              className="btn btn-success"
-              style={{
-                padding: '12px 24px',
-                fontSize: '16px',
-                cursor: starting ? 'not-allowed' : 'pointer',
-                opacity: starting ? 0.6 : 1,
-              }}
-            >
-              {starting ? 'Starting...' : 'Begin'}
-            </button>
-            <button
-              onClick={() => setShowPicker(false)}
-              className="btn btn-secondary"
-              style={{ padding: '12px 24px', fontSize: '16px' }}
-            >
-              Cancel
-            </button>
+      {/* Week Chips */}
+      {hasMultipleWeeks && (
+        <div style={{ marginBottom: '16px' }}>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {data.weeks?.map((week, idx) => (
+              <button
+                key={week.week_number}
+                onClick={() => {
+                  setSelectedWeekIndex(idx);
+                  setSelectedDayIndex(0);
+                }}
+                className={`setup-chip ${idx === selectedWeekIndex ? 'active' : ''}`}
+              >
+                {t.sharing.weekChip(week.week_number)}
+              </button>
+            ))}
           </div>
         </div>
       )}
+
+      {/* Day Chips */}
+      {showDayPicker && (
+        <div style={{ marginBottom: '20px' }}>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {displayedDays.map((day, idx) => (
+              <button
+                key={day.id}
+                onClick={() => setSelectedDayIndex(idx)}
+                className={`setup-chip ${idx === selectedDayIndex ? 'active' : ''} ${
+                  day.is_rest ? 'is-rest' : ''
+                }`}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  opacity: day.is_rest ? 0.5 : 1,
+                  cursor: day.is_rest ? 'not-allowed' : 'pointer',
+                }}
+                disabled={day.is_rest}
+              >
+                {day.label}
+                {day.is_rest && <span style={{ fontSize: '8px' }}>●</span>}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Preview of the currently selected day - replaces showing the whole plan
+          twice (the full read-only listing is only shown for view-only visitors). */}
+      {selectedDay && !selectedDay.is_rest && (
+        <WorkoutPreviewList title={t.sharing.workoutPreviewTitle} exercises={selectedDay.exercises} />
+      )}
+
+      {/* Begin Button */}
+      <div style={{ display: 'flex', justifyContent: 'center', marginTop: '20px' }}>
+        <button
+          onClick={handleBeginWorkout}
+          disabled={starting || !selectedDay || selectedDay.is_rest}
+          className="btn btn-success"
+          style={{
+            padding: '12px 24px',
+            fontSize: '16px',
+            cursor: starting || !selectedDay || selectedDay.is_rest ? 'not-allowed' : 'pointer',
+            opacity: starting || !selectedDay || selectedDay.is_rest ? 0.6 : 1,
+          }}
+        >
+          {starting ? t.sharing.starting : t.sharing.beginWorkout}
+        </button>
+      </div>
     </div>
   );
 };

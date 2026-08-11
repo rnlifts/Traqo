@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import { useLanguage } from "../contexts/LanguageContext";
 
 export interface ModalProps {
   isOpen: boolean;
@@ -15,6 +16,7 @@ export const Modal: React.FC<ModalProps> = ({
   title,
   fullScreen = false,
 }) => {
+  const { t } = useLanguage();
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
@@ -113,7 +115,7 @@ export const Modal: React.FC<ModalProps> = ({
               onClick={onClose}
               style={closeButtonStyle}
               className="modal-close-btn"
-              aria-label="Close modal"
+              aria-label={t.modal.closeModal}
             >
               ×
             </button>
@@ -129,7 +131,7 @@ export const Modal: React.FC<ModalProps> = ({
               right: "12px",
             }}
             className="modal-close-btn"
-            aria-label="Close modal"
+            aria-label={t.modal.closeModal}
           >
             ×
           </button>

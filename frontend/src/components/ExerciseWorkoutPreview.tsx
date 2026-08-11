@@ -1,5 +1,6 @@
 import React from "react";
 import { getYoutubeEmbedUrl } from "../utils/youtube";
+import { useLanguage } from "../contexts/LanguageContext";
 
 export interface ExerciseWorkoutPreviewProps {
   name: string;
@@ -14,6 +15,7 @@ export const ExerciseWorkoutPreview: React.FC<ExerciseWorkoutPreviewProps> = ({
   muscle_group,
   equipment,
 }) => {
+  const { t } = useLanguage();
   const containerStyle: React.CSSProperties = {
     display: "flex",
     flexDirection: "column",
@@ -83,7 +85,7 @@ export const ExerciseWorkoutPreview: React.FC<ExerciseWorkoutPreviewProps> = ({
       return (
         <div style={noVideoStyle}>
           <div style={{ fontSize: "20px" }}>🎬</div>
-          <div>No video available</div>
+          <div>{t.exercisePreview.noVideo}</div>
         </div>
       );
     }
@@ -93,7 +95,7 @@ export const ExerciseWorkoutPreview: React.FC<ExerciseWorkoutPreviewProps> = ({
       return (
         <div style={noVideoStyle}>
           <div style={{ fontSize: "20px" }}>🎬</div>
-          <div>No video available</div>
+          <div>{t.exercisePreview.noVideo}</div>
         </div>
       );
     }

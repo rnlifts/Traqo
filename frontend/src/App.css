@@ -1513,3 +1513,34 @@
   text-align: center;
   margin: 0;
 }
+
+/* ---------- Dashboard layout (mobile-first: single column by default) ---------- */
+.dashboard-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+.dashboard-profile-widgets {
+  display: none;
+}
+
+.dashboard-sidebar-toolbar {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .dashboard-layout {
+    grid-template-columns: 2fr 1fr;
+  }
+
+  .dashboard-profile-widgets {
+    display: block;
+  }
+
+  .dashboard-sidebar-toolbar {
+    display: flex;
+    justify-content: flex-end;
+  }
+}

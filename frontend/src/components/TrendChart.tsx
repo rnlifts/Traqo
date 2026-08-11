@@ -1,4 +1,5 @@
 import React from "react";
+import { useLanguage } from "../contexts/LanguageContext";
 
 export interface TrendChartDataPoint {
   date: string;
@@ -19,11 +20,12 @@ export const TrendChart: React.FC<TrendChartProps> = ({
   color = "var(--accent)",
   exerciseName,
 }) => {
+  const { t } = useLanguage();
   // Handle empty state
   if (data.length === 0) {
     return (
       <div className="empty-state">
-        <p>No sets logged for {exerciseName ? exerciseName.toLowerCase() : label.toLowerCase()} yet. Log a workout with this exercise to start tracking progress.</p>
+        <p>{t.trendChart.noSetsLogged(exerciseName ? exerciseName.toLowerCase() : label.toLowerCase())}</p>
       </div>
     );
   }
@@ -33,11 +35,11 @@ export const TrendChart: React.FC<TrendChartProps> = ({
     return (
       <div className="card" style={{ padding: "20px", textAlign: "center" }}>
         <p style={{ marginBottom: "12px", fontSize: "14px", color: "var(--text)" }}>
-          Log this exercise in another session to see a progress trend.
+          {t.trendChart.logAnotherSession}
         </p>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
           <div>
-            <p style={{ fontSize: "12px", color: "var(--text)", margin: "0 0 4px 0" }}>Date</p>
+            <p style={{ fontSize: "12px", color: "var(--text)", margin: "0 0 4px 0" }}>{t.sessionDetail.dateLabel}</p>
             <p style={{ margin: "0", fontWeight: "bold" }}>
               {new Date(data[0].date).toLocaleDateString()}
             </p>
@@ -187,7 +189,7 @@ export const TrendChart: React.FC<TrendChartProps> = ({
             {/* Tooltip via title element */}
             <title>
               {new Date(p.data.date).toLocaleDateString()}: {p.data.value.toFixed(1)}
-              {p.data.isPR ? " (New PR!)" : ""}
+              {p.data.isPR ? t.trendChart.newPrSuffix : ""}
             </title>
           </g>
         ))}

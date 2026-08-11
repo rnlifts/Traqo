@@ -64,16 +64,17 @@ const styles = {
     zIndex: 1000,
   },
   dialog: {
-    backgroundColor: 'white',
+    backgroundColor: 'var(--surface)',
     borderRadius: '8px',
     padding: '24px',
     maxWidth: '400px',
-    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+    boxShadow: 'var(--shadow-modal)',
   },
   title: {
     margin: '0 0 12px 0',
     fontSize: '18px',
     fontWeight: 'bold' as const,
+    color: 'var(--ink)',
   },
   message: {
     margin: '0 0 20px 0',
@@ -96,7 +97,7 @@ const styles = {
     transition: 'background-color 0.2s',
   },
   btnPrimary: {
-    backgroundColor: '#007bff',
+    backgroundColor: 'var(--accent)',
     color: 'white',
   },
   btnSecondary: {
@@ -104,7 +105,7 @@ const styles = {
     color: 'var(--text-h)',
   },
   btnDanger: {
-    backgroundColor: '#dc3545',
+    backgroundColor: 'var(--danger)',
     color: 'white',
   },
 };

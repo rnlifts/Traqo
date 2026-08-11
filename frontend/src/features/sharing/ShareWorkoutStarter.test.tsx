@@ -2,6 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { ShareWorkoutStarter } from './ShareWorkoutStarter';
+import { en } from '../../i18n/en';
+
+vi.mock('../../contexts/LanguageContext', () => ({
+  useLanguage: () => ({ language: 'en', t: en, setLanguage: vi.fn() }),
+}));
 import * as sharingApi from '../../api/sharingApi';
 
 vi.mock('../../api/sharingApi');
@@ -139,50 +144,90 @@ describe('ShareWorkoutStarter', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('renders a Start workout button when permission is log', () => {
+  it('shows the day picker immediately, with no separate reveal step', () => {
     render(
       <MemoryRouter>
         <ShareWorkoutStarter data={mockDaysData} token="test-token" />
       </MemoryRouter>
     );
-    expect(screen.getByText('Start workout')).toBeInTheDocument();
+    // No "Start workout" gate button anymore — chips are visible right away.
+    expect(screen.queryByText('Start workout')).not.toBeInTheDocument();
+    expect(screen.getByText('Chest Day')).toBeInTheDocument();
+    expect(screen.getByText('Rest Day')).toBeInTheDocument();
   });
 
-  it('renders a day picker for a days-type plan', async () => {
-    render(
-      <MemoryRouter>
-        <ShareWorkoutStarter data={mockDaysData} token="test-token" />
-      </MemoryRouter>
-    );
-
-    const startButton = screen.getByText('Start workout');
-    fireEvent.click(startButton);
-
-    // Day picker should be shown
-    await waitFor(() => {
-      expect(screen.getByText('Chest Day')).toBeInTheDocument();
-      expect(screen.getByText('Rest Day')).toBeInTheDocument();
-    });
-  });
-
-  it('renders a week picker for a weeks-type plan', async () => {
+  it('renders a week picker for a weeks-type plan', () => {
     render(
       <MemoryRouter>
         <ShareWorkoutStarter data={mockWeeksData} token="test-token" />
       </MemoryRouter>
     );
 
-    const startButton = screen.getByText('Start workout');
-    fireEvent.click(startButton);
-
-    // Week chips should be shown
-    await waitFor(() => {
-      expect(screen.getByText('Week 1')).toBeInTheDocument();
-      expect(screen.getByText('Week 2')).toBeInTheDocument();
-    });
-
-    // Day chips should be shown for the first week
+    expect(screen.getByText('Week 1')).toBeInTheDocument();
+    expect(screen.getByText('Week 2')).toBeInTheDocument();
     expect(screen.getByText('Monday')).toBeInTheDocument();
+  });
+
+  it('shows a "Workout Preview" of the currently selected day\'s exercises (sets only, no reps/weight)', () => {
+    render(
+      <MemoryRouter>
+        <ShareWorkoutStarter data={mockDaysData} token="test-token" />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText('Workout Preview')).toBeInTheDocument();
+    expect(screen.getByText('Bench Press')).toBeInTheDocument();
+    expect(screen.getByText('4 sets')).toBeInTheDocument();
+    expect(screen.queryByText(/6-8/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/225/)).not.toBeInTheDocument();
+  });
+
+  it('updates the preview when a different day is selected', () => {
+    const twoWorkoutDays = {
+      ...mockDaysData,
+      days: [
+        mockDaysData.days[0],
+        {
+          id: 3,
+          label: 'Leg Day',
+          order_position: 2,
+          is_rest: false,
+          exercises: [
+            { exercise_id: 2, exercise_name: 'Squats', order_number: 1, target_sets: 5, target_reps: '5', target_weight: 315, target_duration_seconds: null },
+          ],
+        },
+      ],
+    };
+
+    render(
+      <MemoryRouter>
+        <ShareWorkoutStarter data={twoWorkoutDays} token="test-token" />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText('Bench Press')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Leg Day'));
+
+    expect(screen.queryByText('Bench Press')).not.toBeInTheDocument();
+    expect(screen.getByText('Squats')).toBeInTheDocument();
+  });
+
+  it('does not show a preview or allow beginning on a rest day', () => {
+    // Rest day chips are disabled, so they can't be clicked into selection —
+    // test the case where a rest day is the initially selected day instead.
+    const restDayFirst = {
+      ...mockDaysData,
+      days: [mockDaysData.days[1], mockDaysData.days[0]],
+    };
+
+    render(
+      <MemoryRouter>
+        <ShareWorkoutStarter data={restDayFirst} token="test-token" />
+      </MemoryRouter>
+    );
+
+    expect(screen.queryByText('Workout Preview')).not.toBeInTheDocument();
+    expect(screen.getByText('Begin workout →').closest('button')).toBeDisabled();
   });
 
   it('calls startWorkoutViaShare with correct plan_day_id for days-type plan', async () => {
@@ -197,15 +242,7 @@ describe('ShareWorkoutStarter', () => {
       </MemoryRouter>
     );
 
-    const startButton = screen.getByText('Start workout');
-    fireEvent.click(startButton);
-
-    await waitFor(() => {
-      expect(screen.getByText('Chest Day')).toBeInTheDocument();
-    });
-
-    const beginButton = screen.getByText('Begin');
-    fireEvent.click(beginButton);
+    fireEvent.click(screen.getByText('Begin workout →'));
 
     await waitFor(() => {
       expect(sharingApi.sharingApi.startWorkoutViaShare).toHaveBeenCalledWith(
@@ -227,26 +264,15 @@ describe('ShareWorkoutStarter', () => {
       </MemoryRouter>
     );
 
-    const startButton = screen.getByText('Start workout');
-    fireEvent.click(startButton);
-
-    await waitFor(() => {
-      expect(screen.getByText('Week 1')).toBeInTheDocument();
-    });
-
     // Select week 2
     const allWeekButtons = screen.getAllByText(/Week/);
-    fireEvent.click(allWeekButtons[1]); // Click Week 2
+    fireEvent.click(allWeekButtons[1]);
 
-    // Wait for day for week 2 to render
     await waitFor(() => {
-      // Verify that days for week 2 are shown
-      const dayButtons = screen.getAllByText(/Monday/);
-      expect(dayButtons.length).toBeGreaterThan(0);
+      expect(screen.getByText('Deadlifts')).toBeInTheDocument();
     });
 
-    const beginButton = screen.getByText('Begin');
-    fireEvent.click(beginButton);
+    fireEvent.click(screen.getByText('Begin workout →'));
 
     await waitFor(() => {
       expect(sharingApi.sharingApi.startWorkoutViaShare).toHaveBeenCalledWith(
@@ -256,48 +282,7 @@ describe('ShareWorkoutStarter', () => {
     });
   });
 
-  it('navigates to /workout-sessions/{session_id} when auth_token is present', async () => {
-    localStorage.setItem('auth_token', 'test-auth-token');
-
-    const mockNavigate = vi.fn();
-    vi.doMock('react-router-dom', async () => {
-      const actual = await vi.importActual('react-router-dom');
-      return {
-        ...actual,
-        useNavigate: () => mockNavigate,
-      };
-    });
-
-    vi.mocked(sharingApi.sharingApi.startWorkoutViaShare).mockResolvedValue({
-      session_id: 456,
-      message: 'Workout started',
-    });
-
-    render(
-      <MemoryRouter>
-        <ShareWorkoutStarter data={mockDaysData} token="test-token" />
-      </MemoryRouter>
-    );
-
-    const startButton = screen.getByText('Start workout');
-    fireEvent.click(startButton);
-
-    await waitFor(() => {
-      expect(screen.getByText('Chest Day')).toBeInTheDocument();
-    });
-
-    const beginButton = screen.getByText('Begin');
-    fireEvent.click(beginButton);
-
-    // The component uses useNavigate internally, but we can't easily mock it in test
-    // Instead, we verify the API was called correctly
-    await waitFor(() => {
-      expect(sharingApi.sharingApi.startWorkoutViaShare).toHaveBeenCalled();
-    });
-  });
-
   it('renders AnonymousWorkoutLogger when auth_token is absent', async () => {
-    // Ensure no auth token
     localStorage.removeItem('auth_token');
 
     vi.mocked(sharingApi.sharingApi.startWorkoutViaShare).mockResolvedValue({
@@ -311,17 +296,8 @@ describe('ShareWorkoutStarter', () => {
       </MemoryRouter>
     );
 
-    const startButton = screen.getByText('Start workout');
-    fireEvent.click(startButton);
+    fireEvent.click(screen.getByText('Begin workout →'));
 
-    await waitFor(() => {
-      expect(screen.getByText('Chest Day')).toBeInTheDocument();
-    });
-
-    const beginButton = screen.getByText('Begin');
-    fireEvent.click(beginButton);
-
-    // After starting without auth token, AnonymousWorkoutLogger should render
     await waitFor(() => {
       expect(screen.getByText('Log your sets')).toBeInTheDocument();
     });
@@ -338,20 +314,10 @@ describe('ShareWorkoutStarter', () => {
       </MemoryRouter>
     );
 
-    const startButton = screen.getByText('Start workout');
-    fireEvent.click(startButton);
+    fireEvent.click(screen.getByText('Begin workout →'));
 
     await waitFor(() => {
-      expect(screen.getByText('Chest Day')).toBeInTheDocument();
-    });
-
-    const beginButton = screen.getByText('Begin');
-    fireEvent.click(beginButton);
-
-    await waitFor(() => {
-      expect(
-        screen.getByText(/Permission denied/)
-      ).toBeInTheDocument();
+      expect(screen.getByText(/Permission denied/)).toBeInTheDocument();
     });
   });
 });

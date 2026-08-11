@@ -2,6 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { BrowserRouter, useParams, useLocation } from 'react-router-dom';
 import ActiveWorkoutPage from './ActiveWorkoutPage';
+import { en } from '../i18n/en';
+
+vi.mock('../contexts/LanguageContext', () => ({
+  useLanguage: () => ({ language: 'en', t: en, setLanguage: vi.fn() }),
+}));
 
 vi.mock('../components/Layout', () => ({
   Layout: ({ children }: any) => <div>{children}</div>,

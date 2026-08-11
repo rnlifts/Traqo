@@ -26,6 +26,7 @@ import { ExerciseLibrarySidebar, type SelectedExerciseInfo } from '../exerciseLi
 import { ExercisePreviewPanel } from '../../components/ExercisePreviewPanel';
 import { Modal } from '../../components/Modal';
 import { getYoutubeThumbnailUrl } from '../../utils/youtube';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 interface PlanDraft {
   name: string;
@@ -80,6 +81,7 @@ const toggleChipStyle: React.CSSProperties = {
 export const PlanBuilder = (props: PlanBuilderProps) => {
   const navigate = useNavigate();
   const { Toast, showToast } = useToast();
+  const { t } = useLanguage();
 
   // State for both create and edit modes
   const [loading, setLoading] = useState(props.isCreateMode ? false : true);
@@ -231,9 +233,9 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
     try {
       const newDay = await workoutPlansApi.createDay(planId, `Day ${draftDays.length + 1}`);
       setDraftDays([...draftDays, { ...newDay, exercises: newDay.exercises ?? [] }]);
-      showToast('Day added!', 'success');
+      showToast(t.planBuilder.dayAdded, 'success');
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to add day');
+      setError(err.response?.data?.error || t.planBuilder.addDayFailed);
     }
   }
 
@@ -275,7 +277,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
     }
 
     if (!draftName.trim()) {
-      setError('Plan name is required');
+      setError(t.planBuilder.nameRequired);
       return;
     }
 
@@ -335,7 +337,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
       }
 
       await buildPlan(payload);
-      showToast('Plan created successfully!', 'success');
+      showToast(t.planBuilder.createdSuccess, 'success');
       navigate('/workout-plans');
     } catch (err: any) {
       setError(err.response?.data?.error || (err as Error).message);
@@ -460,11 +462,11 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
     notesValue: string,
   ) {
     const name = exerciseInfo.name;
-    if (!name.trim()) throw new Error('Exercise name required');
+    if (!name.trim()) throw new Error(t.planBuilder.exerciseNameRequired);
 
     const days = getActiveDays();
     const currentDay = days[activeDayIndex];
-    if (!currentDay) throw new Error('No active day');
+    if (!currentDay) throw new Error(t.planBuilder.noActiveDay);
 
     // Find or create exercise
     const existingExercise = availableExercises.find(
@@ -689,7 +691,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
         false, // has_duration: default to false
         '' // notes: empty
       );
-      showToast(`${exerciseInfo.name} added to ${draftUnitType === 'days' ? 'day' : 'week'}!`, 'success');
+      showToast(t.planBuilder.quickAddToast(exerciseInfo.name, draftUnitType === 'days' ? 'day' : 'week'), 'success');
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -1529,7 +1531,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
     } else if (planId) {
       try {
         await customizeWeek(planId, draftWeeks[activeWeekIndex].week_number);
-        showToast('Week customized!', 'success');
+        showToast(t.planBuilder.weekCustomized, 'success');
         // Backend creates new day/exercise IDs during customization.
         // API response doesn't include full nested data, so reload to get correct IDs.
         await loadPlanForEdit();
@@ -1557,7 +1559,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
     } else if (planId) {
       try {
         await matchPreviousWeek(planId, draftWeeks[activeWeekIndex].week_number);
-        showToast('Week reverted!', 'success');
+        showToast(t.planBuilder.weekReverted, 'success');
         // Patch local state: set mode='linked' and days=[]
         setDraftWeeks((prev) =>
           prev.map((week, idx) => {
@@ -1573,7 +1575,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
         );
       } catch (err: any) {
         if (err.response?.status === 409) {
-          setError(err.response?.data?.error || 'Cannot revert this week');
+          setError(err.response?.data?.error || t.planBuilder.cannotRevertWeek);
         } else {
           setError((err as Error).message);
         }
@@ -1583,7 +1585,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
 
   if (loading) return (
     <>
-      <div className="loading">Loading plan builder...</div>
+      <div className="loading">{t.planBuilder.loading}</div>
       {Toast}
     </>
   );
@@ -1611,7 +1613,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
               }}
               className="btn btn-secondary"
             >
-              ← Back
+              {t.planBuilder.back}
             </button>
           </div>
 
@@ -1626,12 +1628,12 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                 style={{
                   background: 'none',
                   border: 'none',
-                  color: '#721c24',
+                  color: 'var(--danger)',
                   fontSize: '20px',
                   cursor: 'pointer',
                   padding: '0 0 0 12px',
                 }}
-                aria-label="Dismiss error"
+                aria-label={t.planBuilder.dismissError}
               >
                 ×
               </button>
@@ -1650,7 +1652,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                   style={{ flex: 1 }}
                 />
                 <button onClick={handleUpdatePlanName} className="btn btn-primary">
-                  Save
+                  {t.planBuilder.save}
                 </button>
                 <button
                   onClick={() => {
@@ -1659,7 +1661,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                   }}
                   className="btn btn-secondary"
                 >
-                  Cancel
+                  {t.planBuilder.cancel}
                 </button>
               </div>
             ) : (
@@ -1667,7 +1669,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                 <h2 style={{ margin: 0 }}>{draftName}</h2>
                 {!props.isCreateMode && (
                   <button onClick={() => setIsRenamingPlan(true)} className="btn">
-                    Rename
+                    {t.planBuilder.rename}
                   </button>
                 )}
               </div>
@@ -1686,15 +1688,15 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
       {/* Week Rail (for weeks-type plans) */}
       {draftUnitType === 'weeks' && draftWeeks.length > 1 && (
         <div className="panel" style={{ marginBottom: '20px' }}>
-          <label className="field-label">Weeks</label>
+          <label className="field-label">{t.planBuilder.weeksLabel}</label>
           <div className="week-selector-row">
             {draftWeeks.map((week, idx) => (
               <div key={week.week_number} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <button
                   onClick={() => setActiveWeekIndex(idx)}
                   className={`week-node${idx === activeWeekIndex ? ' active' : week.mode === 'custom' ? ' completed' : ''}`}
-                  aria-label={`Week ${week.week_number}, ${week.mode}${idx === activeWeekIndex ? ', active' : ''}`}
-                  title={`Week ${week.week_number} (${week.mode})`}
+                  aria-label={t.planBuilder.weekNodeAriaLabel(week.week_number, week.mode, idx === activeWeekIndex)}
+                  title={t.planBuilder.weekNodeTitle(week.week_number, week.mode)}
                 >
                   {week.week_number}
                 </button>
@@ -1712,18 +1714,23 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
             {draftWeeks[activeWeekIndex].mode === 'linked' && (
               <>
                 <p>
-                  Week {draftWeeks[activeWeekIndex].week_number} is linked to Week {getEffectiveDaysForWeek(draftWeeks, activeWeekIndex).length > 0 ? draftWeeks.findIndex(w => w.days === getEffectiveDaysForWeek(draftWeeks, activeWeekIndex)) + 1 : '1'}. Editing that week updates this week too.
+                  {t.planBuilder.linkedWeekBanner(
+                    draftWeeks[activeWeekIndex].week_number,
+                    getEffectiveDaysForWeek(draftWeeks, activeWeekIndex).length > 0
+                      ? draftWeeks.findIndex(w => w.days === getEffectiveDaysForWeek(draftWeeks, activeWeekIndex)) + 1
+                      : 1
+                  )}
                 </p>
                 <button onClick={handleCustomizeWeek} className="btn btn-primary" style={{ fontSize: '13px', padding: '8px 16px' }}>
-                  Customize this week
+                  {t.planBuilder.customizeThisWeek}
                 </button>
               </>
             )}
             {draftWeeks[activeWeekIndex].mode === 'custom' && (
               <>
-                <p>Week {draftWeeks[activeWeekIndex].week_number} is customized — it has its own days, separate from the chain.</p>
+                <p>{t.planBuilder.customWeekBanner(draftWeeks[activeWeekIndex].week_number)}</p>
                 <button onClick={handleMatchPreviousWeek} className="btn btn-secondary" style={{ fontSize: '13px', padding: '8px 16px' }}>
-                  Match previous week
+                  {t.planBuilder.matchPreviousWeek}
                 </button>
               </>
             )}
@@ -1749,7 +1756,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
           {/* Rest Toggle */}
           {currentDay && (
             <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <label style={{ fontWeight: 'bold', fontSize: '14px' }}>Rest day:</label>
+              <label style={{ fontWeight: 'bold', fontSize: '14px' }}>{t.planBuilder.restDayLabel}</label>
               <button
                 onClick={handleToggleRestDay}
                 disabled={isLinkedWeek}
@@ -1765,11 +1772,11 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                 }}
                 className="btn"
               >
-                {currentDay.is_rest ? 'Yes' : 'No'}
+                {currentDay.is_rest ? t.planBuilder.yes : t.planBuilder.no}
               </button>
               {isLinkedWeek && (
                 <span style={{ fontSize: '12px', color: 'var(--text)', fontStyle: 'italic' }}>
-                  This day is linked. Customize the week to edit it directly.
+                  {t.planBuilder.linkedDayNotice}
                 </span>
               )}
             </div>
@@ -1779,15 +1786,15 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
           {currentDay && !currentDay.is_rest && (
             <>
               <div style={{ marginBottom: '12px' }}>
-                <div className="exercise-section-label">Exercises</div>
+                <div className="exercise-section-label">{t.planBuilder.exercisesLabel}</div>
 
                 {currentDay.exercises.map((ex, idx) => {
                   const sets = getSetsList(ex);
                   const isExpanded = expandedExerciseIds.has(ex.id);
                   const summaryText = [
-                    `${sets.length} set${sets.length === 1 ? '' : 's'}`,
-                    ex.has_reps && ex.target_reps ? `${ex.target_reps} reps` : null,
-                    ex.has_weight && ex.target_weight ? `${ex.target_weight} lbs` : null,
+                    t.planBuilder.setsCount(sets.length),
+                    ex.has_reps && ex.target_reps ? t.planBuilder.repsCount(ex.target_reps) : null,
+                    ex.has_weight && ex.target_weight ? t.planBuilder.lbsWeight(ex.target_weight) : null,
                     ex.has_duration && ex.target_duration_seconds
                       ? `${Math.floor(ex.target_duration_seconds / 60)}:${String(ex.target_duration_seconds % 60).padStart(2, '0')}`
                       : null,
@@ -1810,7 +1817,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                       <div
                         onClick={() => {
                           handlePreviewExercise({
-                            name: ex.exercise_name || `Exercise ${ex.exercise_id}`,
+                            name: ex.exercise_name || t.planBuilder.exerciseFallback(ex.exercise_id),
                             video_url: ex.video_url || null,
                           });
                           if (isMobile) {
@@ -1836,7 +1843,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                           {getYoutubeThumbnailUrl(ex.video_url) ? (
                             <img
                               src={getYoutubeThumbnailUrl(ex.video_url)!}
-                              alt={ex.exercise_name || `Exercise ${ex.exercise_id}`}
+                              alt={ex.exercise_name || t.planBuilder.exerciseFallback(ex.exercise_id)}
                               style={{ width: '52px', height: '52px', borderRadius: '8px', objectFit: 'cover' }}
                             />
                           ) : (
@@ -1888,7 +1895,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                               whiteSpace: 'nowrap',
                             }}
                           >
-                            {ex.exercise_name || `Exercise ${ex.exercise_id}`}
+                            {ex.exercise_name || t.planBuilder.exerciseFallback(ex.exercise_id)}
                           </div>
                           {!isExpanded && (
                             <div style={{ fontSize: '12px', color: 'var(--text)', marginTop: '2px' }}>
@@ -1904,8 +1911,8 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                           }}
                           className="row-delete-btn"
                           disabled={isLinkedWeek}
-                          title="Remove exercise"
-                          aria-label="Remove exercise"
+                          title={t.planBuilder.removeExercise}
+                          aria-label={t.planBuilder.removeExercise}
                         >
                           <TrashIcon size={15} />
                         </button>
@@ -1924,7 +1931,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                             });
                           }}
                           disabled={isLinkedWeek}
-                          aria-label={isExpanded ? `Collapse ${ex.exercise_name || 'exercise'}` : `Expand ${ex.exercise_name || 'exercise'}`}
+                          aria-label={isExpanded ? t.planBuilder.collapseExercise(ex.exercise_name || t.workoutPreview.exerciseFallback) : t.planBuilder.expandExercise(ex.exercise_name || t.workoutPreview.exerciseFallback)}
                           style={{
                             background: 'transparent',
                             border: 'none',
@@ -1950,10 +1957,10 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                               <button
                                 onClick={() => handleUpdateExercise(ex.id, 'has_reps', false)}
                                 disabled={isLinkedWeek}
-                                title="Remove reps tracking"
+                                title={t.planBuilder.removeRepsTracking}
                                 style={toggleChipStyle}
                               >
-                                Reps ✕
+                                {t.planBuilder.repsChipRemove}
                               </button>
                             ) : (
                               <button
@@ -1961,17 +1968,17 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                                 className="field-restore-chip"
                                 disabled={isLinkedWeek}
                               >
-                                + Reps
+                                {t.planBuilder.repsChipAdd}
                               </button>
                             )}
                             {ex.has_weight ? (
                               <button
                                 onClick={() => handleUpdateExercise(ex.id, 'has_weight', false)}
                                 disabled={isLinkedWeek}
-                                title="Remove weight tracking"
+                                title={t.planBuilder.removeWeightTracking}
                                 style={toggleChipStyle}
                               >
-                                Weight ✕
+                                {t.planBuilder.weightChipRemove}
                               </button>
                             ) : (
                               <button
@@ -1979,17 +1986,17 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                                 className="field-restore-chip"
                                 disabled={isLinkedWeek}
                               >
-                                + Weight
+                                {t.planBuilder.weightChipAdd}
                               </button>
                             )}
                             {ex.has_duration ? (
                               <button
                                 onClick={() => handleUpdateExercise(ex.id, 'has_duration', false)}
                                 disabled={isLinkedWeek}
-                                title="Remove duration tracking"
+                                title={t.planBuilder.removeDurationTracking}
                                 style={toggleChipStyle}
                               >
-                                Duration ✕
+                                {t.planBuilder.durationChipRemove}
                               </button>
                             ) : (
                               <button
@@ -1997,11 +2004,11 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                                 className="field-restore-chip"
                                 disabled={isLinkedWeek}
                               >
-                                + Duration
+                                {t.planBuilder.durationChipAdd}
                               </button>
                             )}
                             <span
-                              title="Target time to sustain this exercise (e.g. treadmill, plank) — not how long the set took."
+                              title={t.planBuilder.durationTooltip}
                               style={{ cursor: 'help', display: 'flex', alignItems: 'center', color: 'var(--text-h)' }}
                             >
                               <InfoIcon style={{ width: '14px', height: '14px' }} />
@@ -2015,7 +2022,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                               type="text"
                               value={ex.notes || ''}
                               onChange={(e) => handleUpdateExercise(ex.id, 'notes', e.target.value)}
-                              placeholder="Notes"
+                              placeholder={t.planBuilder.notesPlaceholder}
                               className="input-field"
                               disabled={isLinkedWeek}
                               style={{ flex: 1 }}
@@ -2058,13 +2065,13 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                                 {ex.has_reps && (
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                                     <span style={{ fontSize: '10.5px', fontWeight: 600, color: 'var(--text)', letterSpacing: '0.02em' }}>
-                                      Reps
+                                      {t.planBuilder.repsLabel}
                                     </span>
                                     <input
                                       type="text"
                                       value={set.target_reps || ''}
                                       onChange={(e) => handleUpdateSet(ex.id, set.set_number, 'reps', e.target.value)}
-                                      placeholder="e.g. 10 or 10-12"
+                                      placeholder={t.planBuilder.repsPlaceholder}
                                       className="input-field"
                                       disabled={isLinkedWeek}
                                       style={{ width: '130px', fontSize: '13px' }}
@@ -2074,14 +2081,14 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                                 {ex.has_weight && (
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                                     <span style={{ fontSize: '10.5px', fontWeight: 600, color: 'var(--text)', letterSpacing: '0.02em' }}>
-                                      Weight
+                                      {t.planBuilder.weightLabel}
                                     </span>
                                     <input
                                       type="number"
                                       step="0.5"
                                       value={set.target_weight || ''}
                                       onChange={(e) => handleUpdateSet(ex.id, set.set_number, 'weight', e.target.value ? Number(e.target.value) : null)}
-                                      placeholder="Weight"
+                                      placeholder={t.planBuilder.weightPlaceholder}
                                       className="input-field"
                                       disabled={isLinkedWeek}
                                       style={{ width: '90px', fontSize: '13px' }}
@@ -2091,7 +2098,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                                 {ex.has_duration && (
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                                     <span style={{ fontSize: '10.5px', fontWeight: 600, color: 'var(--text)', letterSpacing: '0.02em' }}>
-                                      Duration
+                                      {t.planBuilder.durationLabel}
                                     </span>
                                     <DurationInput
                                       value={set.target_duration_seconds || null}
@@ -2104,8 +2111,8 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                                     onClick={() => handleRemoveSet(ex.id, set.set_number)}
                                     className="row-delete-btn"
                                     disabled={isLinkedWeek}
-                                    title={`Remove Set ${set.set_number}`}
-                                    aria-label={`Remove Set ${set.set_number}`}
+                                    title={t.planBuilder.removeSet(set.set_number)}
+                                    aria-label={t.planBuilder.removeSet(set.set_number)}
                                     style={{ marginLeft: 'auto', flexShrink: 0 }}
                                   >
                                     <TrashIcon size={14} />
@@ -2132,7 +2139,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                               cursor: 'pointer',
                             }}
                           >
-                            + Add Set
+                            {t.planBuilder.addSet}
                           </button>
                         </div>
                       )}
@@ -2143,7 +2150,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
 
               {/* Add Exercise Hint */}
               <div style={{ marginBottom: '12px', padding: '12px 14px', fontSize: '13px', color: 'var(--text-h)' }}>
-                {isMobile ? 'Tap "+ Add Exercise" to browse and add exercises' : 'Add exercises using the panel on the right →'}
+                {isMobile ? t.planBuilder.mobileHint : t.planBuilder.desktopHint}
               </div>
             </>
           )}
@@ -2151,7 +2158,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
           {currentDay?.is_rest && (
             <div style={{ padding: '16px', backgroundColor: 'var(--code-bg)', borderRadius: '4px', textAlign: 'center', marginBottom: '12px' }}>
               <p style={{ margin: 0, color: 'var(--text)', fontSize: '14px' }}>
-                Rest day / No exercises scheduled
+                {t.planBuilder.restDayNotice}
               </p>
             </div>
           )}
@@ -2175,7 +2182,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
             cursor: 'pointer',
           }}
         >
-          + Add Exercise
+          {t.planBuilder.addExercise}
         </button>
       )}
 
@@ -2185,7 +2192,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
           className="btn btn-secondary"
           style={{ width: '100%', padding: '12px', marginTop: '12px' }}
         >
-          + Add Day
+          {t.planBuilder.addDay}
         </button>
       )}
 
@@ -2197,7 +2204,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
           className="btn btn-success"
           style={{ width: '100%', padding: '12px', marginTop: '20px' }}
         >
-          {saving ? 'Saving...' : 'Save Plan'}
+          {saving ? t.planBuilder.saving : t.planBuilder.savePlan}
         </button>
       ) : (
         <button
@@ -2205,7 +2212,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
           className="btn btn-primary"
           style={{ width: '100%', padding: '12px', marginTop: '20px' }}
         >
-          Done
+          {t.planBuilder.done}
         </button>
       )}
 
@@ -2214,7 +2221,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
         <Modal
           isOpen={showExercisePicker}
           onClose={() => setShowExercisePicker(false)}
-          title="Add Exercise"
+          title={t.planBuilder.addExerciseModalTitle}
           fullScreen={true}
         >
           <div style={{ padding: '12px 16px', paddingTop: '0' }}>
@@ -2228,7 +2235,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
         <Modal
           isOpen={showPreviewModal}
           onClose={() => setShowPreviewModal(false)}
-          title={selectedPreview?.name || 'Exercise Preview'}
+          title={selectedPreview?.name || t.planBuilder.exercisePreviewModalTitle}
           fullScreen={true}
         >
           <div style={{ padding: '12px 16px', paddingTop: '0' }}>
@@ -2240,10 +2247,10 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
       {/* Back Confirm Dialog (create mode only) */}
       <ConfirmDialog
         isOpen={showBackConfirm}
-        title="Leave plan creation?"
-        message="Are you sure you want to go back? Your progress won't be saved."
-        confirmText="Go back"
-        cancelText="Stay"
+        title={t.planBuilder.leavePlanCreation}
+        message={t.planBuilder.leavePlanMessage}
+        confirmText={t.planBuilder.goBack}
+        cancelText={t.planBuilder.stay}
         isDangerous={true}
         onConfirm={() => navigate('/workout-plans')}
         onCancel={() => setShowBackConfirm(false)}
@@ -2252,10 +2259,10 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
       {/* Delete Confirm Dialog */}
       <ConfirmDialog
         isOpen={deleteConfirm.isOpen}
-        title={deleteConfirm.type === 'exercise' ? 'Remove Exercise' : 'Delete Day'}
-        message={deleteConfirm.type === 'exercise' ? 'Are you sure you want to remove this exercise?' : 'Are you sure you want to delete this day?'}
-        confirmText="Delete"
-        cancelText="Cancel"
+        title={deleteConfirm.type === 'exercise' ? t.planBuilder.removeExerciseTitle : t.planBuilder.deleteDayTitle}
+        message={deleteConfirm.type === 'exercise' ? t.planBuilder.removeExerciseMessage : t.planBuilder.deleteDayMessage}
+        confirmText={t.planBuilder.delete}
+        cancelText={t.planBuilder.cancel}
         isDangerous={true}
         onConfirm={() => {
           if (deleteConfirm.type === 'exercise' && deleteConfirm.exerciseId) {
@@ -2268,10 +2275,10 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
       {/* Save Confirm Dialog (create mode only) */}
       <ConfirmDialog
         isOpen={showSaveConfirm}
-        title="Save this plan?"
-        message="Even if it's not finished yet, it'll be saved. You can edit it anytime."
-        confirmText="Save"
-        cancelText="Keep editing"
+        title={t.planBuilder.savePlanQuestion}
+        message={t.planBuilder.savePlanMessage}
+        confirmText={t.planBuilder.save}
+        cancelText={t.planBuilder.keepEditing}
         onConfirm={() => {
           setShowSaveConfirm(false);
           handleSavePlan();

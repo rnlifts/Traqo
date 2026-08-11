@@ -2,6 +2,9 @@ import React, { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { authApi } from "../../api/authApi";
 import { RegistrationSuccessDialog } from "./RegistrationSuccessDialog";
+import { useLanguage } from "../../contexts/LanguageContext";
+import type { TranslationKeys } from "../../i18n/en";
+import { LanguageToggle } from "../../components/LanguageToggle";
 
 interface RegistrationResult {
   username: string;
@@ -17,7 +20,10 @@ const USERNAME_MIN_LENGTH = 3;
 const USERNAME_MAX_LENGTH = 20;
 const USERNAME_PATTERN = /^[a-z][a-z0-9_]*$/;
 
-function validateUsernameFormat(username: string): UsernameValidationError | null {
+function validateUsernameFormat(
+  username: string,
+  t: TranslationKeys["register"]
+): UsernameValidationError | null {
   const normalized = username.toLowerCase().trim();
 
   if (!normalized) {
@@ -25,24 +31,25 @@ function validateUsernameFormat(username: string): UsernameValidationError | nul
   }
 
   if (normalized.length < USERNAME_MIN_LENGTH) {
-    return { message: "Must be at least 3 characters" };
+    return { message: t.usernameMinLength };
   }
 
   if (normalized.length > USERNAME_MAX_LENGTH) {
-    return { message: "Must be at most 20 characters" };
+    return { message: t.usernameMaxLength };
   }
 
   if (!USERNAME_PATTERN.test(normalized)) {
     if (!/^[a-z]/.test(normalized)) {
-      return { message: "Must start with a letter" };
+      return { message: t.usernameStartLetter };
     }
-    return { message: "Only lowercase letters, numbers, and underscores allowed" };
+    return { message: t.usernameInvalidChars };
   }
 
   return null;
 }
 
 export const RegisterPage: React.FC = () => {
+  const { t } = useLanguage();
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -73,7 +80,7 @@ export const RegisterPage: React.FC = () => {
     }
 
     // Check format first
-    const formatError = validateUsernameFormat(username);
+    const formatError = validateUsernameFormat(username, t.register);
     if (formatError) {
       setUsernameStatus("invalid");
       setUsernameStatusMessage(formatError.message);
@@ -87,7 +94,7 @@ export const RegisterPage: React.FC = () => {
     }
 
     setUsernameStatus("checking");
-    setUsernameStatusMessage("Checking availability…");
+    setUsernameStatusMessage(t.register.checkingAvailability);
 
     debounceTimerRef.current = setTimeout(async () => {
       inFlightUsernameRef.current = username;
@@ -102,17 +109,17 @@ export const RegisterPage: React.FC = () => {
 
         if (result.available) {
           setUsernameStatus("available");
-          setUsernameStatusMessage("✓ Username available");
+          setUsernameStatusMessage(t.register.usernameAvailable);
         } else {
           setUsernameStatus("taken");
-          setUsernameStatusMessage(`✗ ${result.reason || "Username already taken"}`);
+          setUsernameStatusMessage(t.register.usernameTaken(result.reason || t.register.usernameTakenDefault));
         }
       } catch (err: any) {
         if (inFlightUsernameRef.current !== username) {
           return;
         }
         setUsernameStatus("invalid");
-        setUsernameStatusMessage("Error checking availability");
+        setUsernameStatusMessage(t.register.errorCheckingAvailability);
       }
     }, 400);
 
@@ -121,12 +128,12 @@ export const RegisterPage: React.FC = () => {
         clearTimeout(debounceTimerRef.current);
       }
     };
-  }, [username]);
+  }, [username, t]);
 
   useEffect(() => {
     if (!loading || !statusMessage) return;
 
-    const messages = ["Creating your account…"];
+    const messages = [t.register.creatingAccount];
     let currentIndex = 0;
 
     const updateStatus = () => {
@@ -144,12 +151,12 @@ export const RegisterPage: React.FC = () => {
 
     // Validate username availability
     if (usernameStatus !== "available") {
-      setError("Please choose an available username");
+      setError(t.register.chooseAvailableUsername);
       return;
     }
 
     setLoading(true);
-    setStatusMessage("Creating your account…");
+    setStatusMessage(t.register.creatingAccount);
 
     const startTime = Date.now();
 
@@ -175,11 +182,9 @@ export const RegisterPage: React.FC = () => {
       setLoading(false);
       setStatusMessage(null);
       if (err.response?.status === 409) {
-        setError("That username is already taken. Please choose another.");
+        setError(t.register.usernameConflict);
       } else {
-        setError(
-          err.response?.data?.error || "Registration failed. Please try again."
-        );
+        setError(err.response?.data?.error || t.register.genericError);
       }
     }
   };
@@ -196,7 +201,10 @@ export const RegisterPage: React.FC = () => {
       )}
 
       <div style={{ maxWidth: "400px", margin: "50px auto", padding: "20px" }}>
-        <h1>Register</h1>
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "12px" }}>
+          <LanguageToggle />
+        </div>
+        <h1>{t.register.title}</h1>
 
         {statusMessage ? (
           <div style={{ textAlign: "center", minHeight: "200px", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -208,14 +216,14 @@ export const RegisterPage: React.FC = () => {
           <form onSubmit={handleSubmit}>
             <div style={{ marginBottom: "15px" }}>
               <label htmlFor="displayName" style={{ display: "block", marginBottom: "5px" }}>
-                Nickname:
+                {t.register.nicknameLabel}
               </label>
               <input
                 id="displayName"
                 type="text"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                placeholder="What should we call you?"
+                placeholder={t.register.nicknamePlaceholder}
                 required
                 className="input-field"
               />
@@ -223,14 +231,14 @@ export const RegisterPage: React.FC = () => {
 
             <div style={{ marginBottom: "15px" }}>
               <label htmlFor="username" style={{ display: "block", marginBottom: "5px" }}>
-                Username:
+                {t.register.usernameLabel}
               </label>
               <input
                 id="username"
                 type="text"
                 value={username}
                 onChange={handleUsernameChange}
-                placeholder="3-20 characters"
+                placeholder={t.register.usernamePlaceholder}
                 required
                 className="input-field"
               />
@@ -254,14 +262,14 @@ export const RegisterPage: React.FC = () => {
 
             <div style={{ marginBottom: "15px" }}>
               <label htmlFor="password" style={{ display: "block", marginBottom: "5px" }}>
-                Password:
+                {t.register.passwordLabel}
               </label>
               <input
                 id="password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="At least 8 characters"
+                placeholder={t.register.passwordPlaceholder}
                 required
                 minLength={8}
                 className="input-field"
@@ -277,13 +285,13 @@ export const RegisterPage: React.FC = () => {
                   style={{
                     background: 'none',
                     border: 'none',
-                    color: '#721c24',
+                    color: 'var(--danger)',
                     fontSize: '20px',
                     cursor: 'pointer',
                     padding: '0 0 0 12px',
                     flex: '0 0 auto'
                   }}
-                  aria-label="Dismiss error"
+                  aria-label={t.register.dismissError}
                 >
                   ×
                 </button>
@@ -299,15 +307,15 @@ export const RegisterPage: React.FC = () => {
                 opacity: (!isFormValid || loading) ? 0.6 : 1,
               }}
             >
-              {loading ? "Registering..." : "Register"}
+              {loading ? t.register.registering : t.register.submit}
             </button>
           </form>
         )}
 
         <p style={{ marginTop: "15px", textAlign: "center" }}>
-          Already have an account?{" "}
-          <Link to="/login" style={{ color: "#007bff", textDecoration: "none" }}>
-            Log in
+          {t.register.haveAccount}
+          <Link to="/login" style={{ color: "var(--accent)", textDecoration: "none" }}>
+            {t.register.loginLink}
           </Link>
         </p>
       </div>

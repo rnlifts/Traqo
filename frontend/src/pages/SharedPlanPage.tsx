@@ -3,36 +3,38 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { sharingApi } from '../api/sharingApi';
 import type { SharedPlanResponse, SharedPlanExercise, SharedPlanDay } from '../api/sharingApi';
 import { ShareWorkoutStarter } from '../features/sharing/ShareWorkoutStarter';
+import { useLanguage } from '../contexts/LanguageContext';
+import type { TranslationKeys } from '../i18n/en';
 
-function ExerciseCard({ exercise }: { exercise: SharedPlanExercise }) {
+function ExerciseCard({ exercise, t }: { exercise: SharedPlanExercise; t: TranslationKeys }) {
   return (
     <div className="exercise-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
       <div className="field-cell field-cell-name">
-        <span className="cell-label">Exercise</span>
+        <span className="cell-label">{t.sharedPlanPage.exerciseLabel}</span>
         <span className="cell-static-value">{exercise.exercise_name}</span>
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
         {exercise.target_sets !== null && (
           <div className="field-cell">
-            <span className="cell-label">Sets</span>
+            <span className="cell-label">{t.sharedPlanPage.setsLabel}</span>
             <span className="cell-static-value">{exercise.target_sets}</span>
           </div>
         )}
         {exercise.target_reps && (
           <div className="field-cell">
-            <span className="cell-label">Reps</span>
+            <span className="cell-label">{t.planBuilder.repsLabel}</span>
             <span className="cell-static-value">{exercise.target_reps}</span>
           </div>
         )}
         {exercise.target_weight !== null && (
           <div className="field-cell">
-            <span className="cell-label">Weight</span>
+            <span className="cell-label">{t.planBuilder.weightLabel}</span>
             <span className="cell-static-value">{exercise.target_weight} lbs</span>
           </div>
         )}
         {exercise.target_duration_seconds !== null && (
           <div className="field-cell">
-            <span className="cell-label">Duration</span>
+            <span className="cell-label">{t.planBuilder.durationLabel}</span>
             <span className="cell-static-value">
               {Math.floor(exercise.target_duration_seconds / 60)}m
             </span>
@@ -41,7 +43,7 @@ function ExerciseCard({ exercise }: { exercise: SharedPlanExercise }) {
       </div>
       {exercise.notes && (
         <div className="field-cell field-cell-notes">
-          <span className="cell-label">Notes</span>
+          <span className="cell-label">{t.sharing.notesLabel}</span>
           <span className="cell-static-value" style={{ fontWeight: 'normal' }}>
             {exercise.notes}
           </span>
@@ -51,19 +53,19 @@ function ExerciseCard({ exercise }: { exercise: SharedPlanExercise }) {
   );
 }
 
-function DayCard({ day }: { day: SharedPlanDay }) {
+function DayCard({ day, t }: { day: SharedPlanDay; t: TranslationKeys }) {
   return (
     <div className="card">
       <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', color: 'var(--text-h)' }}>
         {day.is_rest ? '🛌 ' : ''}
-        Day {day.order_position}: {day.label}
+        {t.sharedPlanPage.dayHeading(day.order_position, day.label)}
       </h3>
       {day.is_rest ? (
-        <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>Rest day</p>
+        <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>{t.sharedPlanPage.restDay}</p>
       ) : day.exercises.length > 0 ? (
-        day.exercises.map((exercise, idx) => <ExerciseCard key={idx} exercise={exercise} />)
+        day.exercises.map((exercise, idx) => <ExerciseCard key={idx} exercise={exercise} t={t} />)
       ) : (
-        <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>No exercises</p>
+        <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>{t.sharedPlanPage.noExercises}</p>
       )}
     </div>
   );
@@ -72,6 +74,7 @@ function DayCard({ day }: { day: SharedPlanDay }) {
 export const SharedPlanPage: React.FC = () => {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<SharedPlanResponse | null>(null);
   const [error, setError] = useState<{ status: number; message: string } | null>(
@@ -95,18 +98,17 @@ export const SharedPlanPage: React.FC = () => {
       if (err.response?.status === 404) {
         setError({
           status: 404,
-          message: 'This link is invalid or no longer shared.',
+          message: t.sharedPlanPage.invalidLinkMessage,
         });
       } else if (err.response?.status === 403) {
         setError({
           status: 403,
-          message:
-            'This share is restricted — log in with an account that has access.',
+          message: t.sharedPlanPage.restrictedMessage,
         });
       } else {
         setError({
           status: 500,
-          message: 'An error occurred while loading the shared plan.',
+          message: t.sharedPlanPage.genericErrorMessage,
         });
       }
     } finally {
@@ -115,7 +117,7 @@ export const SharedPlanPage: React.FC = () => {
   }
 
   if (loading) {
-    return <div className="loading">Loading plan...</div>;
+    return <div className="loading">{t.sessionSetup.loadingPlan}</div>;
   }
 
   if (error) {
@@ -123,19 +125,19 @@ export const SharedPlanPage: React.FC = () => {
       <div className="page-container">
         <div style={{ marginBottom: '20px' }}>
           <button onClick={() => navigate('/workout-plans')} className="btn btn-secondary">
-            ← Back
+            {t.planBuilder.back}
           </button>
         </div>
         <div className="card" style={{ textAlign: 'center' }}>
           <h1 className="page-title" style={{ marginBottom: '12px' }}>
-            {error.status === 404 ? 'Invalid Link' : 'Access Denied'}
+            {error.status === 404 ? t.sharedPlanPage.invalidLinkTitle : t.common2.accessDenied}
           </h1>
           <p style={{ fontSize: '16px', marginBottom: '12px', color: 'var(--text)' }}>
             {error.message}
           </p>
           {error.status === 403 && (
             <p style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
-              You can <Link to="/login">log in</Link> with an account that has access.
+              {t.sharedPlanPage.youCanLogInBefore}<Link to="/login">{t.sharedPlanPage.logIn}</Link>{t.sharedPlanPage.youCanLogInAfter}
             </p>
           )}
         </div>
@@ -168,7 +170,7 @@ export const SharedPlanPage: React.FC = () => {
         >
           <div>
             <h2 style={{ margin: '0 0 8px 0', fontSize: '14px', color: 'var(--text)', fontWeight: 'normal' }}>
-              Shared by <strong>{plan_owner_username}</strong> — you can{' '}
+              {t.sharedPlanPage.sharedByPrefix}<strong>{plan_owner_username}</strong>{t.sharedPlanPage.youCanPrefix}{' '}
               <strong>{permission}</strong>
             </h2>
             <h1 style={{ margin: 0, fontSize: '28px', color: 'var(--text-h)', fontWeight: 'bold' }}>
@@ -181,7 +183,7 @@ export const SharedPlanPage: React.FC = () => {
               className="btn btn-secondary"
               style={{ textDecoration: 'none', whiteSpace: 'nowrap' }}
             >
-              Edit plan
+              {t.sharedPlanPage.editPlan}
             </Link>
           )}
         </div>
@@ -189,33 +191,35 @@ export const SharedPlanPage: React.FC = () => {
 
       <p className="section-label">
         {plan.unit_type === 'days'
-          ? `${plan.total_units} DAY${plan.total_units === 1 ? '' : 'S'}`
-          : `${plan.total_units} WEEK${plan.total_units === 1 ? '' : 'S'}`}
+          ? t.planList.dayCount(plan.total_units)
+          : t.planList.weekCount(plan.total_units)}
       </p>
 
-      {/* Workout Starter — only if permission allows */}
-      {(permission === 'log' || permission === 'edit') && token && (
-        <ShareWorkoutStarter data={data} token={token} />
-      )}
-
-      {/* Days-type plan */}
-      {days && days.length > 0 && days.map((day) => <DayCard key={day.id} day={day} />)}
-
-      {/* Weeks-type plan */}
-      {weeks && weeks.length > 0 && (
+      {permission === 'view' ? (
+        // View-only visitors have no picker to interact with, so showing the
+        // full plan is the only way for them to see what's in it.
         <>
-          {weeks.map((week) => (
-            <div key={week.week_number}>
-              <p className="section-label">
-                Week {week.resolved_week_number || week.week_number}
-                {week.mode !== 'base' && ` (${week.mode})`}
-              </p>
-              {week.days.map((day) => (
-                <DayCard key={day.id} day={day} />
+          {days && days.length > 0 && days.map((day) => <DayCard key={day.id} day={day} t={t} />)}
+          {weeks && weeks.length > 0 && (
+            <>
+              {weeks.map((week) => (
+                <div key={week.week_number}>
+                  <p className="section-label">
+                    {t.sharing.weekChip(week.resolved_week_number || week.week_number)}
+                    {week.mode !== 'base' && t.sharedPlanPage.weekModeSuffix(week.mode)}
+                  </p>
+                  {week.days.map((day) => (
+                    <DayCard key={day.id} day={day} t={t} />
+                  ))}
+                </div>
               ))}
-            </div>
-          ))}
+            </>
+          )}
         </>
+      ) : (
+        // log/edit permission: ShareWorkoutStarter's own picker + per-day preview
+        // replaces the full plan dump, so the same content isn't shown twice at once.
+        token && <ShareWorkoutStarter data={data} token={token} />
       )}
     </div>
   );
