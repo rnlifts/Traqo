@@ -353,6 +353,12 @@ class TestLoginLockout:
             },
         )
         assert response.status_code == 429, "Account should be locked after max attempts"
+        # Regression test: the lockout response must carry a positive Retry-After
+        # header — without it, the frontend's countdown timer showed "NaN:NaN"
+        # instead of an actual wait time.
+        retry_after = response.headers.get("Retry-After")
+        assert retry_after is not None, "Locked response must include a Retry-After header"
+        assert int(retry_after) > 0
 
     def test_successful_login_resets_failed_attempts(self, client):
         """Successful login clears failed-attempt counter and lockout."""

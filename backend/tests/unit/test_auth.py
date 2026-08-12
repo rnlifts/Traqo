@@ -2,7 +2,7 @@
 
 import pytest
 from src.modules.auth.domain.entities.user import User
-from src.modules.auth.domain.exceptions import InvalidCredentialsError, UsernameAlreadyTakenError
+from src.modules.auth.domain.exceptions import InvalidCredentialsError, UsernameAlreadyTakenError, AccountLockedError
 from src.modules.auth.domain.interfaces.user_repository import UserRepository
 from src.modules.auth.domain.interfaces.password_hasher import PasswordHasher
 from src.modules.auth.domain.services.username_validator import UsernameValidator
@@ -224,6 +224,40 @@ class TestLoginUser:
         login = LoginUser(user_repo, password_hasher)
         with pytest.raises(InvalidCredentialsError):
             login.execute("alice123", "")
+
+    def test_login_when_locked_raises_account_locked_error_with_positive_retry_after(
+        self, user_repo, password_hasher
+    ):
+        """A locked account raises AccountLockedError carrying a positive
+        retry_after_seconds derived from locked_until — regression test for the
+        production bug where a missing retry-after value made the frontend
+        display "Try again in NaN:NaN"."""
+        from datetime import datetime, timedelta
+
+        register = RegisterUser(user_repo, password_hasher)
+        user = register.execute("Alice", "alice123", "correctpass")
+        user.locked_until = datetime.utcnow() + timedelta(minutes=10)
+        user_repo.save(user)
+
+        login = LoginUser(user_repo, password_hasher)
+        with pytest.raises(AccountLockedError) as exc_info:
+            login.execute("alice123", "correctpass")
+
+        # Should be close to 10 minutes (600s), never 0/negative/NaN.
+        assert 0 < exc_info.value.retry_after_seconds <= 600
+
+    def test_login_when_lock_has_expired_succeeds_normally(self, user_repo, password_hasher):
+        """A locked_until timestamp in the past no longer blocks login."""
+        from datetime import datetime, timedelta
+
+        register = RegisterUser(user_repo, password_hasher)
+        user = register.execute("Alice", "alice123", "correctpass")
+        user.locked_until = datetime.utcnow() - timedelta(minutes=1)
+        user_repo.save(user)
+
+        login = LoginUser(user_repo, password_hasher)
+        result = login.execute("alice123", "correctpass")
+        assert result.username == "alice123"
 
 
 # ============================================================================

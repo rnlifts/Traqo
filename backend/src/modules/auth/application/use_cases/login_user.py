@@ -34,7 +34,11 @@ class LoginUser:
 
         # Check if account is locked
         if user.locked_until and user.locked_until > datetime.utcnow():
-            raise AccountLockedError("Account is locked due to too many failed login attempts")
+            retry_after_seconds = int((user.locked_until - datetime.utcnow()).total_seconds())
+            raise AccountLockedError(
+                "Account is locked due to too many failed login attempts",
+                retry_after_seconds=max(retry_after_seconds, 1),
+            )
 
         # Verify password
         if not self.password_hasher.verify(password, user.password_hash):

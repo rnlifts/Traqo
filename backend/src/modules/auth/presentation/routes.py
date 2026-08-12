@@ -94,10 +94,11 @@ async def login(request: Request, req: LoginRequest, response: Response, db: Ses
     use_case = LoginUser(user_repository, password_hasher)
     try:
         user = use_case.execute(req.username, req.password)
-    except AccountLockedError:
+    except AccountLockedError as e:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Account is locked due to too many failed login attempts. Try again later.",
+            headers={"Retry-After": str(e.retry_after_seconds)},
         )
     except InvalidCredentialsError:
         raise HTTPException(

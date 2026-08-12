@@ -6998,3 +6998,64 @@ id, `unit_type: "days"`, `total_units: 3` correctly derived, and all 3 days'
 exercises (Dip, Front Squat) faithfully copied.
 
 Not committed or pushed yet.
+
+## 2026-08-12 (cont'd) — Fixed production login lockout showing "Locked (NaN:NaN)"
+
+**Report:** user's own password was correct but login kept failing in
+production, and after enough attempts the button read "Locked (NaN:NaN)"
+instead of a real countdown.
+
+**Root cause, two layers:**
+1. The account-lockout path (`AccountLockedError` → `429` in
+   `backend/src/modules/auth/presentation/routes.py`) never carried a
+   `Retry-After` header — only `detail` was set on the `HTTPException`. The
+   frontend's `LoginPage.tsx` unconditionally does
+   `parseInt(err.response.headers["retry-after"], 10)`, so with the header
+   absent this evaluates to `NaN`, and `formatCountdown(NaN)` renders
+   `"NaN:NaN"`.
+2. Even after adding the header, it still didn't reach the client: a global
+   `@app.exception_handler(HTTPException)` in `backend/src/app.py` intercepts
+   **every** `HTTPException` app-wide and rebuilds a fresh `JSONResponse`
+   from just `exc.status_code`/`exc.detail` — silently dropping any custom
+   `headers=` set on the original exception. This is the actual root cause;
+   setting the header on the raise site alone would not have fixed it.
+
+**Fix:**
+- `backend/src/modules/auth/domain/exceptions.py`: `AccountLockedError` now
+  carries `retry_after_seconds`.
+- `backend/src/modules/auth/application/use_cases/login_user.py`: computes
+  `retry_after_seconds` from `user.locked_until - now()` when raising.
+- `backend/src/modules/auth/presentation/routes.py`: sets
+  `headers={"Retry-After": str(e.retry_after_seconds)}` on the `429`
+  `HTTPException`.
+- `backend/src/app.py`: the global `http_exception_handler` now forwards
+  `headers=exc.headers` into the `JSONResponse` it builds — this is the fix
+  that actually mattered; already-exposed via CORS (`expose_headers`
+  already included `Retry-After`, so that wasn't the issue).
+- `frontend/src/features/auth/LoginPage.tsx`: hardened defensively — falls
+  back to a 15-minute countdown (matching `LOGIN_LOCKOUT_DURATION_MINUTES`)
+  instead of `NaN` if the header is ever missing again from any future 429
+  source.
+
+**New tests:**
+- `backend/tests/unit/test_auth.py` — `LoginUser` raises `AccountLockedError`
+  with a positive `retry_after_seconds` (≤600s for a 10-min lock) when
+  locked, and login succeeds normally once `locked_until` is in the past.
+- `backend/tests/integration/test_auth_routes.py` — the existing lockout
+  test now also asserts the `429` response actually carries a positive
+  `Retry-After` header (this is the test that would have caught the global
+  handler dropping it).
+- `frontend/src/features/auth/LoginPage.test.tsx` (new file) — valid
+  `Retry-After: 125` renders `"Locked (2:05)"`; a missing header renders
+  `"Locked (15:00)"`, never `NaN`; a plain `401` still shows the generic
+  invalid-credentials message, not a lockout state.
+
+**Verified:** backend `pytest` 391/407 passed (same 8 pre-existing unrelated
+failures); frontend `tsc -b` clean, `vitest run` 324/324 passed. Live-verified
+against the local backend: 5 wrong-password attempts then a 6th returned
+`429` with `retry-after: 899` in the actual response headers (confirmed via
+raw `curl -D -`) — this exact request would have returned no header at all
+before the `app.py` fix. Local dev DB only, not production; no real accounts
+affected.
+
+Not committed or pushed yet.

@@ -66,8 +66,10 @@ export const LoginPage: React.FC = () => {
       navigate("/dashboard");
     } catch (err: any) {
       if (err.response?.status === 429) {
-        // Rate limit hit
-        const retryAfter = parseInt(err.response.headers["retry-after"], 10);
+        // Rate limit / account lockout hit. Fall back to a sane default if the
+        // server ever omits Retry-After, rather than showing "NaN:NaN".
+        const parsed = parseInt(err.response.headers["retry-after"], 10);
+        const retryAfter = Number.isFinite(parsed) && parsed > 0 ? parsed : 15 * 60;
         setRateLimitCountdown(retryAfter);
         setIsRateLimited(true);
         setError(null);
