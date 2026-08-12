@@ -12,6 +12,7 @@ import * as exercisesApiModule from '../../api/exercisesApi';
 import { customizeWeek, updateExerciseInDay, updateDay, removeExerciseFromDay, addExerciseToDay, replaceSetTargets } from '../../api/workoutPlansApi';
 import client from '../../api/client';
 import type { WorkoutPlanDetail } from '../../api/workoutPlansApi';
+import { getClipboard, setClipboard, clearClipboard } from '../../utils/exerciseClipboard';
 
 // Mock dependencies
 vi.mock('../../api/workoutPlansApi', () => ({
@@ -314,6 +315,55 @@ describe('PlanBuilder Task 81: True Optimistic Updates', () => {
     await waitFor(() =>
       expect(vi.mocked(updateExerciseInDay)).toHaveBeenCalledWith(5, 100, 999, { has_reps: false })
     );
+  });
+
+  it('keeps showing the real exercise name after reconciliation, even though the backend response omits it', async () => {
+    // POST /days/{day_id}/exercises intentionally returns a lean WorkoutExerciseResponse
+    // with no exercise_name/video_url field — regression test for the exercise briefly
+    // (permanently, pre-fix) showing as "Exercise {id}" once the optimistic temp entry
+    // was reconciled with the real server response.
+    const user = userEvent.setup();
+    vi.mocked(client.get).mockResolvedValue({ data: emptyDayFixture } as any);
+    const mockedExercisesApi = vi.mocked(exercisesApiModule.exercisesApi);
+    mockedExercisesApi.create.mockResolvedValue({
+      id: 1,
+      name: 'Bench Press',
+      video_url: 'https://youtube.com/watch?v=test1',
+      muscle_group: 'chest',
+      equipment: 'barbell',
+      is_custom: false,
+      logging_type: 'weights',
+    });
+
+    vi.mocked(addExerciseToDay).mockResolvedValue({
+      id: 999,
+      plan_day_id: 100,
+      exercise_id: 1,
+      order_number: 1,
+      target_sets: 1,
+      target_reps: null,
+      target_weight: null,
+      target_duration_seconds: null,
+      has_reps: true,
+      has_weight: true,
+      has_duration: false,
+      set_targets: [],
+      notes: '',
+      // No exercise_name / video_url — matches the real backend's lean response.
+    } as any);
+
+    render(
+      <BrowserRouter>
+        <PlanBuilder isCreateMode={false} planId={5} />
+      </BrowserRouter>
+    );
+
+    await screen.findByText('Exercises');
+    await user.click(screen.getByTestId('library-exercise-add'));
+
+    await waitFor(() => expect(vi.mocked(addExerciseToDay)).toHaveBeenCalled());
+    expect(await screen.findByText('Bench Press')).toBeInTheDocument();
+    expect(screen.queryByText('Exercise 1')).not.toBeInTheDocument();
   });
 });
 
@@ -640,5 +690,320 @@ describe('PlanBuilder Task 79: Optimistic Updates (Edit Mode)', () => {
     // that a local patch can't know in advance) — this is the one intentional exception.
     await waitFor(() => expect(vi.mocked(client.get)).toHaveBeenCalledTimes(2));
     expect(vi.mocked(customizeWeek)).toHaveBeenCalledWith(5, 2);
+  });
+});
+
+describe('PlanBuilder Copy/Paste Exercises', () => {
+  const twoExerciseFixture: WorkoutPlanDetail = {
+    plan: {
+      id: 5,
+      user_id: 1,
+      name: 'Copy Paste Plan',
+      unit_type: 'days',
+      total_units: 1,
+      is_quick_start: false,
+      created_at: '2026-08-01T00:00:00Z',
+      updated_at: '2026-08-01T00:00:00Z',
+    },
+    days: [
+      {
+        id: 100,
+        label: 'Day 1',
+        order_position: 1,
+        is_rest: false,
+        exercises: [
+          {
+            id: 200,
+            plan_day_id: 100,
+            exercise_id: 1,
+            order_number: 1,
+            target_sets: 3,
+            target_reps: '10',
+            target_weight: 135,
+            target_duration_seconds: null,
+            has_reps: true,
+            has_weight: true,
+            has_duration: false,
+            set_targets: [],
+            notes: 'go slow',
+            exercise_name: 'Bench Press',
+            video_url: null,
+          },
+          {
+            id: 201,
+            plan_day_id: 100,
+            exercise_id: 2,
+            order_number: 2,
+            target_sets: 1,
+            target_reps: '10',
+            target_weight: null,
+            target_duration_seconds: null,
+            has_reps: true,
+            has_weight: true,
+            has_duration: false,
+            set_targets: [],
+            notes: '',
+            exercise_name: 'Squat',
+            video_url: null,
+          },
+        ],
+      },
+    ],
+    weeks: null,
+  };
+
+  const emptyDayFixture: WorkoutPlanDetail = {
+    ...twoExerciseFixture,
+    days: [{ ...twoExerciseFixture.days![0], exercises: [] }],
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearClipboard();
+    const mocked = vi.mocked(exercisesApiModule.exercisesApi);
+    mocked.list.mockResolvedValue([]);
+  });
+
+  it('selecting exercises and copying stores them in the clipboard and exits select mode', async () => {
+    const user = userEvent.setup();
+    vi.mocked(client.get).mockResolvedValue({ data: twoExerciseFixture } as any);
+
+    render(
+      <BrowserRouter>
+        <PlanBuilder isCreateMode={false} planId={5} />
+      </BrowserRouter>
+    );
+
+    await screen.findByText('Bench Press');
+    await user.click(screen.getByRole('button', { name: 'Select' }));
+
+    await user.click(screen.getByRole('checkbox', { name: 'Select Bench Press' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Select Squat' }));
+
+    await user.click(screen.getByRole('button', { name: 'Copy' }));
+
+    await waitFor(() => expect(getClipboard()).toHaveLength(2));
+    const clipboard = getClipboard();
+    expect(clipboard.map((c) => c.exercise_name)).toEqual(['Bench Press', 'Squat']);
+    expect(clipboard[0].notes).toBe('go slow');
+    expect(clipboard[0].target_weight).toBe(135);
+
+    // Select mode UI is gone (checkboxes removed, "Select" button back)
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Select' })).toBeInTheDocument();
+  });
+
+  it('clicking a single exercise\'s copy icon copies just that one exercise, with full fidelity', async () => {
+    const user = userEvent.setup();
+    vi.mocked(client.get).mockResolvedValue({ data: twoExerciseFixture } as any);
+
+    render(
+      <BrowserRouter>
+        <PlanBuilder isCreateMode={false} planId={5} />
+      </BrowserRouter>
+    );
+
+    await screen.findByText('Bench Press');
+
+    // Copy only "Squat" via its row's copy icon — no Select mode involved.
+    await user.click(screen.getByRole('button', { name: 'Copy Squat' }));
+
+    await waitFor(() => expect(getClipboard()).toHaveLength(1));
+    expect(getClipboard()[0]).toMatchObject({
+      exercise_id: 2,
+      exercise_name: 'Squat',
+      target_sets: 1,
+      target_reps: '10',
+    });
+
+    // Copying a different single exercise replaces the clipboard, doesn't add to it.
+    await user.click(screen.getByRole('button', { name: 'Copy Bench Press' }));
+    await waitFor(() => expect(getClipboard()).toHaveLength(1));
+    expect(getClipboard()[0]).toMatchObject({ exercise_id: 1, exercise_name: 'Bench Press', notes: 'go slow', target_weight: 135 });
+  });
+
+  it('pasting appends the copied exercises to the target day via the API, in order', async () => {
+    const user = userEvent.setup();
+    setClipboard([
+      {
+        exercise_id: 1,
+        exercise_name: 'Bench Press',
+        video_url: null,
+        target_sets: 3,
+        target_reps: '10',
+        target_weight: 135,
+        target_duration_seconds: null,
+        has_reps: true,
+        has_weight: true,
+        has_duration: false,
+        notes: '',
+        set_targets: [],
+      },
+      {
+        exercise_id: 2,
+        exercise_name: 'Squat',
+        video_url: null,
+        target_sets: 1,
+        target_reps: '10',
+        target_weight: null,
+        target_duration_seconds: null,
+        has_reps: true,
+        has_weight: true,
+        has_duration: false,
+        notes: '',
+        set_targets: [],
+      },
+    ]);
+
+    vi.mocked(client.get).mockResolvedValue({ data: emptyDayFixture } as any);
+    // Mirrors the real backend: addExerciseToDay's response has no exercise_name/video_url.
+    vi.mocked(addExerciseToDay)
+      .mockResolvedValueOnce({
+        id: 300,
+        plan_day_id: 100,
+        exercise_id: 1,
+        order_number: 1,
+        target_sets: 3,
+        target_reps: '10',
+        target_weight: 135,
+        target_duration_seconds: null,
+        has_reps: true,
+        has_weight: true,
+        has_duration: false,
+        set_targets: [],
+        notes: '',
+      } as any)
+      .mockResolvedValueOnce({
+        id: 301,
+        plan_day_id: 100,
+        exercise_id: 2,
+        order_number: 2,
+        target_sets: 1,
+        target_reps: '10',
+        target_weight: null,
+        target_duration_seconds: null,
+        has_reps: true,
+        has_weight: true,
+        has_duration: false,
+        set_targets: [],
+        notes: '',
+      } as any);
+
+    render(
+      <BrowserRouter>
+        <PlanBuilder isCreateMode={false} planId={5} />
+      </BrowserRouter>
+    );
+
+    const pasteButton = await screen.findByRole('button', { name: 'Paste 2 here' });
+    await user.click(pasteButton);
+
+    await screen.findByText('Bench Press');
+    await screen.findByText('Squat');
+
+    expect(vi.mocked(addExerciseToDay)).toHaveBeenNthCalledWith(1, 5, 100, 1, 3, '10', 135, undefined, true, true, false);
+    expect(vi.mocked(addExerciseToDay)).toHaveBeenNthCalledWith(2, 5, 100, 2, 1, '10', undefined, undefined, true, true, false);
+  });
+
+  it('pasting an exercise with notes and custom set targets follows up with the corresponding API calls', async () => {
+    const user = userEvent.setup();
+    setClipboard([
+      {
+        exercise_id: 1,
+        exercise_name: 'Bench Press',
+        video_url: null,
+        target_sets: 3,
+        target_reps: '10',
+        target_weight: 135,
+        target_duration_seconds: null,
+        has_reps: true,
+        has_weight: true,
+        has_duration: false,
+        notes: 'go slow',
+        set_targets: [{ set_number: 1, target_reps: '8', target_weight: 140, target_duration_seconds: null }],
+      },
+    ]);
+
+    vi.mocked(client.get).mockResolvedValue({ data: emptyDayFixture } as any);
+    vi.mocked(addExerciseToDay).mockResolvedValue({
+      id: 300,
+      plan_day_id: 100,
+      exercise_id: 1,
+      order_number: 1,
+      target_sets: 3,
+      target_reps: '10',
+      target_weight: 135,
+      target_duration_seconds: null,
+      has_reps: true,
+      has_weight: true,
+      has_duration: false,
+      set_targets: [],
+      notes: '',
+    } as any);
+    vi.mocked(updateExerciseInDay).mockResolvedValue({
+      id: 300,
+      plan_day_id: 100,
+      exercise_id: 1,
+      order_number: 1,
+      target_sets: 3,
+      target_reps: '10',
+      target_weight: 135,
+      target_duration_seconds: null,
+      has_reps: true,
+      has_weight: true,
+      has_duration: false,
+      set_targets: [],
+      notes: 'go slow',
+    } as any);
+    vi.mocked(replaceSetTargets).mockResolvedValue(undefined as any);
+
+    render(
+      <BrowserRouter>
+        <PlanBuilder isCreateMode={false} planId={5} />
+      </BrowserRouter>
+    );
+
+    const pasteButton = await screen.findByRole('button', { name: 'Paste 1 here' });
+    await user.click(pasteButton);
+
+    await waitFor(() => expect(vi.mocked(updateExerciseInDay)).toHaveBeenCalledWith(5, 100, 300, { notes: 'go slow' }));
+    expect(vi.mocked(replaceSetTargets)).toHaveBeenCalledWith(5, 100, 300, [
+      { set_number: 1, target_reps: '8', target_weight: 140, target_duration_seconds: null },
+    ]);
+
+    // Regression check: even with the backend's name-less response, the pasted
+    // exercise still shows its real name, not "Exercise 1".
+    expect(await screen.findByText('Bench Press')).toBeInTheDocument();
+    expect(screen.queryByText('Exercise 1')).not.toBeInTheDocument();
+  });
+
+  it('clipboard persists across a full remount (e.g. navigating to a different plan)', async () => {
+    const user = userEvent.setup();
+    vi.mocked(client.get).mockResolvedValue({ data: twoExerciseFixture } as any);
+
+    const { unmount } = render(
+      <BrowserRouter>
+        <PlanBuilder isCreateMode={false} planId={5} />
+      </BrowserRouter>
+    );
+
+    await screen.findByText('Bench Press');
+    await user.click(screen.getByRole('button', { name: 'Select' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Select Bench Press' }));
+    await user.click(screen.getByRole('button', { name: 'Copy' }));
+    await waitFor(() => expect(getClipboard()).toHaveLength(1));
+
+    unmount();
+
+    // Simulate navigating to a different plan: fresh mount, different planId.
+    vi.mocked(client.get).mockResolvedValue({ data: emptyDayFixture } as any);
+    render(
+      <BrowserRouter>
+        <PlanBuilder isCreateMode={false} planId={7} />
+      </BrowserRouter>
+    );
+
+    // The "Paste 1 here" button appearing proves the clipboard survived the remount.
+    expect(await screen.findByRole('button', { name: 'Paste 1 here' })).toBeInTheDocument();
   });
 });

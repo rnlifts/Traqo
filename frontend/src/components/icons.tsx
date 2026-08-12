@@ -148,3 +148,10 @@ export const NoteIcon: React.FC<IconProps> = ({ size = 16, className, style }) =
     <path d="M8 13h8M8 17h5" />
   </svg>
 );
+
+export const CopyIcon: React.FC<IconProps> = ({ size = 15, className, style }) => (
+  <svg {...base(size)} className={className} style={style}>
+    <rect x="9" y="9" width="12" height="12" rx="2" />
+    <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
+  </svg>
+);

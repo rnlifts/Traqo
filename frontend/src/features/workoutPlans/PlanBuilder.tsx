@@ -21,12 +21,13 @@ import { exercisesApi } from '../../api/exercisesApi';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { useToast } from '../../components/Toast';
 import { DurationInput } from '../../components/DurationInput';
-import { TrashIcon, InfoIcon, ChevronDownIcon, NoteIcon } from '../../components/icons';
+import { TrashIcon, InfoIcon, ChevronDownIcon, NoteIcon, CopyIcon } from '../../components/icons';
 import { ExerciseLibrarySidebar, type SelectedExerciseInfo } from '../exerciseLibrary/ExerciseLibrarySidebar';
 import { ExercisePreviewPanel } from '../../components/ExercisePreviewPanel';
 import { Modal } from '../../components/Modal';
 import { getYoutubeThumbnailUrl } from '../../utils/youtube';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { getClipboard, setClipboard, clearClipboard, type ClipboardExercise } from '../../utils/exerciseClipboard';
 
 interface PlanDraft {
   name: string;
@@ -146,6 +147,15 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
 
   // Set list UI state - which set is expanded per exercise (pure UI state, not derived from backend)
   const [expandedExerciseIds, setExpandedExerciseIds] = useState<Set<number>>(new Set());
+
+  // Copy/paste exercises: select mode + the current localStorage clipboard contents.
+  // The clipboard itself lives outside React state (see utils/exerciseClipboard) so it
+  // survives navigating to a different plan; clipboardExercises just mirrors it locally
+  // so the "Paste N" button re-renders after a copy/paste/clear.
+  const [isSelectMode, setIsSelectMode] = useState(false);
+  const [selectedExerciseIds, setSelectedExerciseIds] = useState<Set<number>>(new Set());
+  const [clipboardExercises, setClipboardExercises] = useState<ClipboardExercise[]>(() => getClipboard());
+  const [pasting, setPasting] = useState(false);
 
   // Auto-save debounce refs
   const autoSaveTimeoutsRef = useRef<Map<number, NodeJS.Timeout>>(new Map());
@@ -594,6 +604,10 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
       // Fire API call in background
       addExerciseToDay(planId, currentDay.id, exerciseId, sets, reps, weight, durationSeconds, hasReps, hasWeight, hasDuration)
         .then((created) => {
+          // POST /days/{day_id}/exercises intentionally returns a lean response with no
+          // exercise_name/video_url — carry over the values we already know locally
+          // instead of letting them regress to the "Exercise {id}" fallback.
+          const reconciled: WorkoutExercise = { ...created, exercise_name: name, video_url: exerciseInfo.video_url || null };
           // Reconcile temp ID with real ID
           if (draftUnitType === 'days') {
             setDraftDays((prev) =>
@@ -602,7 +616,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                   ? {
                       ...d,
                       exercises: d.exercises.map((ex) =>
-                        ex.id === tempId ? created : ex
+                        ex.id === tempId ? reconciled : ex
                       ),
                     }
                   : d
@@ -619,7 +633,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                         ? {
                             ...d,
                             exercises: d.exercises.map((ex) =>
-                              ex.id === tempId ? created : ex
+                              ex.id === tempId ? reconciled : ex
                             ),
                           }
                         : d
@@ -696,6 +710,181 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
       setError((err as Error).message);
     } finally {
       pendingAddsRef.current.delete(key);
+    }
+  }
+
+  // ---- Copy / paste exercises ----
+
+  function toggleSelectMode() {
+    setIsSelectMode((prev) => {
+      if (prev) setSelectedExerciseIds(new Set());
+      return !prev;
+    });
+  }
+
+  function toggleExerciseSelected(exerciseId: number) {
+    setSelectedExerciseIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(exerciseId)) {
+        next.delete(exerciseId);
+      } else {
+        next.add(exerciseId);
+      }
+      return next;
+    });
+  }
+
+  // Full-fidelity serialization: everything needed to recreate this exercise
+  // elsewhere — exercise identity + video, sets/reps/weight/duration, which
+  // fields are tracked, notes, and any per-set custom targets. Deliberately
+  // excludes id/plan_day_id/order_number, which only mean something in the
+  // exercise's current location.
+  function toClipboardExercise(ex: WorkoutExercise): ClipboardExercise {
+    return {
+      exercise_id: ex.exercise_id,
+      exercise_name: ex.exercise_name || t.planBuilder.exerciseFallback(ex.exercise_id),
+      video_url: ex.video_url || null,
+      target_sets: ex.target_sets,
+      target_reps: ex.target_reps,
+      target_weight: ex.target_weight,
+      target_duration_seconds: ex.target_duration_seconds,
+      has_reps: ex.has_reps,
+      has_weight: ex.has_weight,
+      has_duration: ex.has_duration,
+      notes: ex.notes || '',
+      set_targets: ex.set_targets.map((st) => ({
+        set_number: st.set_number,
+        target_reps: st.target_reps,
+        target_weight: st.target_weight,
+        target_duration_seconds: st.target_duration_seconds,
+      })),
+    };
+  }
+
+  function handleCopySingle(ex: WorkoutExercise) {
+    const toCopy = [toClipboardExercise(ex)];
+    setClipboard(toCopy);
+    setClipboardExercises(toCopy);
+    showToast(t.planBuilder.exercisesCopiedToast(1), 'success');
+  }
+
+  function handleCopySelected() {
+    const days = getActiveDays();
+    const currentDay = days[activeDayIndex];
+    if (!currentDay) return;
+
+    const toCopy = currentDay.exercises
+      .filter((ex) => selectedExerciseIds.has(ex.id))
+      .map(toClipboardExercise);
+
+    if (toCopy.length === 0) return;
+
+    setClipboard(toCopy);
+    setClipboardExercises(toCopy);
+    setIsSelectMode(false);
+    setSelectedExerciseIds(new Set());
+    showToast(t.planBuilder.exercisesCopiedToast(toCopy.length), 'success');
+  }
+
+  function handleClearClipboard() {
+    clearClipboard();
+    setClipboardExercises([]);
+  }
+
+  async function handlePasteClipboard() {
+    const days = getActiveDays();
+    const currentDay = days[activeDayIndex];
+    if (!currentDay || clipboardExercises.length === 0 || pasting) return;
+
+    setPasting(true);
+    try {
+      if (props.isCreateMode) {
+        // Draft mode: no backend plan yet, just append full exercise objects locally.
+        let nextTempId = -(Date.now());
+        const pasted: WorkoutExercise[] = clipboardExercises.map((item) => ({
+          id: nextTempId--,
+          plan_day_id: currentDay.id,
+          exercise_id: item.exercise_id,
+          order_number: 0, // recomputed on save; display order follows array order
+          target_sets: item.target_sets,
+          target_reps: item.target_reps,
+          target_weight: item.target_weight,
+          target_duration_seconds: item.target_duration_seconds,
+          has_reps: item.has_reps,
+          has_weight: item.has_weight,
+          has_duration: item.has_duration,
+          set_targets: item.set_targets,
+          notes: item.notes,
+          exercise_name: item.exercise_name,
+          video_url: item.video_url,
+        }));
+
+        if (draftUnitType === 'days') {
+          setDraftDays((prev) =>
+            prev.map((d) => (d.id === currentDay.id ? { ...d, exercises: [...d.exercises, ...pasted] } : d))
+          );
+        } else {
+          setDraftWeeks((prev) =>
+            prev.map((week, wIdx) =>
+              wIdx === activeWeekIndex
+                ? { ...week, days: week.days.map((d) => (d.id === currentDay.id ? { ...d, exercises: [...d.exercises, ...pasted] } : d)) }
+                : week
+            )
+          );
+        }
+      } else if (planId) {
+        // Edit mode: create each exercise on the backend sequentially (so order_number
+        // stays predictable), then follow up with notes / custom set-targets if the
+        // copied exercise had any.
+        for (const item of clipboardExercises) {
+          const created = await addExerciseToDay(
+            planId,
+            currentDay.id,
+            item.exercise_id,
+            item.target_sets ?? undefined,
+            item.target_reps ?? undefined,
+            item.target_weight ?? undefined,
+            item.target_duration_seconds ?? undefined,
+            item.has_reps,
+            item.has_weight,
+            item.has_duration
+          );
+
+          // addExerciseToDay (and updateExerciseInDay) intentionally return a lean
+          // response with no exercise_name/video_url — carry over the values from
+          // the clipboard item instead of letting them regress to the "Exercise {id}"
+          // fallback.
+          let finalExercise: WorkoutExercise = { ...created, exercise_name: item.exercise_name, video_url: item.video_url };
+          if (item.notes) {
+            const updated = await updateExerciseInDay(planId, currentDay.id, created.id, { notes: item.notes });
+            finalExercise = { ...finalExercise, ...updated, exercise_name: item.exercise_name, video_url: item.video_url };
+          }
+          if (item.set_targets.length > 0) {
+            await replaceSetTargets(planId, currentDay.id, created.id, item.set_targets);
+            finalExercise = { ...finalExercise, set_targets: item.set_targets };
+          }
+
+          if (draftUnitType === 'days') {
+            setDraftDays((prev) =>
+              prev.map((d) => (d.id === currentDay.id ? { ...d, exercises: [...d.exercises, finalExercise] } : d))
+            );
+          } else {
+            setDraftWeeks((prev) =>
+              prev.map((week, wIdx) =>
+                wIdx === activeWeekIndex
+                  ? { ...week, days: week.days.map((d) => (d.id === currentDay.id ? { ...d, exercises: [...d.exercises, finalExercise] } : d)) }
+                  : week
+              )
+            );
+          }
+        }
+      }
+
+      showToast(t.planBuilder.exercisesPastedToast(clipboardExercises.length), 'success');
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setPasting(false);
     }
   }
 
@@ -1786,7 +1975,79 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
           {currentDay && !currentDay.is_rest && (
             <>
               <div style={{ marginBottom: '12px' }}>
-                <div className="exercise-section-label">{t.planBuilder.exercisesLabel}</div>
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: '8px',
+                    marginBottom: '8px',
+                  }}
+                >
+                  <div className="exercise-section-label" style={{ marginBottom: 0 }}>{t.planBuilder.exercisesLabel}</div>
+
+                  {currentDay.exercises.length > 0 && !isLinkedWeek && (
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                      {isSelectMode ? (
+                        <>
+                          <button
+                            onClick={handleCopySelected}
+                            disabled={selectedExerciseIds.size === 0}
+                            className="btn btn-primary"
+                            style={{ fontSize: '12px', padding: '6px 12px' }}
+                          >
+                            {t.planBuilder.copyButton}
+                          </button>
+                          <button onClick={toggleSelectMode} className="btn btn-secondary" style={{ fontSize: '12px', padding: '6px 12px' }}>
+                            {t.planBuilder.cancel}
+                          </button>
+                        </>
+                      ) : (
+                        <button onClick={toggleSelectMode} className="btn btn-secondary" style={{ fontSize: '12px', padding: '6px 12px' }}>
+                          {t.planBuilder.selectExercises}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {!isSelectMode && clipboardExercises.length > 0 && !isLinkedWeek && (
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '8px 12px',
+                      marginBottom: '12px',
+                      borderRadius: '8px',
+                      backgroundColor: 'var(--bg-hover)',
+                      fontSize: '13px',
+                    }}
+                  >
+                    <span>{t.planBuilder.clipboardStatus(clipboardExercises.length)}</span>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        onClick={handlePasteClipboard}
+                        disabled={pasting}
+                        className="btn btn-primary"
+                        style={{ fontSize: '12px', padding: '6px 12px' }}
+                      >
+                        {pasting ? t.planBuilder.pasting : t.planBuilder.pasteHere(clipboardExercises.length)}
+                      </button>
+                      <button
+                        onClick={handleClearClipboard}
+                        className="btn btn-secondary"
+                        style={{ fontSize: '12px', padding: '6px 12px' }}
+                        aria-label={t.planBuilder.clearClipboard}
+                        title={t.planBuilder.clearClipboard}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {currentDay.exercises.map((ex, idx) => {
                   const sets = getSetsList(ex);
@@ -1816,6 +2077,10 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                       {/* Header: thumbnail, name, collapsed summary, remove, expand toggle */}
                       <div
                         onClick={() => {
+                          if (isSelectMode) {
+                            toggleExerciseSelected(ex.id);
+                            return;
+                          }
                           handlePreviewExercise({
                             name: ex.exercise_name || t.planBuilder.exerciseFallback(ex.exercise_id),
                             video_url: ex.video_url || null,
@@ -1839,6 +2104,16 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                           pointerEvents: isLinkedWeek ? 'none' : 'auto',
                         }}
                       >
+                        {isSelectMode && (
+                          <input
+                            type="checkbox"
+                            checked={selectedExerciseIds.has(ex.id)}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={() => toggleExerciseSelected(ex.id)}
+                            aria-label={t.planBuilder.selectExerciseAriaLabel(ex.exercise_name || t.planBuilder.exerciseFallback(ex.exercise_id))}
+                            style={{ width: '18px', height: '18px', cursor: 'pointer', flexShrink: 0 }}
+                          />
+                        )}
                         <div style={{ position: 'relative', flexShrink: 0 }}>
                           {getYoutubeThumbnailUrl(ex.video_url) ? (
                             <img
@@ -1904,52 +2179,71 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                           )}
                         </div>
 
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDeleteConfirm({ isOpen: true, type: 'exercise', dayId: currentDay.id, exerciseId: ex.id });
-                          }}
-                          className="row-delete-btn"
-                          disabled={isLinkedWeek}
-                          title={t.planBuilder.removeExercise}
-                          aria-label={t.planBuilder.removeExercise}
-                        >
-                          <TrashIcon size={15} />
-                        </button>
+                        {!isSelectMode && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCopySingle(ex);
+                            }}
+                            className="row-delete-btn"
+                            disabled={isLinkedWeek}
+                            title={t.planBuilder.copyButton}
+                            aria-label={t.planBuilder.copyExerciseAriaLabel(ex.exercise_name || t.planBuilder.exerciseFallback(ex.exercise_id))}
+                          >
+                            <CopyIcon size={15} />
+                          </button>
+                        )}
 
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setExpandedExerciseIds((prev) => {
-                              const next = new Set(prev);
-                              if (next.has(ex.id)) {
-                                next.delete(ex.id);
-                              } else {
-                                next.add(ex.id);
-                              }
-                              return next;
-                            });
-                          }}
-                          disabled={isLinkedWeek}
-                          aria-label={isExpanded ? t.planBuilder.collapseExercise(ex.exercise_name || t.workoutPreview.exerciseFallback) : t.planBuilder.expandExercise(ex.exercise_name || t.workoutPreview.exerciseFallback)}
-                          style={{
-                            background: 'transparent',
-                            border: 'none',
-                            cursor: 'pointer',
-                            color: 'var(--text-h)',
-                            padding: '4px',
-                            display: 'flex',
-                            flexShrink: 0,
-                            transition: 'transform 0.15s',
-                            transform: isExpanded ? 'rotate(180deg)' : 'none',
-                          }}
-                        >
-                          <ChevronDownIcon size={18} />
-                        </button>
+                        {!isSelectMode && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteConfirm({ isOpen: true, type: 'exercise', dayId: currentDay.id, exerciseId: ex.id });
+                            }}
+                            className="row-delete-btn"
+                            disabled={isLinkedWeek}
+                            title={t.planBuilder.removeExercise}
+                            aria-label={t.planBuilder.removeExercise}
+                          >
+                            <TrashIcon size={15} />
+                          </button>
+                        )}
+
+                        {!isSelectMode && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setExpandedExerciseIds((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(ex.id)) {
+                                  next.delete(ex.id);
+                                } else {
+                                  next.add(ex.id);
+                                }
+                                return next;
+                              });
+                            }}
+                            disabled={isLinkedWeek}
+                            aria-label={isExpanded ? t.planBuilder.collapseExercise(ex.exercise_name || t.workoutPreview.exerciseFallback) : t.planBuilder.expandExercise(ex.exercise_name || t.workoutPreview.exerciseFallback)}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              cursor: 'pointer',
+                              color: 'var(--text-h)',
+                              padding: '4px',
+                              display: 'flex',
+                              flexShrink: 0,
+                              transition: 'transform 0.15s',
+                              transform: isExpanded ? 'rotate(180deg)' : 'none',
+                            }}
+                          >
+                            <ChevronDownIcon size={18} />
+                          </button>
+                        )}
                       </div>
 
                       {/* Expanded body */}
-                      {isExpanded && (
+                      {isExpanded && !isSelectMode && (
                         <div style={{ borderTop: '1px solid var(--border)', padding: '12px' }}>
                           {/* Exercise-level field toggles */}
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
