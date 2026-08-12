@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   listWorkoutPlans,
   deleteWorkoutPlan,
+  duplicateWorkoutPlan,
 } from "../../api/workoutPlansApi";
 import type { WorkoutPlan } from "../../api/workoutPlansApi";
 import { sharingApi } from "../../api/sharingApi";
@@ -10,6 +11,7 @@ import type { SharedWithMeEntry } from "../../api/sharingApi";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { useToast } from "../../components/Toast";
 import { PlanActionCards } from "../../components/PlanActionCards";
+import { CopyIcon } from "../../components/icons";
 import { ShareDialog } from "../../features/sharing/ShareDialog";
 import { useLanguage } from "../../contexts/LanguageContext";
 import type { TranslationKeys } from "../../i18n/en";
@@ -31,6 +33,7 @@ export default function PlanList() {
   const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
   const [sharedWithMe, setSharedWithMe] = useState<SharedWithMeEntry[]>([]);
   const [sharedWithMeLoading, setSharedWithMeLoading] = useState(true);
+  const [duplicatingPlanId, setDuplicatingPlanId] = useState<number | null>(null);
   const navigate = useNavigate();
   const { Toast, showToast } = useToast();
   const { t } = useLanguage();
@@ -90,6 +93,24 @@ export default function PlanList() {
     }
   }
 
+  async function handleDuplicatePlan(plan: WorkoutPlan) {
+    if (duplicatingPlanId !== null) return;
+    setDuplicatingPlanId(plan.id);
+    try {
+      const newName = t.planList.duplicateName(plan.name);
+      await duplicateWorkoutPlan(plan.id, newName);
+      setError("");
+      showToast(t.planList.duplicateSuccess(newName), "success");
+      await loadPlans();
+    } catch (err: any) {
+      const errorMsg =
+        err.response?.data?.error || (err as Error).message || t.planList.duplicateFailed;
+      setError(errorMsg);
+    } finally {
+      setDuplicatingPlanId(null);
+    }
+  }
+
   return (
     <div className="page-container">
       <p className="kicker">{t.planList.kicker}</p>
@@ -125,6 +146,15 @@ export default function PlanList() {
         <div className="plan-grid">
           {plans.map((plan) => (
             <div key={plan.id} className="plan-card">
+              <button
+                className="duplicate-icon"
+                onClick={() => handleDuplicatePlan(plan)}
+                disabled={duplicatingPlanId === plan.id}
+                aria-label={t.planList.duplicatePlan}
+                title={t.planList.duplicatePlan}
+              >
+                <CopyIcon size={15} />
+              </button>
               <button
                 className="delete-x"
                 onClick={() => handleDeletePlan(plan.id)}

@@ -6818,4 +6818,183 @@ per-session Volume line; weight/reps exercises are unchanged.
 auth-assertion failures as before); frontend `tsc -b` clean, `vitest run`
 301/301 passed.
 
+Committed and pushed as `abc4641`; deploy confirmed SUCCESS.
+
+## 2026-08-11 (cont'd) — Copy/paste exercises in Plan Builder
+
+New feature (not a bug fix): select one or more exercises in a plan day, copy
+them, and paste into any other day or plan.
+
+**Design (agreed with owner via a few clarifying questions):** copy/paste
+lives in Plan Builder only (not Active Workout); selection is an explicit
+"Select" mode toggle with checkboxes rather than long-press/right-click;
+pasted exercises always append to the end of the target day.
+
+**Mechanism:** a client-side "clipboard" backed by `localStorage`
+(`frontend/src/utils/exerciseClipboard.ts` — `getClipboard`/`setClipboard`/
+`clearClipboard`, a plain util module rather than a React Context since
+nothing needs to subscribe to it reactively), not the OS clipboard. This
+matters because navigating to a different plan fully unmounts `PlanBuilder`;
+component state wouldn't survive that, but `localStorage` does. Paste doesn't
+clear the clipboard automatically — a small "×" next to the "Paste N here"
+button clears it explicitly — so one copy can be pasted into several days/
+plans in a row (e.g. build one day, then stamp it onto every other day).
+
+**`PlanBuilder.tsx` changes:**
+- "Select" toggle above the exercise list turns each row into a checkbox
+  (`isSelectMode` + `selectedExerciseIds`); while active, the row's normal
+  click-to-preview behavior is replaced by toggling selection, and the
+  delete/expand buttons are hidden to avoid accidental interaction.
+- "Copy N" button serializes the selected `WorkoutExercise`s into
+  `ClipboardExercise`s (dropping `id`/`plan_day_id`/`order_number`, which are
+  destination-specific) and writes them to the clipboard.
+- Whenever the clipboard is non-empty, a status row ("N exercises copied" +
+  "Paste N here" + clear) appears above the exercise list of whichever day is
+  currently active — including a freshly-created empty day, so "copy from Day
+  1, add Day 2, paste" works in one flow.
+- Paste, in **edit mode**: sequentially (not `Promise.all`, to keep
+  `order_number` predictable) calls the existing `addExerciseToDay` per
+  copied exercise, then a follow-up `updateExerciseInDay` if the source had
+  notes and/or `replaceSetTargets` if it had custom per-set overrides — no
+  new backend endpoints needed, this just re-sequences existing calls.
+- Paste, in **create mode** (building a brand-new plan, no backend plan yet):
+  appends full draft `WorkoutExercise` objects with temporary negative IDs
+  directly to local state, mirroring the existing single-exercise-add draft
+  path — no API calls until the whole plan is saved.
+
+**New tests:**
+- `frontend/src/utils/exerciseClipboard.test.ts` — round-trip, clear, and
+  malformed/non-array localStorage-content fallbacks.
+- `PlanBuilder.test.tsx` (new `describe('PlanBuilder Copy/Paste Exercises')`):
+  select + copy stores the right data and exits select mode; paste calls
+  `addExerciseToDay` for each item in order with the right args; an item with
+  notes/set_targets triggers the follow-up `updateExerciseInDay`/
+  `replaceSetTargets` calls; the clipboard survives a full component
+  unmount/remount (simulating navigating to a different plan).
+
+**Verified:** `tsc -b` clean; full suite 312/312 passed (17/17 in
+`PlanBuilder.test.tsx` including the 4 new cases, 5/5 in the new clipboard
+util test). Live in browser against the real local backend: selected 2
+exercises in Day 1 of a real plan, copied, added Day 2, pasted — both
+exercises appeared immediately; reloaded the page and re-navigated back into
+the plan from scratch, and both were still there under Day 2 (confirms real
+backend persistence, not just optimistic local state); the clipboard
+indicator was still showing "2 exercises copied" throughout, confirming
+paste doesn't consume it.
+
+Not committed or pushed yet.
+
+## 2026-08-11 (cont'd) — Copy/paste UX iteration + fixed pasted/added exercises briefly showing as "Exercise {id}"
+
+Two follow-ups on the copy/paste feature above, both from live owner feedback
+on the same session's build (not yet pushed, so no separate incident):
+
+**UX iteration:** owner found the original "Select → check boxes → Copy N"
+flow presented two overlapping ideas (a proposed "Copy All that isn't
+actually copy-all" pre-checked mode) that would have been confusing.
+Simplified to two clear, non-overlapping affordances:
+- A small copy icon on every exercise row (`CopyIcon`, added to
+  `components/icons.tsx`) — one click copies just that exercise, no mode
+  switch. New `handleCopySingle`/shared `toClipboardExercise` serializer in
+  `PlanBuilder.tsx`.
+- "Select" mode unchanged (still opt-in, still nothing pre-checked), but its
+  action button is now a static **"Copy"** label instead of "Copy N" — the
+  owner didn't want the count in the button text.
+
+**Bug found via the above:** after pasting (or, it turns out, after a normal
+single quick-add too), the exercise displayed as "Exercise {id}" instead of
+its real name until the page was reloaded. Root cause: `POST /workout-plans/
+{id}/days/{day}/exercises` and `PUT .../exercises/{id}` both intentionally
+return a lean `WorkoutExerciseResponse` with no `exercise_name`/`video_url`
+field (`backend/src/modules/workouts/presentation/schemas.py` — only
+`WorkoutExerciseDetailedResponse`, used by full-plan-detail GETs, carries
+those). `PlanBuilder.tsx`'s optimistic-update reconciliation
+(`ex.id === tempId ? created : ex`) blindly replaced the correctly-named
+temp/draft exercise with this name-less response — a pre-existing gap in the
+normal add-exercise flow that copy/paste inherited by reusing the same
+pattern, and made obvious because paste shows several rows regressing to
+"Exercise N" at once.
+
+**Fix:** both the single-add reconciliation (line ~605) and the paste
+reconciliation now merge in `exercise_name`/`video_url` from what's already
+known locally (the picked exercise's `name`/`exerciseInfo.video_url`, or the
+clipboard item's fields) instead of trusting the lean server response for
+those two fields.
+
+**Tests:** updated the paste tests' `addExerciseToDay`/`updateExerciseInDay`
+mocks to omit `exercise_name`/`video_url` (matching the real backend) so they
+actually exercise this path instead of accidentally passing either way; added
+a new regression test for the normal single quick-add flow with the same lean
+mock. `tsc -b` clean, full suite 314/314 passed. Live-verified against the
+real local backend: pasting "Dip" into a fresh Day 3 now shows "Dip"
+immediately, not "Exercise 28".
+
+Not committed or pushed yet.
+
+## 2026-08-12 — Duplicate plan button on the Saved Plans list
+
+New feature: a small copy icon next to each plan card's × delete button on
+`/workout-plans` that duplicates the plan into a brand-new, fully independent
+copy.
+
+**Logic (discussed with owner before building):** fetch the source plan's
+full detail (`GET /workout-plans/{id}`, already returns every day/week and
+every exercise with its full targets/notes/set_targets), reshape it into the
+same nested payload the existing bulk-create endpoint
+(`POST /workout-plans/build`) accepts, and POST it under a new name
+(`"{name} (Copy)"`) — this atomically creates an entirely new plan with a new
+ID, not a reference to the original. No new backend endpoint needed, same
+reuse-what-exists approach as the copy/paste-exercises feature. Owner chose:
+auto-name as "(Copy)" rather than prompting, and stay on the list rather than
+jumping into editing the new copy.
+
+**Implementation:**
+- `frontend/src/api/workoutPlansApi.ts`: added `BuildPlanPayload`/
+  `BuildPlanDayPayload`/`BuildPlanWeekPayload`/`BuildPlanExercisePayload`
+  types (the existing `buildPlan()` had a stale, narrower inline type —
+  missing `notes`/`set_targets`/`has_*`/duration and even mistyping
+  `target_reps` as `number` instead of `string` — widened it to match what
+  the backend's `BuildPlanRequest` schema actually accepts; the only existing
+  caller, `PlanBuilder.tsx`'s create-flow, already sent the full field set
+  via an untyped `any` payload, so this was a type-only fix, not a behavior
+  change there). Added `toBuildPlanPayload(source, name?)` (pure, exported,
+  unit-tested) and `workoutPlansApi.duplicate(planId, newName)` /
+  `duplicateWorkoutPlan(planId, newName)`.
+- `frontend/src/features/workoutPlans/PlanList.tsx`: new copy-icon button
+  (`CopyIcon`, reused from the exercise-copy work) positioned to the left of
+  the existing × delete button; `handleDuplicatePlan` calls
+  `duplicateWorkoutPlan`, toasts, and reloads the list.
+- `frontend/src/App.css`: `.plan-card .duplicate-icon` positioned
+  `top: 10px; right: 34px` (next to `.delete-x` at `right: 10px`); bumped
+  `.plan-card .name`'s `padding-right` from 20px to 44px so the title doesn't
+  run under both icons.
+
+**Bug caught during live verification (not from the mocked tests):** the real
+"Quick Workout" plan on this local backend is a Quick-Start plan, created
+without ever going through the normal create-plan flow — its `total_units`
+is `null` in the DB. `toBuildPlanPayload` originally defaulted a missing
+`total_units` to `0`, which the backend's `BuildPlanRequest` schema rejects
+(`total_units` must be `> 0`), producing a real "Validation error: Input
+should be greater than 0" toast when duplicating it. Fixed by deriving
+`total_units` from the actual day/week count being duplicated when the
+source value is missing, instead of defaulting to 0.
+
+**New tests:** `frontend/src/api/workoutPlansApi.test.ts` (new file) —
+`toBuildPlanPayload`: full-fidelity days-type transform (notes, set_targets,
+duration, flags all carried over), name defaults to the source plan's own
+name when no override given, weeks-type structure preserved (linked weeks
+keep no `days` key), and the Quick-Start/null-`total_units` derivation case
+that the live bug above exposed; `workoutPlansApi.duplicate`: fetches then
+POSTs the transformed payload to `/workout-plans/build` (adapter-mocked
+`client`, same technique as `sharingApi.test.ts`). `PlanList.test.tsx`: new
+duplicate button renders per card and calls `duplicateWorkoutPlan` with the
+right id/name and reloads the list; error banner shows on failure.
+
+**Verified:** `tsc -b` clean, full suite 321/321 passed. Live end-to-end
+against the real local backend: duplicated the real "Quick Workout - Aug 11"
+Quick-Start plan (the one that originally hit the total_units bug above),
+confirmed "Quick Workout - Aug 11 (Copy)" appeared as a new plan with its own
+id, `unit_type: "days"`, `total_units: 3` correctly derived, and all 3 days'
+exercises (Dip, Front Squat) faithfully copied.
+
 Not committed or pushed yet.

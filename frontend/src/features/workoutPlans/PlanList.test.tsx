@@ -140,6 +140,52 @@ describe('PlanList', () => {
     });
   });
 
+  it('renders a Duplicate button on each plan card and duplicates the clicked one', async () => {
+    vi.mocked(workoutPlansApi.listWorkoutPlans).mockResolvedValue(mockPlans);
+    vi.mocked(workoutPlansApi.duplicateWorkoutPlan).mockResolvedValue({} as any);
+
+    render(
+      <BrowserRouter>
+        <PlanList />
+      </BrowserRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByText('Loading workout plans...')).not.toBeInTheDocument();
+    });
+
+    const duplicateButtons = screen.getAllByRole('button', { name: 'Duplicate plan' });
+    expect(duplicateButtons).toHaveLength(2);
+
+    fireEvent.click(duplicateButtons[0]); // "Workout A"
+
+    await waitFor(() =>
+      expect(vi.mocked(workoutPlansApi.duplicateWorkoutPlan)).toHaveBeenCalledWith(1, 'Workout A (Copy)')
+    );
+    // Refetches the list so the new plan appears
+    await waitFor(() => expect(vi.mocked(workoutPlansApi.listWorkoutPlans)).toHaveBeenCalledTimes(2));
+  });
+
+  it('shows an error banner if duplicating a plan fails', async () => {
+    vi.mocked(workoutPlansApi.listWorkoutPlans).mockResolvedValue(mockPlans);
+    vi.mocked(workoutPlansApi.duplicateWorkoutPlan).mockRejectedValue(new Error('network error'));
+
+    render(
+      <BrowserRouter>
+        <PlanList />
+      </BrowserRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByText('Loading workout plans...')).not.toBeInTheDocument();
+    });
+
+    const duplicateButtons = screen.getAllByRole('button', { name: 'Duplicate plan' });
+    fireEvent.click(duplicateButtons[0]);
+
+    expect(await screen.findByText('network error')).toBeInTheDocument();
+  });
+
   it('renders a "Shared with me" section header', async () => {
     vi.mocked(workoutPlansApi.listWorkoutPlans).mockResolvedValue([]);
 

@@ -53,6 +53,40 @@ export interface WorkoutPlanDetail {
   weeks?: PlanWeek[] | null;
 }
 
+export interface BuildPlanExercisePayload {
+  exercise_id: number;
+  target_sets?: number | null;
+  target_reps?: string | null;
+  target_weight?: number | null;
+  target_duration_seconds?: number | null;
+  notes?: string;
+  has_reps?: boolean;
+  has_weight?: boolean;
+  has_duration?: boolean;
+  set_targets?: { set_number: number; target_reps: string | null; target_weight: number | null; target_duration_seconds: number | null }[];
+}
+
+export interface BuildPlanDayPayload {
+  label: string;
+  is_rest: boolean;
+  order_position: number;
+  exercises: BuildPlanExercisePayload[];
+}
+
+export interface BuildPlanWeekPayload {
+  week_number: number;
+  mode: 'base' | 'linked' | 'custom';
+  days?: BuildPlanDayPayload[];
+}
+
+export interface BuildPlanPayload {
+  name: string;
+  unit_type: 'days' | 'weeks';
+  total_units: number;
+  days?: BuildPlanDayPayload[];
+  weeks?: BuildPlanWeekPayload[];
+}
+
 export interface PreviousPerformanceSet {
   set_number: number;
   weight: number | null;
@@ -68,6 +102,72 @@ export interface PreviousPerformanceExercise {
 export interface PreviousPerformanceResponse {
   session_date: string | null;
   exercises: PreviousPerformanceExercise[];
+}
+
+function toBuildPlanExercisePayload(ex: WorkoutExercise): BuildPlanExercisePayload {
+  return {
+    exercise_id: ex.exercise_id,
+    target_sets: ex.target_sets,
+    target_reps: ex.target_reps,
+    target_weight: ex.target_weight,
+    target_duration_seconds: ex.target_duration_seconds,
+    has_reps: ex.has_reps,
+    has_weight: ex.has_weight,
+    has_duration: ex.has_duration,
+    notes: ex.notes || '',
+    set_targets: ex.set_targets.map((st) => ({
+      set_number: st.set_number,
+      target_reps: st.target_reps,
+      target_weight: st.target_weight,
+      target_duration_seconds: st.target_duration_seconds,
+    })),
+  };
+}
+
+function toBuildPlanDayPayload(day: PlanDay): BuildPlanDayPayload {
+  return {
+    label: day.label,
+    is_rest: day.is_rest || false,
+    order_position: day.order_position,
+    exercises: day.exercises.map(toBuildPlanExercisePayload),
+  };
+}
+
+/**
+ * Reshapes a fetched plan into the same nested payload the bulk-create
+ * endpoint (`POST /workout-plans/build`) accepts, so an existing plan can be
+ * duplicated into a brand-new, fully independent plan in one call. Linked
+ * weeks are preserved as linked (no days of their own) rather than being
+ * flattened into a copy of whatever they currently resolve to.
+ */
+export function toBuildPlanPayload(source: WorkoutPlanDetail, name?: string): BuildPlanPayload {
+  const unitType = source.plan.unit_type || 'days';
+  // Quick Start plans are created ad-hoc without ever going through the
+  // normal create-plan flow, so they can have a null total_units in the DB —
+  // the backend requires total_units > 0, so derive it from the actual
+  // number of days/weeks being duplicated instead of defaulting to 0.
+  const totalUnits =
+    source.plan.total_units ||
+    (unitType === 'weeks' ? source.weeks?.length : source.days?.length) ||
+    1;
+
+  const payload: BuildPlanPayload = {
+    name: name ?? source.plan.name,
+    unit_type: unitType,
+    total_units: totalUnits,
+  };
+
+  if (payload.unit_type === 'weeks') {
+    payload.weeks = (source.weeks || []).map((week) => ({
+      week_number: week.week_number,
+      mode: week.mode,
+      ...(week.mode !== 'linked' ? { days: week.days.map(toBuildPlanDayPayload) } : {}),
+    }));
+  } else {
+    payload.days = (source.days || []).map(toBuildPlanDayPayload);
+  }
+
+  return payload;
 }
 
 export const workoutPlansApi = {
@@ -182,15 +282,14 @@ export const workoutPlansApi = {
     return response.data;
   },
 
-  async buildPlan(payload: {
-    name: string;
-    unit_type: 'days' | 'weeks';
-    total_units: number;
-    days?: Array<{ label: string; is_rest: boolean; order_position: number; exercises: Array<{ exercise_id: number; target_sets?: number; target_reps?: number; target_weight?: number; notes?: string }> }>;
-    weeks?: Array<{ week_number: number; mode: 'base' | 'linked' | 'custom'; days?: Array<{ label: string; is_rest: boolean; order_position: number; exercises: Array<{ exercise_id: number; target_sets?: number; target_reps?: number; target_weight?: number; notes?: string }> }> }>;
-  }): Promise<WorkoutPlanDetail> {
+  async buildPlan(payload: BuildPlanPayload): Promise<WorkoutPlanDetail> {
     const response = await client.post<WorkoutPlanDetail>("/workout-plans/build", payload);
     return response.data;
+  },
+
+  async duplicate(planId: number, newName: string): Promise<WorkoutPlanDetail> {
+    const source = await this.getDetail(planId);
+    return this.buildPlan(toBuildPlanPayload(source, newName));
   },
 
   async updateExerciseInDay(
@@ -289,6 +388,10 @@ export async function deleteWorkoutPlan(planId: number): Promise<void> {
   return workoutPlansApi.delete(planId);
 }
 
+export async function duplicateWorkoutPlan(planId: number, newName: string): Promise<WorkoutPlanDetail> {
+  return workoutPlansApi.duplicate(planId, newName);
+}
+
 export async function addExerciseToPlan(
   planId: number,
   exerciseId: number,
@@ -379,13 +482,7 @@ export async function getPreviousPerformance(
   return workoutPlansApi.getPreviousPerformance(planId, dayId, excludeSessionId);
 }
 
-export async function buildPlan(payload: {
-  name: string;
-  unit_type: 'days' | 'weeks';
-  total_units: number;
-  days?: Array<{ label: string; is_rest: boolean; order_position: number; exercises: Array<{ exercise_id: number; target_sets?: number; target_reps?: number; target_weight?: number; notes?: string }> }>;
-  weeks?: Array<{ week_number: number; mode: 'base' | 'linked' | 'custom'; days?: Array<{ label: string; is_rest: boolean; order_position: number; exercises: Array<{ exercise_id: number; target_sets?: number; target_reps?: number; target_weight?: number; notes?: string }> }> }>;
-}): Promise<WorkoutPlanDetail> {
+export async function buildPlan(payload: BuildPlanPayload): Promise<WorkoutPlanDetail> {
   return workoutPlansApi.buildPlan(payload);
 }
 

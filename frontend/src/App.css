@@ -538,7 +538,7 @@
   font-weight: 700;
   font-size: 16px;
   letter-spacing: 0.01em;
-  padding-right: 20px;
+  padding-right: 44px;
   cursor: pointer;
 }
 .plan-card .meta {
@@ -564,6 +564,27 @@
 .plan-card .delete-x:hover {
   color: var(--danger);
   background: var(--danger-soft);
+}
+.plan-card .duplicate-icon {
+  position: absolute;
+  top: 10px;
+  right: 34px;
+  background: none;
+  border: none;
+  color: var(--ink-faint);
+  padding: 4px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.plan-card .duplicate-icon:hover:not(:disabled) {
+  color: var(--accent);
+  background: var(--bg-hover);
+}
+.plan-card .duplicate-icon:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 .plan-card .card-actions {
   display: flex;
