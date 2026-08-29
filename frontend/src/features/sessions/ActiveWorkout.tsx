@@ -1,25 +1,28 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import type { WorkoutSet, WorkoutSession } from "../../api/workoutSessionsApi";
-import { workoutSessionsApi } from "../../api/workoutSessionsApi";
-import type { PreviousPerformanceResponse } from "../../api/workoutPlansApi";
-import { updateWorkoutPlan, addExerciseToDay, updateExerciseInDay } from "../../api/workoutPlansApi";
 import { exercisesApi } from "../../api/exercisesApi";
+import type { PreviousPerformanceResponse } from "../../api/workoutPlansApi";
+import { addExerciseToDay, updateExerciseInDay, updateWorkoutPlan } from "../../api/workoutPlansApi";
+import type { WorkoutSession, WorkoutSet } from "../../api/workoutSessionsApi";
+import { workoutSessionsApi } from "../../api/workoutSessionsApi";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
-import { useToast } from "../../components/Toast";
-import { useUnsavedChanges } from "../../contexts/UnsavedChangesContext";
 import { DurationInput } from "../../components/DurationInput";
-import { secondsToHMS } from "../../utils/duration";
-import { getYoutubeThumbnailUrl } from "../../utils/youtube";
 import { ExerciseWorkoutPreview } from "../../components/ExerciseWorkoutPreview";
 import { Modal } from "../../components/Modal";
-import { ExerciseLibrarySidebar, type SelectedExerciseInfo } from "../exerciseLibrary/ExerciseLibrarySidebar";
+import { useToast } from "../../components/Toast";
 import { useLanguage } from "../../contexts/LanguageContext";
+import { useUnsavedChanges } from "../../contexts/UnsavedChangesContext";
+import { secondsToHMS } from "../../utils/duration";
+import { getYoutubeThumbnailUrl } from "../../utils/youtube";
+import { ExerciseLibrarySidebar, type SelectedExerciseInfo } from "../exerciseLibrary/ExerciseLibrarySidebar";
 
 interface Exercise {
   id: number;
   name: string;
   logging_type: string;
+  video_url?: string | null;
+  muscle_group?: string | null;
+  equipment?: string | null;
 }
 
 interface WorkoutExercise {
@@ -547,15 +550,41 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
       let exerciseId: number;
       if (existingExercise) {
         exerciseId = existingExercise.id;
+        // Backfill metadata if the existing exercise (e.g. one created earlier from a
+        // bare typed name) is missing video/muscle group/equipment that this selection
+        // has. Without this, re-picking the real library exercise silently keeps reusing
+        // the metadata-less row and its video never shows up once added to a plan.
+        const missingVideo = !existingExercise.video_url && !!exerciseInfo.video_url;
+        const missingMuscleGroup = !existingExercise.muscle_group && !!exerciseInfo.muscle_group;
+        const missingEquipment = !existingExercise.equipment && !!exerciseInfo.equipment;
+        if (missingVideo || missingMuscleGroup || missingEquipment) {
+          const updated = await exercisesApi.update(existingExercise.id, {
+            name: existingExercise.name,
+            video_url: exerciseInfo.video_url ?? existingExercise.video_url,
+            muscle_group: exerciseInfo.muscle_group ?? existingExercise.muscle_group,
+            equipment: exerciseInfo.equipment ?? existingExercise.equipment,
+          });
+          existingExercise.video_url = updated.video_url;
+          existingExercise.muscle_group = updated.muscle_group;
+          existingExercise.equipment = updated.equipment;
+        }
       } else {
         // This is a library exercise being added to a plan for the first time
         // Mark it as not custom (is_custom: false) so it doesn't pollute the Custom Exercises tab
-        const newExercise = await exercisesApi.create({ name: exerciseInfo.name, is_custom: false });
+        // Pass through video_url, muscle_group, and equipment from the library exercise
+        const newExercise = await exercisesApi.create({
+          name: exerciseInfo.name,
+          video_url: exerciseInfo.video_url,
+          muscle_group: exerciseInfo.muscle_group,
+          equipment: exerciseInfo.equipment,
+          is_custom: false,
+        });
         exerciseId = newExercise.id;
       }
 
       // Add exercise with 1 set (not 3)
       await addExerciseToDay(planId, dayId, exerciseId, 1, undefined, undefined, undefined, true, true, false);
+      setShowExercisePicker(false);
 
       setError(null);
       showToast(t.activeWorkout.exerciseAdded(exerciseInfo.name), 'success');

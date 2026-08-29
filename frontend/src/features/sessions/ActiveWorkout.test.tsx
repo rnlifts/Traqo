@@ -35,6 +35,7 @@ vi.mock('../../api/workoutPlansApi', () => ({
 vi.mock('../../api/exercisesApi', () => ({
   exercisesApi: {
     create: vi.fn(),
+    update: vi.fn(),
   },
 }));
 
@@ -76,6 +77,9 @@ vi.mock('../../features/exerciseLibrary/ExerciseLibrarySidebar', () => ({
       </button>
       <button onClick={() => onPreviewExercise({ name: 'Deadlift', video_url: null, muscle_group: 'Back', equipment: null })}>
         Preview Deadlift
+      </button>
+      <button onClick={() => onSelectExercise({ name: 'Bench Press', video_url: 'https://youtube.com/watch?v=demo', muscle_group: 'Chest', equipment: 'Barbell' })}>
+        Add Bench Press
       </button>
     </div>
   ),
@@ -558,6 +562,58 @@ describe('ActiveWorkout', () => {
       await waitFor(() => {
         expect(screen.getAllByRole('button', { name: /Set \d+, not logged/i })).toHaveLength(1);
       });
+    });
+  });
+
+  describe('Video/metadata backfill on reuse', () => {
+    it('backfills a video-less existing exercise instead of silently reusing it without video', async () => {
+      // Regression test: a "Bench Press" exercise already exists for this user (e.g.
+      // created earlier via a bare typed name) with no video_url/muscle_group/equipment.
+      // Re-adding the real "Bench Press" library entry (which has a video) must update
+      // that existing exercise, not just reuse its id and drop the video on the floor.
+      const user = userEvent.setup();
+      const { exercisesApi } = await import('../../api/exercisesApi');
+      const { addExerciseToDay } = await import('../../api/workoutPlansApi');
+      (addExerciseToDay as any).mockResolvedValue({});
+      (exercisesApi.update as any).mockResolvedValue({
+        id: 7,
+        name: 'Bench Press',
+        logging_type: 'standard',
+        video_url: 'https://youtube.com/watch?v=demo',
+        muscle_group: 'Chest',
+        equipment: 'Barbell',
+      });
+
+      mockViewport(false);
+      render(
+        <BrowserRouter>
+          <ActiveWorkout
+            session={mockSession}
+            planExercises={mockPlanExercises}
+            availableExercises={[
+              { id: 7, name: 'Bench Press', logging_type: 'standard', video_url: null, muscle_group: null, equipment: null },
+            ]}
+            onFinish={mockOnFinish}
+            planName="Full Body"
+            dayLabel="Monday"
+            planId={1}
+            dayId={1}
+            isQuickStart={true}
+          />
+        </BrowserRouter>
+      );
+
+      const addButton = await screen.findByRole('button', { name: 'Add Bench Press' });
+      await user.click(addButton);
+
+      await waitFor(() =>
+        expect(exercisesApi.update).toHaveBeenCalledWith(
+          7,
+          expect.objectContaining({ video_url: 'https://youtube.com/watch?v=demo' })
+        )
+      );
+      // The stale exercise is reused (never re-created) — only patched.
+      expect(exercisesApi.create).not.toHaveBeenCalled();
     });
   });
 });

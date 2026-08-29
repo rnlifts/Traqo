@@ -39,6 +39,9 @@ interface Exercise {
   id: number;
   name: string;
   logging_type: string;
+  video_url?: string | null;
+  muscle_group?: string | null;
+  equipment?: string | null;
 }
 
 interface EditPlanBuilderProps {
@@ -486,6 +489,24 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
     let exerciseId: number;
     if (existingExercise) {
       exerciseId = existingExercise.id;
+      // Backfill metadata if the existing exercise (e.g. one created earlier from a
+      // bare typed name) is missing video/muscle group/equipment that this selection
+      // has. Without this, re-picking the real library exercise silently keeps reusing
+      // the metadata-less row and its video never shows up once added to a plan.
+      const missingVideo = !existingExercise.video_url && !!exerciseInfo.video_url;
+      const missingMuscleGroup = !existingExercise.muscle_group && !!exerciseInfo.muscle_group;
+      const missingEquipment = !existingExercise.equipment && !!exerciseInfo.equipment;
+      if (missingVideo || missingMuscleGroup || missingEquipment) {
+        const updated = await exercisesApi.update(existingExercise.id, {
+          name: existingExercise.name,
+          video_url: exerciseInfo.video_url ?? existingExercise.video_url,
+          muscle_group: exerciseInfo.muscle_group ?? existingExercise.muscle_group,
+          equipment: exerciseInfo.equipment ?? existingExercise.equipment,
+        });
+        setAvailableExercises(
+          availableExercises.map((ex) => (ex.id === existingExercise.id ? updated : ex))
+        );
+      }
     } else {
       // This is a library exercise being added to a plan for the first time
       // Mark it as not custom (is_custom: false) so it doesn't pollute the Custom Exercises tab

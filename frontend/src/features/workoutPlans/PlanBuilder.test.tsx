@@ -35,6 +35,7 @@ vi.mock('../../api/exercisesApi', () => ({
     list: vi.fn(),
     listCustomOnly: vi.fn(),
     create: vi.fn(),
+    update: vi.fn(),
     get: vi.fn(),
   },
 }));
@@ -508,6 +509,59 @@ describe('PlanBuilder Preview Panel', () => {
     const dayRowName = await screen.findByText('Bench Press');
     await user.click(dayRowName);
 
+    const previewPanel = screen.getByTestId('preview-panel');
+    expect(previewPanel).toHaveTextContent('Preview: Bench Press (has video)');
+  });
+
+  it('backfills a video-less existing exercise instead of silently reusing it without video', async () => {
+    // Regression test: a "Bench Press" exercise already exists for this user (e.g.
+    // created earlier via a bare typed name) with no video_url/muscle_group/equipment.
+    // Selecting the real "Bench Press" library entry (which has a video) must update
+    // that existing exercise, not just reuse its id and drop the video on the floor.
+    const mocked = vi.mocked(exercisesApiModule.exercisesApi);
+    mocked.list.mockResolvedValue([
+      {
+        id: 42,
+        name: 'Bench Press',
+        video_url: null,
+        muscle_group: null,
+        equipment: null,
+        is_custom: false,
+        logging_type: 'weights',
+      },
+    ]);
+    mocked.update.mockResolvedValue({
+      id: 42,
+      name: 'Bench Press',
+      video_url: 'https://youtube.com/watch?v=test1',
+      muscle_group: null,
+      equipment: null,
+      is_custom: false,
+      logging_type: 'weights',
+    });
+
+    const user = userEvent.setup();
+    render(
+      <BrowserRouter>
+        <PlanBuilder isCreateMode={true} draft={{ name: 'Test Plan', unitType: 'days', totalUnits: 1 }} />
+      </BrowserRouter>
+    );
+
+    const addButton = await screen.findByTestId('library-exercise-add');
+    await user.click(addButton);
+
+    await waitFor(() =>
+      expect(mocked.update).toHaveBeenCalledWith(
+        42,
+        expect.objectContaining({ video_url: 'https://youtube.com/watch?v=test1' })
+      )
+    );
+    // The stale exercise is reused (never re-created) — only patched.
+    expect(mocked.create).not.toHaveBeenCalled();
+
+    // Previewing the now-added day-row confirms the backfilled video actually took.
+    const dayRowName = await screen.findByText('Bench Press');
+    await user.click(dayRowName);
     const previewPanel = screen.getByTestId('preview-panel');
     expect(previewPanel).toHaveTextContent('Preview: Bench Press (has video)');
   });
