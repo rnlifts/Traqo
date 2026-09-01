@@ -150,10 +150,18 @@ export default function PlanList() {
                 className="duplicate-icon"
                 onClick={() => handleDuplicatePlan(plan)}
                 disabled={duplicatingPlanId === plan.id}
-                aria-label={t.planList.duplicatePlan}
-                title={t.planList.duplicatePlan}
+                aria-label={
+                  duplicatingPlanId === plan.id
+                    ? t.planList.duplicating
+                    : t.planList.duplicatePlan
+                }
+                title={
+                  duplicatingPlanId === plan.id
+                    ? t.planList.duplicating
+                    : t.planList.duplicatePlan
+                }
               >
-                <CopyIcon size={15} />
+                <CopyIcon size={15} className={duplicatingPlanId === plan.id ? "spinning" : undefined} />
               </button>
               <button
                 className="delete-x"

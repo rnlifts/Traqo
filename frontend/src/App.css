@@ -586,6 +586,17 @@
   opacity: 0.5;
   cursor: default;
 }
+.plan-card .duplicate-icon .spinning {
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
 .plan-card .card-actions {
   display: flex;
   gap: 8px;

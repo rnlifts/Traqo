@@ -166,6 +166,46 @@ describe('PlanList', () => {
     await waitFor(() => expect(vi.mocked(workoutPlansApi.listWorkoutPlans)).toHaveBeenCalledTimes(2));
   });
 
+  it('shows a spinning, disabled duplicate icon while the request is in flight, then clears it', async () => {
+    // Task follow-up: the duplicate call is 3-4 sequential network round trips
+    // (get plan detail -> build new plan -> refetch list). On production's real
+    // network latency this took long enough with zero visual feedback that it
+    // looked broken/unresponsive, even though it always succeeded. This test
+    // locks in the loading indicator so that regression can't silently return.
+    vi.mocked(workoutPlansApi.listWorkoutPlans).mockResolvedValue(mockPlans);
+    let resolveDuplicate!: (value: any) => void;
+    vi.mocked(workoutPlansApi.duplicateWorkoutPlan).mockReturnValue(
+      new Promise((resolve) => {
+        resolveDuplicate = resolve;
+      }) as any
+    );
+
+    render(
+      <BrowserRouter>
+        <PlanList />
+      </BrowserRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByText('Loading workout plans...')).not.toBeInTheDocument();
+    });
+
+    const duplicateButtons = screen.getAllByRole('button', { name: 'Duplicate plan' });
+    fireEvent.click(duplicateButtons[0]);
+
+    // While in flight: button disabled, label swaps, icon carries the spin class
+    const inFlightButton = await screen.findByRole('button', { name: 'Duplicating...' });
+    expect(inFlightButton).toBeDisabled();
+    expect(inFlightButton.querySelector('.spinning')).not.toBeNull();
+
+    resolveDuplicate({} as any);
+
+    // Once resolved: back to the idle label, no longer disabled or spinning
+    const idleButton = await screen.findByRole('button', { name: 'Duplicate plan' });
+    expect(idleButton).not.toBeDisabled();
+    expect(idleButton.querySelector('.spinning')).toBeNull();
+  });
+
   it('shows an error banner if duplicating a plan fails', async () => {
     vi.mocked(workoutPlansApi.listWorkoutPlans).mockResolvedValue(mockPlans);
     vi.mocked(workoutPlansApi.duplicateWorkoutPlan).mockRejectedValue(new Error('network error'));
