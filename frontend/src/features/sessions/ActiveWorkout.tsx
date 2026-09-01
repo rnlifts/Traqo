@@ -753,8 +753,9 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
         <div
           style={{
             display: "flex",
+            flexDirection: isMobile ? "column" : "row",
             justifyContent: "space-between",
-            alignItems: "center",
+            alignItems: isMobile ? "stretch" : "center",
             backgroundColor: "var(--danger-soft)",
             border: "1px solid var(--danger)",
             borderRadius: "8px",
@@ -766,25 +767,25 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
           <span style={{ color: "var(--danger)", fontSize: "14px", flex: 1, fontWeight: "500" }}>
             {t.activeWorkout.exitBannerMessage}
           </span>
-          <div style={{ display: "flex", gap: "8px" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
             <button
               onClick={() => setShowExitConfirm(false)}
               className="btn btn-secondary"
-              style={{ padding: "8px 12px", fontSize: "13px" }}
+              style={{ padding: "8px 12px", fontSize: "13px", flex: isMobile ? 1 : undefined }}
             >
               {t.activeWorkout.keepGoing}
             </button>
             <button
               onClick={handleSaveAndExit}
               className="btn btn-primary"
-              style={{ padding: "8px 12px", fontSize: "13px" }}
+              style={{ padding: "8px 12px", fontSize: "13px", flex: isMobile ? 1 : undefined }}
             >
               {t.activeWorkout.saveAndExit}
             </button>
             <button
               onClick={() => setDiscardConfirm(true)}
               className="btn btn-danger"
-              style={{ padding: "8px 12px", fontSize: "13px" }}
+              style={{ padding: "8px 12px", fontSize: "13px", flex: isMobile ? 1 : undefined }}
             >
               {t.hero.discard}
             </button>
