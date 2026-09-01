@@ -44,3 +44,18 @@ services:
 
 volumes:
   postgres_data:
+
+networks:
+  # Pin the MTU to match the VPS host's real interface (confirmed via
+  # `ip link show`: eth0 is capped at 1380, likely due to the provider's
+  # underlying overlay/tunnel network). Docker's default bridge network
+  # otherwise assumes the standard 1500 MTU, which silently black-holes any
+  # packet that needs more than ~1 packet's worth of payload to cross the
+  # real 1380 path — request bodies over roughly 1.2KB would hang until
+  # nginx's client_body_timeout, never reaching the backend. Confirmed via a
+  # request-size binary search: ~1064 bytes succeeded instantly, ~1364 bytes
+  # hung for the full timeout, every single time, regardless of client.
+  default:
+    driver: bridge
+    driver_opts:
+      com.docker.network.driver.mtu: 1380
