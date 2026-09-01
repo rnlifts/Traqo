@@ -64,26 +64,26 @@ class ReorderDayExercise:
         if exercise.plan_day_id != day_id:
             raise ValueError(f"Exercise {workout_exercise_id} does not belong to day {day_id}")
 
-        # Step 4: Determine target order_number
-        if direction == "up":
-            target_order = exercise.order_number - 1
-            if target_order < 1:
-                raise ValueError("Cannot move exercise up: already at top")
-        elif direction == "down":
-            target_order = exercise.order_number + 1
-        else:
+        # Step 4: Find the adjacent exercise by position, not by arithmetic on
+        # order_number — order_number is not guaranteed contiguous (e.g. after a
+        # deletion leaves a gap), so "current - 1" may not correspond to any real row.
+        if direction not in ("up", "down"):
             raise ValueError(f"Invalid direction: {direction}")
 
-        # Step 5: Find the exercise currently at the target position within this day
-        exercises_in_day = self.exercise_repository.list_by_day(day_id)
-        neighbor = None
-        for e in exercises_in_day:
-            if e.order_number == target_order:
-                neighbor = e
-                break
+        exercises_in_day = sorted(
+            self.exercise_repository.list_by_day(day_id), key=lambda e: e.order_number
+        )
+        index = next((i for i, e in enumerate(exercises_in_day) if e.id == workout_exercise_id), None)
+        if index is None:
+            raise ValueError(f"Exercise {workout_exercise_id} not found in day {day_id}")
 
-        if not neighbor:
-            raise ValueError(f"No exercise at position {target_order} in this day")
+        neighbor_index = index - 1 if direction == "up" else index + 1
+        if neighbor_index < 0:
+            raise ValueError("Cannot move exercise up: already at top")
+        if neighbor_index >= len(exercises_in_day):
+            raise ValueError("Cannot move exercise down: already at bottom")
+
+        neighbor = exercises_in_day[neighbor_index]
 
         # Step 6: Swap order_number values using a temporary sentinel (-999) to avoid UNIQUE constraint violation
         # Step 1: Move the neighbor to the sentinel

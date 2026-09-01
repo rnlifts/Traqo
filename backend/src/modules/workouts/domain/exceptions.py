@@ -86,3 +86,12 @@ class LinkedWeekWithDaysError(WorkoutException):
     """Raised when a linked week includes days (which it shouldn't)."""
 
     pass
+
+
+class ExerciseOrderConflictError(WorkoutException):
+    """Raised when adding/reordering a workout_exercise collides with another
+    exercise's order_number within the same day (UNIQUE(plan_day_id, order_number)).
+    Expected to be rare and transient (e.g. a concurrent add) — the caller should
+    retry."""
+
+    pass

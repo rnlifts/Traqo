@@ -38,6 +38,7 @@ from src.modules.workouts.domain.exceptions import (
     TotalUnitsMismatchError,
     LinkedWeekWithDaysError,
     InvalidPlanStructureError,
+    ExerciseOrderConflictError,
 )
 
 docs_enabled = settings.ENVIRONMENT != "production"
@@ -249,6 +250,14 @@ async def invalid_plan_structure_handler(request, exc):
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={"error": str(exc)},
+    )
+
+
+@app.exception_handler(ExerciseOrderConflictError)
+async def exercise_order_conflict_handler(request, exc):
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={"error": "That exercise slot was just taken — please try again"},
     )
 
 

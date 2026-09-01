@@ -1,6 +1,8 @@
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from src.modules.workouts.domain.entities.workout_exercise import WorkoutExercise
+from src.modules.workouts.domain.exceptions import ExerciseOrderConflictError
 from src.modules.workouts.domain.interfaces.workout_exercise_repository import (
     WorkoutExerciseRepository,
 )
@@ -30,7 +32,15 @@ class WorkoutExerciseRepositoryImpl(WorkoutExerciseRepository):
             target_duration_seconds=exercise.target_duration_seconds,
         )
         self.session.add(model)
-        self.session.commit()
+        try:
+            self.session.commit()
+        except IntegrityError as e:
+            self.session.rollback()
+            if "workout_exercises_plan_day_id_order_number_key" in str(e.orig):
+                raise ExerciseOrderConflictError(
+                    f"order_number {exercise.order_number} already exists in day {exercise.plan_day_id}"
+                ) from e
+            raise
         return model.to_domain()
 
     def list_by_plan(self, plan_id: int) -> list[WorkoutExercise]:

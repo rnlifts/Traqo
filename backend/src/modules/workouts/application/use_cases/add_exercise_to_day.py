@@ -106,9 +106,13 @@ class AddExerciseToDay:
                 f"User {requesting_user_id} does not own exercise {exercise_id}"
             )
 
-        # Step 4: Determine next order_number within this day
+        # Step 4: Determine next order_number within this day.
+        # Derived from the highest existing order_number, not a count — a count
+        # collides with the UNIQUE(plan_day_id, order_number) constraint once a
+        # non-last exercise has been deleted and left a gap (e.g. 1,2,3,4 -> delete
+        # #2 -> 1,3,4; count+1 would recompute 4, which already exists).
         existing_exercises = self.exercise_repository_workout.list_by_day(day_id)
-        next_order = len(existing_exercises) + 1
+        next_order = max((we.order_number for we in existing_exercises), default=0) + 1
 
         # Step 5: Add to day
         workout_exercise = WorkoutExercise(
