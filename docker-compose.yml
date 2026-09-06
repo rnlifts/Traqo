@@ -41,9 +41,20 @@ services:
       - backend
     ports:
       - "80:80"
+      - "443:443"
+    volumes:
+      # Shared with the one-off certbot container: certbot writes challenge
+      # files here for domain-ownership verification, nginx serves them.
+      - certbot_webroot:/var/www/certbot
+      # Where certbot writes the actual certificate files; nginx reads them
+      # read-only. Populated by a one-off `certbot` container run manually
+      # on the host, not by anything in this compose file.
+      - certbot_certs:/etc/letsencrypt:ro
 
 volumes:
   postgres_data:
+  certbot_webroot:
+  certbot_certs:
 
 networks:
   # Pin the MTU to match the VPS host's real interface (confirmed via
