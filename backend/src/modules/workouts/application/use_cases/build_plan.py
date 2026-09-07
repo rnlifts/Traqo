@@ -37,11 +37,13 @@ class BuildPlanDaySpec:
         is_rest: bool,
         order_position: int,
         exercises: list[dict] | None = None,
+        custom_name: str | None = None,
     ):
         self.label = label
         self.is_rest = is_rest
         self.order_position = order_position
         self.exercises = exercises or []
+        self.custom_name = custom_name
 
 
 class BuildPlanWeekSpec:
@@ -168,6 +170,7 @@ class BuildPlan:
                 label=day_spec.label,
                 order_position=day_spec.order_position,
                 is_rest=day_spec.is_rest,
+                custom_name=day_spec.custom_name,
             )
             self.db.add(day_model)
             self.db.flush()  # Get the day id
@@ -284,6 +287,7 @@ class BuildPlan:
                         order_position=day_spec.order_position,
                         is_rest=day_spec.is_rest,
                         plan_week_id=week_model.id,
+                        custom_name=day_spec.custom_name,
                     )
                     self.db.add(day_model)
                     self.db.flush()  # Get the day id

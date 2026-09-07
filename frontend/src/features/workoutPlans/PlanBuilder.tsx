@@ -314,6 +314,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
           label: day.label,
           is_rest: day.is_rest || false,
           order_position: day.order_position,
+          custom_name: day.custom_name || null,
           exercises: day.exercises.map((ex) => ({
             exercise_id: ex.exercise_id,
             target_sets: ex.target_sets,
@@ -338,6 +339,7 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
               label: day.label,
               is_rest: day.is_rest || false,
               order_position: day.order_position,
+              custom_name: day.custom_name || null,
               exercises: day.exercises.map((ex) => ({
                 exercise_id: ex.exercise_id,
                 target_sets: ex.target_sets,
@@ -468,13 +470,10 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
     }
   }
 
-  // Edit-mode only (matches handleUpdatePlanName's own !props.isCreateMode
-  // gating) -- the create-plan payload doesn't include custom_name, so
-  // allowing this before the plan is saved would silently lose the value.
   async function handleUpdateDayCustomName() {
     const days = getActiveDays();
     const currentDay = days[activeDayIndex];
-    if (!currentDay || !planId) return;
+    if (!currentDay) return;
 
     const trimmed = dayCustomNameInput.trim();
     const previousCustomName = currentDay.custom_name;
@@ -500,6 +499,11 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
       );
     }
     setIsEditingDayCustomName(false);
+
+    // Create mode: the plan doesn't exist yet, so there's nothing to PATCH --
+    // the value just lives in draft state until the create-plan payload
+    // (which now includes custom_name) saves it along with everything else.
+    if (props.isCreateMode || !planId) return;
 
     updateDay(planId, currentDay.id, { custom_name: trimmed }).catch((err) => {
       // On failure: revert to previous state
@@ -2032,9 +2036,10 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
           </div>
 
           {/* Day nickname (e.g. "Chest Day") -- shown alongside the "Day N"
-              tab above, not replacing it. Only editable once the plan
-              already exists, same as the plan-name rename button. */}
-          {currentDay && !props.isCreateMode && (
+              tab above, not replacing it. Available in create mode too: the
+              value lives in draft state and is included in the create-plan
+              payload on save. */}
+          {currentDay && (
             <div style={{ marginBottom: '16px' }}>
               {isEditingDayCustomName ? (
                 <div style={{ display: 'flex', gap: '8px' }}>

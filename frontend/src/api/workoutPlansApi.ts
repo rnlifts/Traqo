@@ -74,6 +74,9 @@ export interface BuildPlanDayPayload {
   is_rest: boolean;
   order_position: number;
   exercises: BuildPlanExercisePayload[];
+  // Optional nickname (e.g. "Chest Day") shown alongside `label`, not a
+  // replacement for it.
+  custom_name?: string | null;
 }
 
 export interface BuildPlanWeekPayload {
@@ -133,6 +136,7 @@ function toBuildPlanDayPayload(day: PlanDay): BuildPlanDayPayload {
     is_rest: day.is_rest || false,
     order_position: day.order_position,
     exercises: day.exercises.map(toBuildPlanExercisePayload),
+    custom_name: day.custom_name || null,
   };
 }
 
