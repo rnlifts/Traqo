@@ -633,6 +633,8 @@ export const ne = {
     youCanPrefix: ' — तपाईं ',
     editPlan: 'योजना सम्पादन गर्नुहोस्',
     weekModeSuffix: (mode: string) => ` (${mode})`,
+    watchDemo: 'डेमो हेर्नुहोस्',
+    watchDemoAriaLabel: (exerciseName: string) => `${exerciseName} को डेमो हेर्नुहोस्`,
   },
   profilePage: {
     profileUpdated: 'प्रोफाइल अपडेट भयो!',

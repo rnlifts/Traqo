@@ -6,6 +6,7 @@ import { ShareWorkoutStarter } from '../features/sharing/ShareWorkoutStarter';
 import { ExercisePreviewPanel } from '../components/ExercisePreviewPanel';
 import { ExerciseWorkoutPreview } from '../components/ExerciseWorkoutPreview';
 import { Modal } from '../components/Modal';
+import { PlayIcon } from '../components/icons';
 import { getYoutubeThumbnailUrl } from '../utils/youtube';
 import { useLanguage } from '../contexts/LanguageContext';
 import type { TranslationKeys } from '../i18n/en';
@@ -134,6 +135,36 @@ function ExerciseRow({
           <div style={{ fontSize: '12px', color: 'var(--text)', fontStyle: 'italic', marginTop: '2px' }}>
             {exercise.notes}
           </div>
+        )}
+        {exercise.video_url && (
+          <button
+            onClick={(e) => {
+              // Same action as the row's own click — this button exists purely
+              // to make that clickability visible, not to do anything different.
+              // Stop propagation so it doesn't also fire the row's onClick and
+              // trigger a redundant second (harmless but pointless) state update.
+              e.stopPropagation();
+              handleClick();
+            }}
+            aria-label={t.sharedPlanPage.watchDemoAriaLabel(exercise.exercise_name)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              marginTop: '8px',
+              padding: '6px 12px',
+              backgroundColor: 'var(--accent)',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '20px',
+              fontSize: '12px',
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            <PlayIcon size={11} />
+            {t.sharedPlanPage.watchDemo}
+          </button>
         )}
       </div>
     </div>

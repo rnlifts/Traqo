@@ -621,6 +621,8 @@ export const en = {
     youCanPrefix: ' — you can ',
     editPlan: 'Edit plan',
     weekModeSuffix: (mode: string) => ` (${mode})`,
+    watchDemo: 'Watch Demo',
+    watchDemoAriaLabel: (exerciseName: string) => `Watch demo for ${exerciseName}`,
   },
   profilePage: {
     profileUpdated: 'Profile updated!',

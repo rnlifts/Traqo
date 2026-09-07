@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { SharedPlanPage } from './SharedPlanPage';
 import { en } from '../i18n/en';
@@ -38,6 +38,9 @@ const mockDaysPlan = {
           target_weight: 225,
           target_duration_seconds: null,
           notes: 'Focus on form',
+          video_url: 'https://www.youtube.com/watch?v=abc123',
+          muscle_group: 'chest',
+          equipment: 'barbell',
         },
         {
           exercise_id: 2,
@@ -48,6 +51,9 @@ const mockDaysPlan = {
           target_weight: 70,
           target_duration_seconds: null,
           notes: null,
+          video_url: null,
+          muscle_group: null,
+          equipment: null,
         },
       ],
     },
@@ -140,6 +146,66 @@ describe('SharedPlanPage', () => {
     expect(screen.getByText('Bench Press')).toBeInTheDocument();
     expect(screen.getByText('Incline Dumbbell Press')).toBeInTheDocument();
     expect(screen.getByText(/Rest Day/)).toBeInTheDocument();
+  });
+
+  describe('Watch Demo button (Task 95)', () => {
+    it('renders a "Watch Demo" button for an exercise that has a video', async () => {
+      vi.mocked(sharingApi.sharingApi.getSharedPlan).mockResolvedValue(mockDaysPlan as any);
+
+      render(
+        <MemoryRouter initialEntries={['/shared/test-token']}>
+          <Routes>
+            <Route path="/shared/:token" element={<SharedPlanPage />} />
+          </Routes>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => expect(screen.getByText('Bench Press')).toBeInTheDocument());
+
+      expect(screen.getByRole('button', { name: 'Watch demo for Bench Press' })).toBeInTheDocument();
+    });
+
+    it('does not render a "Watch Demo" button for an exercise with no video', async () => {
+      vi.mocked(sharingApi.sharingApi.getSharedPlan).mockResolvedValue(mockDaysPlan as any);
+
+      render(
+        <MemoryRouter initialEntries={['/shared/test-token']}>
+          <Routes>
+            <Route path="/shared/:token" element={<SharedPlanPage />} />
+          </Routes>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => expect(screen.getByText('Incline Dumbbell Press')).toBeInTheDocument());
+
+      expect(
+        screen.queryByRole('button', { name: 'Watch demo for Incline Dumbbell Press' })
+      ).not.toBeInTheDocument();
+    });
+
+    it('clicking the button opens the same preview the row itself opens', async () => {
+      vi.mocked(sharingApi.sharingApi.getSharedPlan).mockResolvedValue(mockDaysPlan as any);
+
+      render(
+        <MemoryRouter initialEntries={['/shared/test-token']}>
+          <Routes>
+            <Route path="/shared/:token" element={<SharedPlanPage />} />
+          </Routes>
+        </MemoryRouter>
+      );
+
+      const watchDemoButton = await screen.findByRole('button', { name: 'Watch demo for Bench Press' });
+
+      // Before clicking: the preview panel is empty, so "Bench Press" appears
+      // only once (the row itself).
+      expect(screen.getAllByText('Bench Press')).toHaveLength(1);
+
+      fireEvent.click(watchDemoButton);
+
+      // After clicking: the preview panel now also shows the selected
+      // exercise's name, same as clicking the row itself would.
+      await waitFor(() => expect(screen.getAllByText('Bench Press')).toHaveLength(2));
+    });
   });
 
   it('renders plan content for a weeks-type plan', async () => {
