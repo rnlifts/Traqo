@@ -12,6 +12,7 @@ class PlanDay:
         id: int | None = None,
         is_rest: bool = False,
         plan_week_id: int | None = None,
+        custom_name: str | None = None,
         created_at: datetime | None = None,
         updated_at: datetime | None = None,
     ):
@@ -21,5 +22,6 @@ class PlanDay:
         self.order_position = order_position
         self.is_rest = is_rest
         self.plan_week_id = plan_week_id
+        self.custom_name = custom_name
         self.created_at = created_at or datetime.utcnow()
         self.updated_at = updated_at or datetime.utcnow()

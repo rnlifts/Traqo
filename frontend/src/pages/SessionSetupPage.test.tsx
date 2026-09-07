@@ -157,6 +157,34 @@ describe('SessionSetupPage (Task 84 prefetch)', () => {
     expect(screen.queryByText(/10 reps/)).not.toBeInTheDocument();
   });
 
+  it('shows the day nickname alongside the "Day 1" header when set', async () => {
+    const { workoutPlansApi } = await import('../api/workoutPlansApi');
+    const { exercisesApi } = await import('../api/exercisesApi');
+    const planWithNickname = {
+      ...singleDayPlan,
+      days: [{ ...singleDayPlan.days[0], custom_name: 'Chest Day' }],
+    };
+    (workoutPlansApi.getDetail as any).mockResolvedValue(planWithNickname);
+    (exercisesApi.list as any).mockResolvedValue(exercisesFixture);
+
+    renderPage();
+
+    await screen.findByText('Day 1');
+    expect(screen.getByText('Chest Day')).toBeInTheDocument();
+  });
+
+  it('does not show a nickname line when custom_name is not set', async () => {
+    const { workoutPlansApi } = await import('../api/workoutPlansApi');
+    const { exercisesApi } = await import('../api/exercisesApi');
+    (workoutPlansApi.getDetail as any).mockResolvedValue(singleDayPlan);
+    (exercisesApi.list as any).mockResolvedValue(exercisesFixture);
+
+    renderPage();
+
+    await screen.findByText('Day 1');
+    expect(screen.queryByText('Chest Day')).not.toBeInTheDocument();
+  });
+
   it('does not show a "Workout Preview" for a quick-start day with no exercises yet', async () => {
     const { workoutPlansApi } = await import('../api/workoutPlansApi');
     const { exercisesApi } = await import('../api/exercisesApi');

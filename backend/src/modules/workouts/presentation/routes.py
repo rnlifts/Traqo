@@ -158,6 +158,7 @@ def build_plan_detail_response(
             label=day.label,
             order_position=day.order_position,
             is_rest=day.is_rest,
+            custom_name=day.custom_name,
             exercises=exercise_responses,
             created_at=day.created_at,
             updated_at=day.updated_at,
@@ -487,6 +488,7 @@ async def build_plan(
             label=day.label,
             order_position=day.order_position,
             is_rest=day.is_rest,
+            custom_name=day.custom_name,
             exercises=exercise_responses,
             created_at=day.created_at,
             updated_at=day.updated_at,
@@ -634,6 +636,7 @@ async def create_day(
         label=day.label,
         order_position=day.order_position,
         is_rest=day.is_rest,
+        custom_name=day.custom_name,
         created_at=day.created_at,
         updated_at=day.updated_at,
     )
@@ -679,13 +682,16 @@ async def update_day(
     can_edit = _caller_can_edit_plan(plan, user_id, db)
 
     use_case = UpdateDay(plan_repo, day_repo)
-    day_data = use_case.execute(plan_id, day_id, user_id, req.label, req.is_rest, skip_ownership_check=can_edit)
+    day_data = use_case.execute(
+        plan_id, day_id, user_id, req.label, req.is_rest, req.custom_name, skip_ownership_check=can_edit
+    )
 
     return PlanDayResponse(
         id=day_data["id"],
         label=day_data["label"],
         order_position=day_data["order_position"],
         is_rest=day_data.get("is_rest", False),
+        custom_name=day_data.get("custom_name"),
         created_at=day_data["created_at"],
         updated_at=day_data["updated_at"],
     )

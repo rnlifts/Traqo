@@ -365,6 +365,12 @@ export const SharedPlanPage: React.FC = () => {
                 </div>
               )}
 
+              {currentDay?.custom_name && (
+                <p style={{ margin: '0 0 12px 0', fontSize: '14px', color: 'var(--text)', fontStyle: 'italic' }}>
+                  {currentDay.custom_name}
+                </p>
+              )}
+
               {currentDay ? (
                 currentDay.is_rest ? (
                   <div className="card" style={{ textAlign: 'center' }}>

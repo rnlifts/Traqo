@@ -156,6 +156,33 @@ describe('ShareWorkoutStarter', () => {
     expect(screen.getByText('Rest Day')).toBeInTheDocument();
   });
 
+  it('shows the day nickname alongside the plain "Chest Day" label when set', () => {
+    const withNickname = {
+      ...mockDaysData,
+      days: mockDaysData.days.map((d, i) => (i === 0 ? { ...d, custom_name: 'Push Day' } : d)),
+    };
+    render(
+      <MemoryRouter>
+        <ShareWorkoutStarter data={withNickname} token="test-token" />
+      </MemoryRouter>
+    );
+
+    // The day chip itself is unchanged (still the plain label).
+    expect(screen.getByText('Chest Day')).toBeInTheDocument();
+    // The nickname renders separately.
+    expect(screen.getByText('Push Day')).toBeInTheDocument();
+  });
+
+  it('does not render a nickname line when custom_name is not set', () => {
+    render(
+      <MemoryRouter>
+        <ShareWorkoutStarter data={mockDaysData} token="test-token" />
+      </MemoryRouter>
+    );
+
+    expect(screen.queryByText('Push Day')).not.toBeInTheDocument();
+  });
+
   it('renders a week picker for a weeks-type plan', () => {
     render(
       <MemoryRouter>

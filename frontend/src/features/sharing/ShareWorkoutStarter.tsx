@@ -174,6 +174,12 @@ export const ShareWorkoutStarter: React.FC<Props> = ({ data, token }) => {
         </div>
       )}
 
+      {selectedDay?.custom_name && (
+        <p style={{ margin: '0 0 12px 0', fontSize: '14px', color: 'var(--text)', fontStyle: 'italic' }}>
+          {selectedDay.custom_name}
+        </p>
+      )}
+
       {/* Preview of the currently selected day - replaces showing the whole plan
           twice (the full read-only listing is only shown for view-only visitors). */}
       {selectedDay && !selectedDay.is_rest && (

@@ -105,6 +105,9 @@ class UpdateDayRequest(BaseModel):
 
     label: str | None = Field(None, min_length=1, max_length=255)
     is_rest: bool | None = None
+    # Optional nickname shown alongside `label` (e.g. "Chest Day"), not a
+    # replacement for it. None means leave unchanged; "" clears it to unset.
+    custom_name: str | None = Field(None, max_length=255)
 
 
 class PlanDayResponse(BaseModel):
@@ -114,6 +117,7 @@ class PlanDayResponse(BaseModel):
     label: str
     order_position: int
     is_rest: bool = False
+    custom_name: str | None = None
     created_at: UTCDatetime
     updated_at: UTCDatetime
 
@@ -147,6 +151,7 @@ class PlanDayDetailResponse(BaseModel):
     label: str
     order_position: int
     is_rest: bool = False
+    custom_name: str | None = None
     exercises: list[WorkoutExerciseDetailedResponse]
     created_at: UTCDatetime
     updated_at: UTCDatetime

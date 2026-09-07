@@ -289,6 +289,9 @@ export const en = {
     save: 'Save',
     cancel: 'Cancel',
     rename: 'Rename',
+    addDayNickname: '+ Add nickname',
+    editDayNickname: 'Edit nickname',
+    dayNicknamePlaceholder: 'e.g. Chest Day',
     weeksLabel: 'Weeks',
     weekNodeAriaLabel: (n: number, mode: string, active: boolean) =>
       `Week ${n}, ${mode}${active ? ', active' : ''}`,

@@ -19,6 +19,7 @@ class PlanDayRepositoryImpl(PlanDayRepository):
             order_position=plan_day.order_position,
             is_rest=plan_day.is_rest,
             plan_week_id=plan_day.plan_week_id,
+            custom_name=plan_day.custom_name,
         )
         self.db.add(model)
         self.db.commit()
@@ -48,6 +49,7 @@ class PlanDayRepositoryImpl(PlanDayRepository):
             model.order_position = plan_day.order_position
             model.is_rest = plan_day.is_rest
             model.plan_week_id = plan_day.plan_week_id
+            model.custom_name = plan_day.custom_name
             model.updated_at = datetime.utcnow()  # Explicitly set to ensure the field is updated
             self.db.commit()
             return model.to_domain()
