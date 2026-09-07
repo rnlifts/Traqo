@@ -57,6 +57,7 @@ describe('toBuildPlanPayload', () => {
           label: 'Day 1',
           is_rest: false,
           order_position: 1,
+          custom_name: null,
           exercises: [
             {
               exercise_id: 1,
@@ -74,6 +75,29 @@ describe('toBuildPlanPayload', () => {
         },
       ],
     });
+  });
+
+  it('carries over a day\'s custom_name (nickname) when duplicating a plan', () => {
+    const source: WorkoutPlanDetail = {
+      plan: {
+        id: 5,
+        user_id: 1,
+        name: 'Push Pull Legs',
+        unit_type: 'days',
+        total_units: 1,
+        is_quick_start: false,
+        created_at: '2026-08-01T00:00:00Z',
+        updated_at: '2026-08-01T00:00:00Z',
+      },
+      days: [
+        { id: 100, label: 'Day 1', order_position: 1, is_rest: false, custom_name: 'Chest Day', exercises: [] },
+      ],
+      weeks: null,
+    };
+
+    const payload = toBuildPlanPayload(source);
+
+    expect(payload.days![0].custom_name).toBe('Chest Day');
   });
 
   it('defaults to the source plan name when no override is given', () => {
@@ -163,9 +187,9 @@ describe('toBuildPlanPayload', () => {
     const payload = toBuildPlanPayload(source);
 
     expect(payload.weeks).toEqual([
-      { week_number: 1, mode: 'base', days: [{ label: 'Mon', is_rest: false, order_position: 1, exercises: [] }] },
+      { week_number: 1, mode: 'base', days: [{ label: 'Mon', is_rest: false, order_position: 1, custom_name: null, exercises: [] }] },
       { week_number: 2, mode: 'linked' }, // no `days` key at all
-      { week_number: 3, mode: 'custom', days: [{ label: 'Mon (heavy)', is_rest: false, order_position: 1, exercises: [] }] },
+      { week_number: 3, mode: 'custom', days: [{ label: 'Mon (heavy)', is_rest: false, order_position: 1, custom_name: null, exercises: [] }] },
     ]);
     expect(payload.weeks![1]).not.toHaveProperty('days');
   });

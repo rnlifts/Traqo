@@ -442,6 +442,24 @@ describe('PlanBuilder Preview Panel', () => {
     expect(previewPanel).toHaveTextContent('No exercise selected');
   });
 
+  it('allows setting a day nickname in create mode without calling updateDay (plan does not exist yet)', async () => {
+    const user = userEvent.setup();
+    render(
+      <BrowserRouter>
+        <PlanBuilder isCreateMode={true} draft={{ name: 'Test Plan', unitType: 'days', totalUnits: 1 }} />
+      </BrowserRouter>
+    );
+
+    await user.click(screen.getByRole('button', { name: '+ Add nickname' }));
+    await user.type(screen.getByPlaceholderText('e.g. Chest Day'), 'Chest Day');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    // Shows immediately, purely in draft state.
+    expect(screen.getByText('Chest Day')).toBeInTheDocument();
+    // No plan exists yet in create mode -- nothing to PATCH.
+    expect(vi.mocked(updateDay)).not.toHaveBeenCalled();
+  });
+
   it('updates preview panel when clicking Library exercise row', async () => {
     const user = userEvent.setup();
     render(

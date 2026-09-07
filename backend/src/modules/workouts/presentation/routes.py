@@ -369,6 +369,7 @@ async def build_plan(
                 label=day.label,
                 is_rest=day.is_rest,
                 order_position=day.order_position,
+                custom_name=day.custom_name,
                 exercises=[
                     {
                         "exercise_id": ex.exercise_id,
@@ -403,6 +404,7 @@ async def build_plan(
                             label=day.label,
                             is_rest=day.is_rest,
                             order_position=day.order_position,
+                            custom_name=day.custom_name,
                             exercises=[
                                 {
                                     "exercise_id": ex.exercise_id,

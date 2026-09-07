@@ -229,6 +229,9 @@ class BuildPlanDayRequest(BaseModel):
     is_rest: bool = False
     order_position: int = Field(..., gt=0)
     exercises: list[BuildPlanExerciseRequest] = []
+    # Optional nickname (e.g. "Chest Day") shown alongside `label`, not a
+    # replacement for it.
+    custom_name: str | None = Field(None, max_length=255)
 
 
 class BuildPlanWeekRequest(BaseModel):
