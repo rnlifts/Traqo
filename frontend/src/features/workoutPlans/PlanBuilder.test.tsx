@@ -28,6 +28,8 @@ vi.mock('../../api/workoutPlansApi', () => ({
   workoutPlansApi: {
     getWorkoutPlan: vi.fn(),
   },
+  PLAN_NAME_MAX_LENGTH: 60,
+  PLAN_NAME_MAX_WORDS: 8,
 }));
 
 vi.mock('../../api/exercisesApi', () => ({
@@ -246,6 +248,41 @@ describe('PlanBuilder Task 81: True Optimistic Updates', () => {
     expect(vi.mocked(updateDay)).toHaveBeenCalledWith(5, 100, { custom_name: 'Chest Day' });
     // Editing again shows "Edit nickname" now that one is set, not "+ Add nickname".
     expect(screen.getByRole('button', { name: 'Edit nickname' })).toBeInTheDocument();
+  });
+
+  it('blocks typing a 9th word into the plan rename input (max 8 words)', async () => {
+    const user = userEvent.setup();
+    vi.mocked(client.get).mockResolvedValue({ data: oneExerciseFixture } as any);
+
+    render(
+      <BrowserRouter>
+        <PlanBuilder isCreateMode={false} planId={5} />
+      </BrowserRouter>
+    );
+
+    await screen.findByText('Bench Press');
+    await user.click(screen.getByRole('button', { name: 'Rename' }));
+    const input = screen.getByDisplayValue(oneExerciseFixture.plan.name);
+    await user.clear(input);
+    await user.type(input, 'one two three four five six seven eight nine');
+
+    expect(input).toHaveValue('one two three four five six seven eight ');
+  });
+
+  it('caps the plan rename input at 60 characters', async () => {
+    const user = userEvent.setup();
+    vi.mocked(client.get).mockResolvedValue({ data: oneExerciseFixture } as any);
+
+    render(
+      <BrowserRouter>
+        <PlanBuilder isCreateMode={false} planId={5} />
+      </BrowserRouter>
+    );
+
+    await screen.findByText('Bench Press');
+    await user.click(screen.getByRole('button', { name: 'Rename' }));
+
+    expect(screen.getByDisplayValue(oneExerciseFixture.plan.name)).toHaveAttribute('maxLength', '60');
   });
 
   it('blocks typing a 5th word into the day nickname input (max 4 words)', async () => {

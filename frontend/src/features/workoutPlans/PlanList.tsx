@@ -4,6 +4,7 @@ import {
   listWorkoutPlans,
   deleteWorkoutPlan,
   duplicateWorkoutPlan,
+  clampPlanName,
 } from "../../api/workoutPlansApi";
 import type { WorkoutPlan } from "../../api/workoutPlansApi";
 import { sharingApi } from "../../api/sharingApi";
@@ -97,7 +98,11 @@ export default function PlanList() {
     if (duplicatingPlanId !== null) return;
     setDuplicatingPlanId(plan.id);
     try {
-      const newName = t.planList.duplicateName(plan.name);
+      // Clamp rather than reject: an existing plan's name may predate the
+      // PLAN_NAME_MAX_LENGTH/_WORDS limits, and appending " (Copy)" could
+      // push an already-at-the-limit name over -- clamping keeps
+      // "duplicate" from silently failing on an old plan.
+      const newName = clampPlanName(t.planList.duplicateName(plan.name));
       await duplicateWorkoutPlan(plan.id, newName);
       setError("");
       showToast(t.planList.duplicateSuccess(newName), "success");

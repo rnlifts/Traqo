@@ -10,7 +10,17 @@ vi.mock('../../contexts/LanguageContext', () => ({
 import * as workoutPlansApi from '../../api/workoutPlansApi';
 import * as sharingApi from '../../api/sharingApi';
 
-vi.mock('../../api/workoutPlansApi');
+vi.mock('../../api/workoutPlansApi', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../api/workoutPlansApi')>();
+  return {
+    ...actual,
+    listWorkoutPlans: vi.fn(),
+    deleteWorkoutPlan: vi.fn(),
+    duplicateWorkoutPlan: vi.fn(),
+    // clampPlanName is a pure utility -- keep the real implementation
+    // (via ...actual above) instead of auto-mocking it to a no-op.
+  };
+});
 vi.mock('../../api/sharingApi');
 
 const mockNavigate = vi.fn();
@@ -164,6 +174,37 @@ describe('PlanList', () => {
     );
     // Refetches the list so the new plan appears
     await waitFor(() => expect(vi.mocked(workoutPlansApi.listWorkoutPlans)).toHaveBeenCalledTimes(2));
+  });
+
+  it('clamps the generated duplicate name so an already-long plan name plus " (Copy)" cannot exceed the plan-name limits', async () => {
+    const longNamePlan = {
+      ...mockPlans[0],
+      name: 'one two three four five six seven eight',
+    };
+    vi.mocked(workoutPlansApi.listWorkoutPlans).mockResolvedValue([longNamePlan, mockPlans[1]]);
+    vi.mocked(workoutPlansApi.duplicateWorkoutPlan).mockResolvedValue({} as any);
+
+    render(
+      <BrowserRouter>
+        <PlanList />
+      </BrowserRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByText('Loading workout plans...')).not.toBeInTheDocument();
+    });
+
+    const duplicateButtons = screen.getAllByRole('button', { name: 'Duplicate plan' });
+    fireEvent.click(duplicateButtons[0]);
+
+    // "one two three four five six seven eight (Copy)" is 10 words --
+    // clamped to 8, so " (Copy)" never makes it into the new name.
+    await waitFor(() =>
+      expect(vi.mocked(workoutPlansApi.duplicateWorkoutPlan)).toHaveBeenCalledWith(
+        longNamePlan.id,
+        'one two three four five six seven eight'
+      )
+    );
   });
 
   it('shows a spinning, disabled duplicate icon while the request is in flight, then clears it', async () => {

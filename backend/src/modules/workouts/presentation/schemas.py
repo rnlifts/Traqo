@@ -9,6 +9,13 @@ from pydantic import BaseModel, Field, field_validator
 DAY_CUSTOM_NAME_MAX_LENGTH = 40
 DAY_CUSTOM_NAME_MAX_WORDS = 4
 
+# Plan names (e.g. "Beginner Plan", "Weight Loss Plan") are a short title,
+# not a paragraph -- same defensive intent as DAY_CUSTOM_NAME_* above, sized
+# a bit more generously since real plan names run longer ("12 Week Beginner
+# Full Body Strength Plan" is 7 words).
+PLAN_NAME_MAX_LENGTH = 60
+PLAN_NAME_MAX_WORDS = 8
+
 
 def _validate_day_custom_name_word_count(value: str | None) -> str | None:
     if value and len(value.split()) > DAY_CUSTOM_NAME_MAX_WORDS:
@@ -16,16 +23,26 @@ def _validate_day_custom_name_word_count(value: str | None) -> str | None:
     return value
 
 
+def _validate_plan_name_word_count(value: str) -> str:
+    if value and len(value.split()) > PLAN_NAME_MAX_WORDS:
+        raise ValueError(f"name must be at most {PLAN_NAME_MAX_WORDS} words")
+    return value
+
+
 class CreateWorkoutPlanRequest(BaseModel):
     """Create workout plan request schema."""
 
-    name: str = Field(..., min_length=1, max_length=255)
+    name: str = Field(..., min_length=1, max_length=PLAN_NAME_MAX_LENGTH)
+
+    _validate_name_word_count = field_validator("name")(_validate_plan_name_word_count)
 
 
 class UpdateWorkoutPlanRequest(BaseModel):
     """Update workout plan request schema."""
 
-    name: str = Field(..., min_length=1, max_length=255)
+    name: str = Field(..., min_length=1, max_length=PLAN_NAME_MAX_LENGTH)
+
+    _validate_name_word_count = field_validator("name")(_validate_plan_name_word_count)
 
 
 class AddExerciseRequest(BaseModel):
@@ -261,8 +278,10 @@ class BuildPlanWeekRequest(BaseModel):
 class BuildPlanRequest(BaseModel):
     """Bulk plan creation request - creates entire plan structure atomically."""
 
-    name: str = Field(..., min_length=1, max_length=255)
+    name: str = Field(..., min_length=1, max_length=PLAN_NAME_MAX_LENGTH)
     unit_type: Literal["days", "weeks"]
     total_units: int = Field(..., gt=0)
     days: list[BuildPlanDayRequest] | None = None  # For unit_type='days'
     weeks: list[BuildPlanWeekRequest] | None = None  # For unit_type='weeks'
+
+    _validate_name_word_count = field_validator("name")(_validate_plan_name_word_count)

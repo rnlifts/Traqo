@@ -12,6 +12,8 @@ import {
   updateWorkoutPlan,
   replaceSetTargets,
   workoutPlansApi,
+  PLAN_NAME_MAX_LENGTH,
+  PLAN_NAME_MAX_WORDS,
   type WorkoutPlanDetail,
   type PlanDay,
   type PlanWeek,
@@ -1933,9 +1935,15 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                 <input
                   type="text"
                   value={renamePlanName}
-                  onChange={(e) => setRenamePlanName(e.target.value)}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    const words = value.trim().split(/\s+/).filter(Boolean);
+                    if (words.length > PLAN_NAME_MAX_WORDS) return;
+                    setRenamePlanName(value);
+                  }}
                   className="input-field"
                   style={{ flex: 1 }}
+                  maxLength={PLAN_NAME_MAX_LENGTH}
                 />
                 <button onClick={handleUpdatePlanName} className="btn btn-primary">
                   {t.planBuilder.save}

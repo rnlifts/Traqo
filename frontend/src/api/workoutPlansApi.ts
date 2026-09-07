@@ -1,5 +1,20 @@
 import client from "./client";
 
+// Plan names (e.g. "Beginner Plan", "Weight Loss Plan") are a short title,
+// not a paragraph -- mirrors the backend's PLAN_NAME_MAX_LENGTH / _MAX_WORDS
+// limits (schemas.py) so typed/generated names never round-trip to a 422.
+export const PLAN_NAME_MAX_LENGTH = 60;
+export const PLAN_NAME_MAX_WORDS = 8;
+
+// Truncates a plan name to fit within the limits above -- used for names the
+// app generates itself (e.g. "<name> (Copy)" when duplicating a plan) rather
+// than typed directly, where clamping instead of rejecting keeps the action
+// from silently failing on an old plan whose name predates these limits.
+export function clampPlanName(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean).slice(0, PLAN_NAME_MAX_WORDS);
+  return words.join(' ').slice(0, PLAN_NAME_MAX_LENGTH);
+}
+
 export interface WorkoutPlan {
   id: number;
   user_id: number;
