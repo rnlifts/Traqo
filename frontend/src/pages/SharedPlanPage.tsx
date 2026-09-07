@@ -6,7 +6,7 @@ import { ShareWorkoutStarter } from '../features/sharing/ShareWorkoutStarter';
 import { ExercisePreviewPanel } from '../components/ExercisePreviewPanel';
 import { ExerciseWorkoutPreview } from '../components/ExerciseWorkoutPreview';
 import { Modal } from '../components/Modal';
-import { PlayIcon } from '../components/icons';
+import { PlayIcon, TagIcon } from '../components/icons';
 import { getYoutubeThumbnailUrl } from '../utils/youtube';
 import { useLanguage } from '../contexts/LanguageContext';
 import type { TranslationKeys } from '../i18n/en';
@@ -366,7 +366,8 @@ export const SharedPlanPage: React.FC = () => {
               )}
 
               {currentDay?.custom_name && (
-                <p style={{ margin: '0 0 12px 0', fontSize: '14px', color: 'var(--text)', fontStyle: 'italic' }}>
+                <p style={{ margin: '0 0 12px 0', fontSize: '14px', color: 'var(--text)', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <TagIcon size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
                   {currentDay.custom_name}
                 </p>
               )}

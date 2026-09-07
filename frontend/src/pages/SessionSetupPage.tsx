@@ -6,6 +6,7 @@ import { exercisesApi, type Exercise } from '../api/exercisesApi';
 import { useToast } from '../components/Toast';
 import { WorkoutPreviewList } from '../components/WorkoutPreviewList';
 import { useLanguage } from '../contexts/LanguageContext';
+import { TagIcon } from '../components/icons';
 
 export default function SessionSetupPage() {
   const { planId } = useParams<{ planId: string }>();
@@ -252,7 +253,8 @@ export default function SessionSetupPage() {
           {headerLabel}
         </h1>
         {headerCustomName && (
-          <p style={{ margin: '4px 0 0 0', fontSize: '14px', color: 'var(--text)', fontStyle: 'italic' }}>
+          <p style={{ margin: '4px 0 0 0', fontSize: '14px', color: 'var(--text)', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <TagIcon size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
             {headerCustomName}
           </p>
         )}
