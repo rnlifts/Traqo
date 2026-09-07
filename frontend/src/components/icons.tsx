@@ -155,3 +155,10 @@ export const CopyIcon: React.FC<IconProps> = ({ size = 15, className, style }) =
     <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
   </svg>
 );
+
+export const TagIcon: React.FC<IconProps> = ({ size = 14, className, style }) => (
+  <svg {...base(size)} className={className} style={style}>
+    <path d="M12.59 2.59a2 2 0 0 1 1.41-.59H20a2 2 0 0 1 2 2v5.99a2 2 0 0 1-.59 1.41l-8.83 8.83a2 2 0 0 1-2.83 0l-6.58-6.58a2 2 0 0 1 0-2.83l8.83-8.83z" />
+    <circle cx="16.5" cy="7.5" r="1.5" fill="currentColor" stroke="none" />
+  </svg>
+);

@@ -248,6 +248,39 @@ describe('PlanBuilder Task 81: True Optimistic Updates', () => {
     expect(screen.getByRole('button', { name: 'Edit nickname' })).toBeInTheDocument();
   });
 
+  it('blocks typing a 5th word into the day nickname input (max 4 words)', async () => {
+    const user = userEvent.setup();
+    vi.mocked(client.get).mockResolvedValue({ data: oneExerciseFixture } as any);
+
+    render(
+      <BrowserRouter>
+        <PlanBuilder isCreateMode={false} planId={5} />
+      </BrowserRouter>
+    );
+
+    await screen.findByText('Bench Press');
+    await user.click(screen.getByRole('button', { name: '+ Add nickname' }));
+    const input = screen.getByPlaceholderText('e.g. Chest Day');
+    await user.type(input, 'one two three four five');
+
+    expect(input).toHaveValue('one two three four ');
+  });
+
+  it('caps the day nickname input at 40 characters', async () => {
+    vi.mocked(client.get).mockResolvedValue({ data: oneExerciseFixture } as any);
+
+    render(
+      <BrowserRouter>
+        <PlanBuilder isCreateMode={false} planId={5} />
+      </BrowserRouter>
+    );
+
+    await screen.findByText('Bench Press');
+    await userEvent.setup().click(screen.getByRole('button', { name: '+ Add nickname' }));
+
+    expect(screen.getByPlaceholderText('e.g. Chest Day')).toHaveAttribute('maxLength', '40');
+  });
+
   it('reverts the day nickname if the API call fails', async () => {
     const user = userEvent.setup();
     vi.mocked(client.get).mockResolvedValue({ data: oneExerciseFixture } as any);

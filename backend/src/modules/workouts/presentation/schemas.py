@@ -1,7 +1,19 @@
 from src.shared.utc_datetime import UTCDatetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+# Day nicknames (e.g. "Chest Day") are meant to be a short label, not a
+# paragraph -- capped at 4 words and 40 characters so a pasted wall of text
+# (or one long no-space string) can't break the day-tabs layout in the UI.
+DAY_CUSTOM_NAME_MAX_LENGTH = 40
+DAY_CUSTOM_NAME_MAX_WORDS = 4
+
+
+def _validate_day_custom_name_word_count(value: str | None) -> str | None:
+    if value and len(value.split()) > DAY_CUSTOM_NAME_MAX_WORDS:
+        raise ValueError(f"custom_name must be at most {DAY_CUSTOM_NAME_MAX_WORDS} words")
+    return value
 
 
 class CreateWorkoutPlanRequest(BaseModel):
@@ -107,7 +119,9 @@ class UpdateDayRequest(BaseModel):
     is_rest: bool | None = None
     # Optional nickname shown alongside `label` (e.g. "Chest Day"), not a
     # replacement for it. None means leave unchanged; "" clears it to unset.
-    custom_name: str | None = Field(None, max_length=255)
+    custom_name: str | None = Field(None, max_length=DAY_CUSTOM_NAME_MAX_LENGTH)
+
+    _validate_custom_name_word_count = field_validator("custom_name")(_validate_day_custom_name_word_count)
 
 
 class PlanDayResponse(BaseModel):
@@ -231,7 +245,9 @@ class BuildPlanDayRequest(BaseModel):
     exercises: list[BuildPlanExerciseRequest] = []
     # Optional nickname (e.g. "Chest Day") shown alongside `label`, not a
     # replacement for it.
-    custom_name: str | None = Field(None, max_length=255)
+    custom_name: str | None = Field(None, max_length=DAY_CUSTOM_NAME_MAX_LENGTH)
+
+    _validate_custom_name_word_count = field_validator("custom_name")(_validate_day_custom_name_word_count)
 
 
 class BuildPlanWeekRequest(BaseModel):

@@ -6,6 +6,7 @@ import { AnonymousWorkoutLogger } from './AnonymousWorkoutLogger';
 import { WorkoutPreviewList } from '../../components/WorkoutPreviewList';
 import { useToast } from '../../components/Toast';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { TagIcon } from '../../components/icons';
 
 interface Props {
   data: SharedPlanResponse;
@@ -175,7 +176,8 @@ export const ShareWorkoutStarter: React.FC<Props> = ({ data, token }) => {
       )}
 
       {selectedDay?.custom_name && (
-        <p style={{ margin: '0 0 12px 0', fontSize: '14px', color: 'var(--text)', fontStyle: 'italic' }}>
+        <p style={{ margin: '0 0 12px 0', fontSize: '14px', color: 'var(--text)', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <TagIcon size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
           {selectedDay.custom_name}
         </p>
       )}

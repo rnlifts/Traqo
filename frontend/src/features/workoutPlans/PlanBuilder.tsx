@@ -21,7 +21,7 @@ import { exercisesApi } from '../../api/exercisesApi';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { useToast } from '../../components/Toast';
 import { DurationInput } from '../../components/DurationInput';
-import { TrashIcon, InfoIcon, ChevronDownIcon, NoteIcon, CopyIcon } from '../../components/icons';
+import { TrashIcon, InfoIcon, ChevronDownIcon, NoteIcon, CopyIcon, TagIcon } from '../../components/icons';
 import { ExerciseLibrarySidebar, type SelectedExerciseInfo } from '../exerciseLibrary/ExerciseLibrarySidebar';
 import { ExercisePreviewPanel } from '../../components/ExercisePreviewPanel';
 import { Modal } from '../../components/Modal';
@@ -57,6 +57,13 @@ interface CreatePlanBuilderProps {
 type PlanBuilderProps = EditPlanBuilderProps | CreatePlanBuilderProps;
 
 const WEEK_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+// Day nicknames (e.g. "Chest Day") are a short label, not a paragraph --
+// mirrors the backend's DAY_CUSTOM_NAME_MAX_LENGTH / _MAX_WORDS limits so a
+// pasted wall of text (or a giant no-space string) is stopped at the input
+// instead of round-tripping to the API just to get a 422 back.
+const DAY_CUSTOM_NAME_MAX_LENGTH = 40;
+const DAY_CUSTOM_NAME_MAX_WORDS = 4;
 
 // Helper function to get effective days for a week (walk backward through linked weeks)
 function getEffectiveDaysForWeek(weeks: PlanWeek[], weekIndex: number): PlanDay[] {
@@ -2046,10 +2053,20 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
                   <input
                     type="text"
                     value={dayCustomNameInput}
-                    onChange={(e) => setDayCustomNameInput(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      // Block a 5th word from being typed (character maxLength
+                      // alone wouldn't catch "one two three four five" -- only
+                      // 24 characters but 5 words). Words already typed can
+                      // still be edited/deleted freely.
+                      const words = value.trim().split(/\s+/).filter(Boolean);
+                      if (words.length > DAY_CUSTOM_NAME_MAX_WORDS) return;
+                      setDayCustomNameInput(value);
+                    }}
                     placeholder={t.planBuilder.dayNicknamePlaceholder}
                     className="input-field"
                     style={{ flex: 1 }}
+                    maxLength={DAY_CUSTOM_NAME_MAX_LENGTH}
                     autoFocus
                   />
                   <button onClick={handleUpdateDayCustomName} className="btn btn-primary">
@@ -2065,7 +2082,8 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
               ) : (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   {currentDay.custom_name && (
-                    <span style={{ fontSize: '14px', color: 'var(--text)', fontStyle: 'italic' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', color: 'var(--text)', fontStyle: 'italic' }}>
+                      <TagIcon size={14} style={{ color: 'var(--text-muted, var(--text))', flexShrink: 0 }} />
                       {currentDay.custom_name}
                     </span>
                   )}

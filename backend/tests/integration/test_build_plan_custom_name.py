@@ -195,3 +195,55 @@ class TestBuildPlanCustomName:
         duplicated = client.post("/api/workout-plans/build", json=duplicate_payload, headers=auth_headers).json()
 
         assert duplicated["days"][0]["custom_name"] == "Leg Day"
+
+
+class TestBuildPlanCustomNameLimits:
+    """custom_name is meant to be a short label (e.g. "Chest Day"), not a
+    paragraph -- rejects anything over 40 characters or more than 4 words so
+    a pasted wall of text (or one long no-space string) can't reach the DB
+    and break the day-tabs layout in the UI."""
+
+    def _payload(self, custom_name):
+        return {
+            "name": "Limits Plan",
+            "unit_type": "days",
+            "total_units": 1,
+            "days": [
+                {
+                    "label": "Day 1",
+                    "is_rest": False,
+                    "order_position": 1,
+                    "custom_name": custom_name,
+                    "exercises": [],
+                }
+            ],
+        }
+
+    def test_rejects_a_single_long_no_space_string_over_the_character_limit(
+        self, client, user_with_exercise, auth_headers
+    ):
+        response = client.post(
+            "/api/workout-plans/build", json=self._payload("s" * 41), headers=auth_headers
+        )
+        assert response.status_code == 422
+
+    def test_rejects_more_than_four_words_even_if_under_the_character_limit(
+        self, client, user_with_exercise, auth_headers
+    ):
+        response = client.post(
+            "/api/workout-plans/build",
+            json=self._payload("Chest Shoulder Triceps Back Legs"),
+            headers=auth_headers,
+        )
+        assert response.status_code == 422
+
+    def test_accepts_exactly_four_words_within_the_character_limit(
+        self, client, user_with_exercise, auth_headers
+    ):
+        response = client.post(
+            "/api/workout-plans/build",
+            json=self._payload("Chest Shoulder Triceps Day"),
+            headers=auth_headers,
+        )
+        assert response.status_code == 201, response.text
+        assert response.json()["days"][0]["custom_name"] == "Chest Shoulder Triceps Day"
