@@ -226,6 +226,48 @@ describe('PlanBuilder Task 81: True Optimistic Updates', () => {
     expect(vi.mocked(updateDay)).toHaveBeenCalledWith(5, 100, { is_rest: true });
   });
 
+  it('setting a day nickname shows it immediately and saves it via updateDay', async () => {
+    const user = userEvent.setup();
+    vi.mocked(client.get).mockResolvedValue({ data: oneExerciseFixture } as any);
+    vi.mocked(updateDay).mockResolvedValue({} as any);
+
+    render(
+      <BrowserRouter>
+        <PlanBuilder isCreateMode={false} planId={5} />
+      </BrowserRouter>
+    );
+
+    await screen.findByText('Bench Press');
+    await user.click(screen.getByRole('button', { name: '+ Add nickname' }));
+    await user.type(screen.getByPlaceholderText('e.g. Chest Day'), 'Chest Day');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(screen.getByText('Chest Day')).toBeInTheDocument();
+    expect(vi.mocked(updateDay)).toHaveBeenCalledWith(5, 100, { custom_name: 'Chest Day' });
+    // Editing again shows "Edit nickname" now that one is set, not "+ Add nickname".
+    expect(screen.getByRole('button', { name: 'Edit nickname' })).toBeInTheDocument();
+  });
+
+  it('reverts the day nickname if the API call fails', async () => {
+    const user = userEvent.setup();
+    vi.mocked(client.get).mockResolvedValue({ data: oneExerciseFixture } as any);
+    vi.mocked(updateDay).mockRejectedValue(new Error('network error'));
+
+    render(
+      <BrowserRouter>
+        <PlanBuilder isCreateMode={false} planId={5} />
+      </BrowserRouter>
+    );
+
+    await screen.findByText('Bench Press');
+    await user.click(screen.getByRole('button', { name: '+ Add nickname' }));
+    await user.type(screen.getByPlaceholderText('e.g. Chest Day'), 'Chest Day');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(screen.queryByText('Chest Day')).not.toBeInTheDocument());
+    expect(screen.getByRole('button', { name: '+ Add nickname' })).toBeInTheDocument();
+  });
+
   it('removing an exercise re-inserts it at its original position if the API call fails', async () => {
     const user = userEvent.setup();
     vi.mocked(client.get).mockResolvedValue({ data: twoExerciseFixture } as any);

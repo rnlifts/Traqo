@@ -44,6 +44,9 @@ export interface SharedPlanDay {
   label: string;
   order_position: number;
   is_rest: boolean;
+  // Optional nickname (e.g. "Chest Day") shown alongside `label`, not a
+  // replacement for it. null/undefined means no nickname set.
+  custom_name?: string | null;
   exercises: SharedPlanExercise[];
 }
 

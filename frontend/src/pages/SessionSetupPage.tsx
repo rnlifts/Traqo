@@ -212,6 +212,9 @@ export default function SessionSetupPage() {
   const headerLabel = isWeeksType && selectedDay
     ? `Week ${selectedWeekIndex + 1} · ${dayLabel}`
     : dayLabel;
+  // Optional nickname (e.g. "Chest Day") shown alongside the label above,
+  // not folded into the day tabs themselves (those stay short: "Day 1").
+  const headerCustomName = selectedDay?.custom_name || null;
 
   return (
     <div className="page-container">
@@ -248,6 +251,11 @@ export default function SessionSetupPage() {
         <h1 style={{ margin: 0, fontSize: '28px', color: 'var(--text-h)', fontWeight: 'bold' }}>
           {headerLabel}
         </h1>
+        {headerCustomName && (
+          <p style={{ margin: '4px 0 0 0', fontSize: '14px', color: 'var(--text)', fontStyle: 'italic' }}>
+            {headerCustomName}
+          </p>
+        )}
       </div>
 
       {/* Week Chips */}

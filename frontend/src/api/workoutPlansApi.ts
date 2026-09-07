@@ -34,6 +34,9 @@ export interface PlanDay {
   label: string;
   order_position: number;
   is_rest?: boolean;
+  // Optional nickname (e.g. "Chest Day") shown alongside `label`, not a
+  // replacement for it. null/undefined means no nickname set.
+  custom_name?: string | null;
   weekdays?: string[];
   exercises: WorkoutExercise[];
   created_at?: string;
@@ -210,7 +213,7 @@ export const workoutPlansApi = {
     return response.data;
   },
 
-  async updateDay(planId: number, dayId: number, updates: { label?: string; is_rest?: boolean; weekdays?: string[] }): Promise<PlanDay> {
+  async updateDay(planId: number, dayId: number, updates: { label?: string; is_rest?: boolean; custom_name?: string; weekdays?: string[] }): Promise<PlanDay> {
     const response = await client.put<PlanDay>(
       `/workout-plans/${planId}/days/${dayId}`,
       updates
@@ -433,7 +436,7 @@ export async function listDays(planId: number): Promise<PlanDay[]> {
 export async function updateDay(
   planId: number,
   dayId: number,
-  updates: { label?: string; is_rest?: boolean; weekdays?: string[] }
+  updates: { label?: string; is_rest?: boolean; custom_name?: string; weekdays?: string[] }
 ): Promise<PlanDay> {
   return workoutPlansApi.updateDay(planId, dayId, updates);
 }

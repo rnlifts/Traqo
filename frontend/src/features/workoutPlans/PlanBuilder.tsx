@@ -112,6 +112,13 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
   const [activeDayIndex, setActiveDayIndex] = useState(0);
   const [isRenamingPlan, setIsRenamingPlan] = useState(false);
   const [renamePlanName, setRenamePlanName] = useState(draftName);
+  // Per-day custom nickname (e.g. "Chest Day"), shown alongside the existing
+  // "Day 1" label rather than replacing it. Only editable once the plan
+  // already exists (matches the plan-name rename affordance's own
+  // !props.isCreateMode gating) -- the create-plan payload doesn't carry
+  // this field, so allowing it pre-save would silently drop it.
+  const [isEditingDayCustomName, setIsEditingDayCustomName] = useState(false);
+  const [dayCustomNameInput, setDayCustomNameInput] = useState('');
 
   // Track whether at least one exercise has been added (for hint text)
   const [showBackConfirm, setShowBackConfirm] = useState(false);
@@ -459,6 +466,64 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
         setError((err as Error).message);
       });
     }
+  }
+
+  // Edit-mode only (matches handleUpdatePlanName's own !props.isCreateMode
+  // gating) -- the create-plan payload doesn't include custom_name, so
+  // allowing this before the plan is saved would silently lose the value.
+  async function handleUpdateDayCustomName() {
+    const days = getActiveDays();
+    const currentDay = days[activeDayIndex];
+    if (!currentDay || !planId) return;
+
+    const trimmed = dayCustomNameInput.trim();
+    const previousCustomName = currentDay.custom_name;
+
+    // Optimistic: patch local state immediately, same pattern as is_rest.
+    if (draftUnitType === 'days') {
+      setDraftDays((prev) =>
+        prev.map((d) => (d.id === currentDay.id ? { ...d, custom_name: trimmed || null } : d))
+      );
+    } else {
+      setDraftWeeks((prev) =>
+        prev.map((week, wIdx) => {
+          if (wIdx === activeWeekIndex) {
+            return {
+              ...week,
+              days: week.days.map((d) =>
+                d.id === currentDay.id ? { ...d, custom_name: trimmed || null } : d
+              ),
+            };
+          }
+          return week;
+        })
+      );
+    }
+    setIsEditingDayCustomName(false);
+
+    updateDay(planId, currentDay.id, { custom_name: trimmed }).catch((err) => {
+      // On failure: revert to previous state
+      if (draftUnitType === 'days') {
+        setDraftDays((prev) =>
+          prev.map((d) => (d.id === currentDay.id ? { ...d, custom_name: previousCustomName } : d))
+        );
+      } else {
+        setDraftWeeks((prev) =>
+          prev.map((week, wIdx) => {
+            if (wIdx === activeWeekIndex) {
+              return {
+                ...week,
+                days: week.days.map((d) =>
+                  d.id === currentDay.id ? { ...d, custom_name: previousCustomName } : d
+                ),
+              };
+            }
+            return week;
+          })
+        );
+      }
+      setError((err as Error).message);
+    });
   }
 
   // Core logic: find-or-create exercise and add to current day
@@ -1955,13 +2020,64 @@ export const PlanBuilder = (props: PlanBuilderProps) => {
             {activeDays.map((day, idx) => (
               <button
                 key={day.id}
-                onClick={() => setActiveDayIndex(idx)}
+                onClick={() => {
+                  setActiveDayIndex(idx);
+                  setIsEditingDayCustomName(false);
+                }}
                 className={`day-tab${idx === activeDayIndex ? ' active' : ''}`}
               >
                 {day.label}
               </button>
             ))}
           </div>
+
+          {/* Day nickname (e.g. "Chest Day") -- shown alongside the "Day N"
+              tab above, not replacing it. Only editable once the plan
+              already exists, same as the plan-name rename button. */}
+          {currentDay && !props.isCreateMode && (
+            <div style={{ marginBottom: '16px' }}>
+              {isEditingDayCustomName ? (
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    type="text"
+                    value={dayCustomNameInput}
+                    onChange={(e) => setDayCustomNameInput(e.target.value)}
+                    placeholder={t.planBuilder.dayNicknamePlaceholder}
+                    className="input-field"
+                    style={{ flex: 1 }}
+                    autoFocus
+                  />
+                  <button onClick={handleUpdateDayCustomName} className="btn btn-primary">
+                    {t.planBuilder.save}
+                  </button>
+                  <button
+                    onClick={() => setIsEditingDayCustomName(false)}
+                    className="btn btn-secondary"
+                  >
+                    {t.planBuilder.cancel}
+                  </button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {currentDay.custom_name && (
+                    <span style={{ fontSize: '14px', color: 'var(--text)', fontStyle: 'italic' }}>
+                      {currentDay.custom_name}
+                    </span>
+                  )}
+                  <button
+                    onClick={() => {
+                      setDayCustomNameInput(currentDay.custom_name || '');
+                      setIsEditingDayCustomName(true);
+                    }}
+                    className="btn"
+                    style={{ fontSize: '12px', padding: '4px 10px' }}
+                  >
+                    {currentDay.custom_name ? t.planBuilder.editDayNickname : t.planBuilder.addDayNickname}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Rest Toggle */}
           {currentDay && (

@@ -16,6 +16,9 @@ class PlanDayModel(Base):
     order_position = Column(Integer, nullable=False)
     is_rest = Column(Boolean, nullable=False, default=False)
     plan_week_id = Column(Integer, ForeignKey("plan_weeks.id"), nullable=True)
+    # Optional nickname (e.g. "Chest Day") shown alongside the existing
+    # auto-numbered `label` ("Day 1"), never replacing it. NULL means unset.
+    custom_name = Column(String(255), nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(
         DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -31,6 +34,7 @@ class PlanDayModel(Base):
             order_position=self.order_position,
             is_rest=self.is_rest,
             plan_week_id=self.plan_week_id,
+            custom_name=self.custom_name,
             created_at=self.created_at,
             updated_at=self.updated_at,
         )

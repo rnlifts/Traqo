@@ -40,5 +40,11 @@ export function resolveSessionDay(
     }
   }
 
+  // Append the optional nickname (e.g. "Chest Day"), if set, rather than
+  // replacing the existing "Day N" / "Week N · Day N" label.
+  if (matchingDay?.custom_name) {
+    dayLabel = `${dayLabel} — ${matchingDay.custom_name}`;
+  }
+
   return { matchingDay, dayLabel };
 }

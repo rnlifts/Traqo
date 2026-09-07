@@ -148,6 +148,50 @@ describe('SharedPlanPage', () => {
     expect(screen.getByText(/Rest Day/)).toBeInTheDocument();
   });
 
+  describe('Day custom name (nickname)', () => {
+    it('shows the day nickname alongside the existing "Day N" label when set', async () => {
+      const planWithNickname = {
+        ...mockDaysPlan,
+        days: mockDaysPlan.days.map((d, i) =>
+          i === 0 ? { ...d, custom_name: 'Push Day' } : d
+        ),
+      };
+      vi.mocked(sharingApi.sharingApi.getSharedPlan).mockResolvedValue(planWithNickname as any);
+
+      render(
+        <MemoryRouter initialEntries={['/shared/test-token']}>
+          <Routes>
+            <Route path="/shared/:token" element={<SharedPlanPage />} />
+          </Routes>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => expect(screen.getByText('Test Plan')).toBeInTheDocument());
+
+      // The day tab itself still shows the plain label ("Chest Day" is this
+      // fixture's `label` value, unrelated to the new `custom_name` field).
+      expect(screen.getByRole('button', { name: 'Chest Day' })).toBeInTheDocument();
+      // The nickname renders as a separate line, not replacing the tab.
+      expect(screen.getByText('Push Day')).toBeInTheDocument();
+    });
+
+    it('does not render a nickname line when custom_name is not set', async () => {
+      vi.mocked(sharingApi.sharingApi.getSharedPlan).mockResolvedValue(mockDaysPlan as any);
+
+      render(
+        <MemoryRouter initialEntries={['/shared/test-token']}>
+          <Routes>
+            <Route path="/shared/:token" element={<SharedPlanPage />} />
+          </Routes>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => expect(screen.getByText('Test Plan')).toBeInTheDocument());
+
+      expect(screen.queryByText('Push Day')).not.toBeInTheDocument();
+    });
+  });
+
   describe('Watch Demo button (Task 95)', () => {
     it('renders a "Watch Demo" button for an exercise that has a video', async () => {
       vi.mocked(sharingApi.sharingApi.getSharedPlan).mockResolvedValue(mockDaysPlan as any);

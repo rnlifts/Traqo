@@ -301,6 +301,9 @@ export const ne = {
     save: 'सेभ गर्नुहोस्',
     cancel: 'रद्द गर्नुहोस्',
     rename: 'नाम परिवर्तन गर्नुहोस्',
+    addDayNickname: '+ उपनाम थप्नुहोस्',
+    editDayNickname: 'उपनाम सम्पादन गर्नुहोस्',
+    dayNicknamePlaceholder: 'जस्तै: छाती दिन',
     weeksLabel: 'हप्ताहरू',
     weekNodeAriaLabel: (n: number, mode: string, active: boolean) =>
       `हप्ता ${n}, ${mode}${active ? ', सक्रिय' : ''}`,

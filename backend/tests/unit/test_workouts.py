@@ -11,6 +11,7 @@ from src.modules.workouts.application.use_cases.create_workout_plan import Creat
 from src.modules.workouts.application.use_cases.list_workout_plans import ListWorkoutPlans
 from src.modules.workouts.application.use_cases.update_workout_plan import UpdateWorkoutPlan
 from src.modules.workouts.application.use_cases.delete_workout_plan import DeleteWorkoutPlan
+from src.modules.workouts.application.use_cases.update_day import UpdateDay
 
 
 # ============================================================================
@@ -283,3 +284,92 @@ class TestPlanDayRepository:
         assert updated.label == "New Label"
         retrieved = in_memory_day_repo.get_by_id(day.id)
         assert retrieved.label == "New Label"
+
+
+class TestUpdateDayCustomName:
+    """Tests for UpdateDay's custom_name handling (day nicknames like 'Chest Day'),
+    kept alongside the existing auto-numbered `label` rather than replacing it."""
+
+    def test_setting_custom_name_leaves_label_unchanged(
+        self, in_memory_plan_repo, in_memory_day_repo, user_id
+    ):
+        plan = in_memory_plan_repo.create(WorkoutPlan(user_id=user_id, name="Test Plan"))
+        day = in_memory_day_repo.create(
+            PlanDay(workout_plan_id=plan.id, order_position=1, label="Day 1")
+        )
+        use_case = UpdateDay(in_memory_plan_repo, in_memory_day_repo)
+
+        result = use_case.execute(
+            plan.id, day.id, user_id, custom_name="Chest Day"
+        )
+
+        assert result["custom_name"] == "Chest Day"
+        assert result["label"] == "Day 1"
+
+    def test_custom_name_defaults_to_none_when_never_set(
+        self, in_memory_plan_repo, in_memory_day_repo, user_id
+    ):
+        plan = in_memory_plan_repo.create(WorkoutPlan(user_id=user_id, name="Test Plan"))
+        day = in_memory_day_repo.create(
+            PlanDay(workout_plan_id=plan.id, order_position=1, label="Day 1")
+        )
+        use_case = UpdateDay(in_memory_plan_repo, in_memory_day_repo)
+
+        # Update something unrelated (is_rest); custom_name was never provided.
+        result = use_case.execute(plan.id, day.id, user_id, is_rest=True)
+
+        assert result["custom_name"] is None
+
+    def test_empty_string_clears_an_existing_custom_name(
+        self, in_memory_plan_repo, in_memory_day_repo, user_id
+    ):
+        plan = in_memory_plan_repo.create(WorkoutPlan(user_id=user_id, name="Test Plan"))
+        day = in_memory_day_repo.create(
+            PlanDay(workout_plan_id=plan.id, order_position=1, label="Day 1", custom_name="Chest Day")
+        )
+        use_case = UpdateDay(in_memory_plan_repo, in_memory_day_repo)
+
+        result = use_case.execute(plan.id, day.id, user_id, custom_name="")
+
+        assert result["custom_name"] is None
+
+    def test_whitespace_only_custom_name_also_clears_it(
+        self, in_memory_plan_repo, in_memory_day_repo, user_id
+    ):
+        plan = in_memory_plan_repo.create(WorkoutPlan(user_id=user_id, name="Test Plan"))
+        day = in_memory_day_repo.create(
+            PlanDay(workout_plan_id=plan.id, order_position=1, label="Day 1", custom_name="Chest Day")
+        )
+        use_case = UpdateDay(in_memory_plan_repo, in_memory_day_repo)
+
+        result = use_case.execute(plan.id, day.id, user_id, custom_name="   ")
+
+        assert result["custom_name"] is None
+
+    def test_not_providing_custom_name_leaves_existing_value_unchanged(
+        self, in_memory_plan_repo, in_memory_day_repo, user_id
+    ):
+        plan = in_memory_plan_repo.create(WorkoutPlan(user_id=user_id, name="Test Plan"))
+        day = in_memory_day_repo.create(
+            PlanDay(workout_plan_id=plan.id, order_position=1, label="Day 1", custom_name="Chest Day")
+        )
+        use_case = UpdateDay(in_memory_plan_repo, in_memory_day_repo)
+
+        # Only updating label this time -- custom_name argument omitted (None).
+        result = use_case.execute(plan.id, day.id, user_id, label="Day One")
+
+        assert result["custom_name"] == "Chest Day"
+        assert result["label"] == "Day One"
+
+    def test_custom_name_is_stripped_of_surrounding_whitespace(
+        self, in_memory_plan_repo, in_memory_day_repo, user_id
+    ):
+        plan = in_memory_plan_repo.create(WorkoutPlan(user_id=user_id, name="Test Plan"))
+        day = in_memory_day_repo.create(
+            PlanDay(workout_plan_id=plan.id, order_position=1, label="Day 1")
+        )
+        use_case = UpdateDay(in_memory_plan_repo, in_memory_day_repo)
+
+        result = use_case.execute(plan.id, day.id, user_id, custom_name="  Chest Day  ")
+
+        assert result["custom_name"] == "Chest Day"

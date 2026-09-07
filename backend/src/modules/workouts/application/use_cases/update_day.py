@@ -25,6 +25,7 @@ class UpdateDay:
         requesting_user_id: int,
         label: str | None = None,
         is_rest: bool | None = None,
+        custom_name: str | None = None,
         skip_ownership_check: bool = False,
     ) -> dict:
         """Update a plan day.
@@ -37,6 +38,11 @@ class UpdateDay:
             requesting_user_id: The authenticated user id.
             label: New day label (or None to leave unchanged).
             is_rest: New is_rest flag (or None to leave unchanged).
+            custom_name: New custom nickname (e.g. "Chest Day"), shown
+                alongside `label` rather than replacing it. None means leave
+                unchanged; an empty/whitespace-only string clears it back to
+                unset (unlike `label`, an empty custom_name is valid — it
+                just means the day has no nickname).
             skip_ownership_check: If True, skip the ownership check (used for share-authorized paths).
                 Defaults to False to preserve existing behavior.
 
@@ -77,6 +83,11 @@ class UpdateDay:
         if is_rest is not None:
             day.is_rest = is_rest
 
+        # Update custom_name if provided; empty/whitespace clears it to unset
+        if custom_name is not None:
+            stripped = custom_name.strip()
+            day.custom_name = stripped if stripped else None
+
         # Update the day
         updated_day = self.day_repository.update(day)
 
@@ -86,6 +97,7 @@ class UpdateDay:
             "label": updated_day.label,
             "order_position": updated_day.order_position,
             "is_rest": updated_day.is_rest,
+            "custom_name": updated_day.custom_name,
             "created_at": updated_day.created_at,
             "updated_at": updated_day.updated_at,
         }
