@@ -1,7 +1,23 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import client from './client';
-import { workoutPlansApi, toBuildPlanPayload } from './workoutPlansApi';
+import { workoutPlansApi, toBuildPlanPayload, clampPlanName } from './workoutPlansApi';
 import type { WorkoutPlanDetail } from './workoutPlansApi';
+
+describe('clampPlanName', () => {
+  it('leaves a name within the limits unchanged', () => {
+    expect(clampPlanName('Beginner Plan')).toBe('Beginner Plan');
+  });
+
+  it('truncates to at most 8 words', () => {
+    expect(clampPlanName('one two three four five six seven eight nine ten')).toBe(
+      'one two three four five six seven eight'
+    );
+  });
+
+  it('truncates to at most 60 characters', () => {
+    expect(clampPlanName('s'.repeat(80))).toBe('s'.repeat(60));
+  });
+});
 
 describe('toBuildPlanPayload', () => {
   it('transforms a days-type plan, carrying over full exercise fidelity (notes, set_targets, duration, flags)', () => {

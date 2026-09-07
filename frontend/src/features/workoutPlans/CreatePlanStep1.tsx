@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { PLAN_NAME_MAX_LENGTH, PLAN_NAME_MAX_WORDS } from '../../api/workoutPlansApi';
 
 interface PlanDraft {
   name: string;
@@ -96,11 +97,15 @@ export const CreatePlanStep1 = ({ onContinue, onCancel }: CreatePlanStep1Props) 
           type="text"
           value={name}
           onChange={(e) => {
-            setName(e.target.value);
+            const value = e.target.value;
+            const words = value.trim().split(/\s+/).filter(Boolean);
+            if (words.length > PLAN_NAME_MAX_WORDS) return;
+            setName(value);
             setError(null);
           }}
           placeholder={t.createPlanStep1.planNamePlaceholder}
           className="text-input"
+          maxLength={PLAN_NAME_MAX_LENGTH}
         />
 
         <div style={{ marginTop: '24px' }}>
