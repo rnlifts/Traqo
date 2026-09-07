@@ -1618,7 +1618,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
             />
             <button
               onClick={() => setSelectedPreview(null)}
-              className="btn btn-secondary"
+              className="btn btn-primary"
               style={{ width: "100%", marginTop: "16px" }}
             >
               {t.exercisePreview.backButton}
